@@ -99,9 +99,10 @@ func runMemory(args []string) error {
 		}
 		if status.Healthy {
 			fmt.Println("Diagnóstico: OK")
-		} else {
-			fmt.Println("Diagnóstico: requiere atención")
+			return nil
 		}
+
+		fmt.Println("Diagnóstico: requiere atención")
 		if status.Details != "" {
 			fmt.Printf("Detalle: %s\n", status.Details)
 		}
