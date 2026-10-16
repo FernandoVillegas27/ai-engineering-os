@@ -4,19 +4,28 @@
 
 A project is the normalized technical context that AI Engineering OS uses to understand a repository before selecting agents, skills and tools.
 
+The persisted file uses a top-level `project` key:
+
+~~~yaml
+project:
+  id: example
+  name: example
+~~~
+
 A project definition should answer questions such as:
 
 - What stack is this repository using?
 - Which framework and runtime versions were detected?
 - Which build and testing tools are present?
 - What architecture is known?
-- Which skills should be loaded?
-- Which relevant skills are still missing?
+- Which skills are approved and recommended?
+- Which matching skills are still candidates?
+- Which detected technologies have no matching skill?
 - Which memory namespace belongs to this project?
 
 ## Generated, not manually maintained
 
-The long-term goal is that most of this file is generated or refreshed by `ai inspect`.
+Most of this file is generated or refreshed by `ai inspect`.
 
 The user should not need to manually describe a project that can be inspected deterministically from repository evidence.
 
@@ -84,7 +93,7 @@ The `evidence` field exists so detection remains explainable.
 
 Architecture should not be invented when the repository does not provide enough evidence.
 
-The default can remain:
+The default remains:
 
 ~~~yaml
 architecture:
@@ -93,38 +102,38 @@ architecture:
 
 Later, an architect agent may propose or confirm an architecture, but deterministic detection should not fabricate one.
 
-## Recommended skills
+## Skill states in a project
 
-Once technologies are detected, the future Skill Resolver can map them to registered skills.
+Resolved skills are preserved in three groups.
 
-Example:
+### Recommended
 
-~~~text
-Detected:
-  Java 21
-  Spring Boot 3
-
-Resolved skills:
-  java-21
-  spring-boot-3
-~~~
-
-These go into:
+`recommended` contains matching skills whose registry status is `enabled`.
 
 ~~~yaml
 skills:
   recommended:
+    - company-spring-guidelines
+~~~
+
+These are eligible for automatic use by later runtime stages.
+
+### Candidates
+
+`candidates` contains relevant skills that matched the project but are not yet approved.
+
+~~~yaml
+skills:
+  candidates:
     - java-21
     - spring-boot-3
 ~~~
 
-## Missing skills
+This preserves discovery without silently turning third-party guidance into trusted company knowledge.
 
-A detected technology may have no matching skill in the registry.
+### Missing
 
-That should be explicit.
-
-Example:
+`missing` contains detected technologies for which the current registry did not produce a compatible skill match.
 
 ~~~yaml
 skills:
@@ -132,7 +141,7 @@ skills:
     - oracle
 ~~~
 
-This is useful because the system can later recommend importing, creating or reviewing a skill rather than silently proceeding without specialized knowledge.
+This lets the system later recommend importing, creating or reviewing a skill rather than silently proceeding without specialized knowledge.
 
 ## Memory namespace
 
@@ -175,7 +184,9 @@ Project Detector
    ↓
 Project
    ↓
-Capabilities / Skill Resolver
+Skill Resolver
+   ↓
+recommended / candidates / missing
    ↓
 Agents + Skills + Tools
    ↓
@@ -200,7 +211,7 @@ A sample project is available at:
 2. Detected technologies should include evidence.
 3. Versions should be captured when deterministically available.
 4. Unknown architecture should remain unknown rather than guessed.
-5. Skill recommendations are references to the Skill Registry.
-6. Missing skills should be explicit.
+5. Enabled skills and candidate skills must remain distinguishable.
+6. Missing technology coverage should be explicit.
 7. Memory should be isolated by project namespace.
 8. Project definitions must remain independent from IDEs and AI model vendors.
