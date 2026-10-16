@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-os.local/schemas/capability.schema.json",
+  "title": "Capability",
+  "description": "A capability is a normalized unit of work or expertise that agents, skills and tools can provide or require.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "description", "category"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Stable machine-readable identifier in kebab-case."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 10
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "engineering",
+        "architecture",
+        "quality",
+        "security",
+        "operations",
+        "research",
+        "documentation",
+        "technology"
+      ]
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "status": {
+      "type": "string",
+      "enum": ["active", "deprecated"],
+      "default": "active"
+    }
+  }
+}
