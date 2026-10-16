@@ -1,0 +1,10 @@
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.cursor/
+.env
+.env.*
+bin/
+dist/
+tmp/
