@@ -1,0 +1,64 @@
+project:
+  id: supervielle-deuda-tc
+  name: Supervielle Deuda Total TC
+
+  repository:
+    type: git
+    remote: null
+    default_branch: null
+
+  detected:
+    frontend:
+      - name: angular
+        version: "20"
+        evidence:
+          - angular.json
+          - package.json
+
+    backend:
+      - name: java
+        version: "21"
+        evidence:
+          - pom.xml
+      - name: spring-boot
+        version: "3"
+        evidence:
+          - pom.xml
+
+    database:
+      - name: oracle
+        version: null
+        evidence:
+          - application configuration
+
+    testing:
+      - name: junit
+        version: null
+        evidence:
+          - pom.xml
+
+    build:
+      - name: maven
+        version: null
+        evidence:
+          - pom.xml
+
+    runtime: []
+    infrastructure: []
+
+  architecture:
+    style: unknown
+    notes: null
+
+  skills:
+    recommended:
+      - angular-core
+      - java-21
+      - spring-boot-3
+    missing:
+      - oracle
+      - junit
+
+  memory:
+    provider: engram
+    namespace: supervielle-deuda-tc
