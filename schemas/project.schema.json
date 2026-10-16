@@ -1,104 +1,122 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ai-engineering-os.local/schemas/project.schema.json",
-  "title": "Project",
+  "title": "ProjectFile",
   "description": "Describes the detected and declared engineering context of a software project.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "name", "repository", "detected", "architecture", "skills", "memory"],
+  "required": ["project"],
   "properties": {
-    "id": {
-      "type": "string",
-      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
-    },
-    "name": {
-      "type": "string",
-      "minLength": 1
-    },
-    "repository": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["type"],
-      "properties": {
-        "type": {
-          "type": "string",
-          "enum": ["git", "none"]
-        },
-        "remote": {
-          "type": ["string", "null"]
-        },
-        "default_branch": {
-          "type": ["string", "null"]
-        }
-      }
-    },
-    "detected": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "frontend": { "$ref": "#/$defs/technologyList" },
-        "backend": { "$ref": "#/$defs/technologyList" },
-        "database": { "$ref": "#/$defs/technologyList" },
-        "testing": { "$ref": "#/$defs/technologyList" },
-        "build": { "$ref": "#/$defs/technologyList" },
-        "runtime": { "$ref": "#/$defs/technologyList" },
-        "infrastructure": { "$ref": "#/$defs/technologyList" }
-      }
-    },
-    "architecture": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["style"],
-      "properties": {
-        "style": {
-          "type": "string",
-          "minLength": 1
-        },
-        "notes": {
-          "type": ["string", "null"]
-        }
-      }
-    },
-    "skills": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["recommended", "missing"],
-      "properties": {
-        "recommended": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": {
-            "type": "string",
-            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
-          }
-        },
-        "missing": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": {
-            "type": "string",
-            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
-          }
-        }
-      }
-    },
-    "memory": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["provider", "namespace"],
-      "properties": {
-        "provider": {
-          "type": "string",
-          "minLength": 1
-        },
-        "namespace": {
-          "type": "string",
-          "minLength": 1
-        }
-      }
+    "project": {
+      "$ref": "#/$defs/project"
     }
   },
   "$defs": {
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "repository", "detected", "architecture", "skills", "memory"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "repository": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["git", "none"]
+            },
+            "remote": {
+              "type": ["string", "null"]
+            },
+            "default_branch": {
+              "type": ["string", "null"]
+            }
+          }
+        },
+        "detected": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "frontend": { "$ref": "#/$defs/technologyList" },
+            "backend": { "$ref": "#/$defs/technologyList" },
+            "database": { "$ref": "#/$defs/technologyList" },
+            "testing": { "$ref": "#/$defs/technologyList" },
+            "build": { "$ref": "#/$defs/technologyList" },
+            "runtime": { "$ref": "#/$defs/technologyList" },
+            "infrastructure": { "$ref": "#/$defs/technologyList" }
+          }
+        },
+        "architecture": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["style"],
+          "properties": {
+            "style": {
+              "type": "string",
+              "minLength": 1
+            },
+            "notes": {
+              "type": ["string", "null"]
+            }
+          }
+        },
+        "skills": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["recommended", "candidates", "missing"],
+          "properties": {
+            "recommended": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+              }
+            },
+            "candidates": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+              }
+            },
+            "missing": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+              }
+            }
+          }
+        },
+        "memory": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["provider", "namespace"],
+          "properties": {
+            "provider": {
+              "type": "string",
+              "minLength": 1
+            },
+            "namespace": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
     "technologyList": {
       "type": "array",
       "items": {

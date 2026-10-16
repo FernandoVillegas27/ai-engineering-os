@@ -51,8 +51,10 @@ project:
     notes: null
 
   skills:
-    recommended:
+    recommended: []
+    candidates:
       - angular-core
+      - angular-architecture
       - java-21
       - spring-boot-3
     missing:
