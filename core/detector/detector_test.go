@@ -71,8 +71,8 @@ func TestInspectGoProject(t *testing.T) {
 		t.Fatalf("Inspect() error = %v", err)
 	}
 
-	assertTechnology(t, got.Backend, "go", "1")
-	assertTechnology(t, got.Runtime, "go", "1")
+	assertTechnology(t, got.Backend, "go", "1.23")
+	assertTechnology(t, got.Runtime, "go", "1.23")
 }
 
 func TestInspectEmptyProject(t *testing.T) {
