@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-os.local/schemas/tool.schema.json",
+  "title": "Tool",
+  "description": "Defines an external or local capability provider that agents and skills can use at runtime.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "description",
+    "category",
+    "interface",
+    "operations",
+    "risk",
+    "status"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 20
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "filesystem",
+        "version-control",
+        "documentation",
+        "code-intelligence",
+        "memory",
+        "browser",
+        "testing",
+        "database",
+        "deployment",
+        "communication",
+        "general"
+      ]
+    },
+    "interface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["native", "mcp", "connector", "cli", "api"]
+        },
+        "provider": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+      }
+    },
+    "access": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["read", "write", "execute", "network"]
+      }
+    },
+    "risk": {
+      "type": "string",
+      "enum": ["low", "medium", "high"]
+    },
+    "requires_approval": {
+      "type": "boolean",
+      "default": false
+    },
+    "availability_check": {
+      "type": ["string", "null"],
+      "description": "Deterministic check used by the runtime to determine whether the tool is available."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["enabled", "disabled", "deprecated"]
+    }
+  }
+}
