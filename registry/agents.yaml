@@ -1,0 +1,221 @@
+agents:
+  orchestrator:
+    id: orchestrator
+    role: orchestrator
+    mission: Coordinate work, select suitable agents and keep execution aligned with the requested outcome.
+    capabilities:
+      - technical-research
+      - code-review
+    skill_domains:
+      - orchestration
+      - architecture
+      - quality
+    tools:
+      required:
+        - filesystem
+      optional:
+        - github
+        - engram
+        - context7
+    permissions:
+      source_code: read
+      tests: read
+      git_commit: ask
+      git_push: ask
+      secrets: deny
+      production: deny
+    status: active
+
+  architect:
+    id: architect
+    role: architect
+    mission: Design system structure, boundaries and technical decisions while preserving project constraints.
+    capabilities:
+      - database-design
+      - api-development
+      - security-review
+    skill_domains:
+      - architecture
+      - backend
+      - database
+      - security
+    tools:
+      required:
+        - filesystem
+      optional:
+        - github
+        - context7
+        - codegraph
+        - engram
+    permissions:
+      source_code: read
+      tests: read
+      git_commit: ask
+      git_push: ask
+      secrets: deny
+      production: deny
+    status: active
+
+  researcher:
+    id: researcher
+    role: researcher
+    mission: Investigate technologies, APIs and documentation and return evidence-based implementation guidance.
+    capabilities:
+      - technical-research
+    skill_domains:
+      - research
+      - documentation
+    tools:
+      required: []
+      optional:
+        - context7
+        - github
+        - engram
+    permissions:
+      source_code: read
+      tests: read
+      git_commit: deny
+      git_push: deny
+      secrets: deny
+      production: deny
+    status: active
+
+  frontend-engineer:
+    id: frontend-engineer
+    role: frontend-engineer
+    mission: Implement and maintain user-facing application code according to project architecture and conventions.
+    capabilities:
+      - frontend-development
+      - automated-testing
+    skill_domains:
+      - frontend
+      - testing
+      - architecture
+    tools:
+      required:
+        - filesystem
+      optional:
+        - github
+        - context7
+        - codegraph
+        - engram
+    permissions:
+      source_code: write
+      tests: write
+      git_commit: ask
+      git_push: ask
+      secrets: deny
+      production: deny
+    status: active
+
+  backend-engineer:
+    id: backend-engineer
+    role: backend-engineer
+    mission: Implement and maintain backend logic, APIs and integrations according to project architecture.
+    capabilities:
+      - backend-development
+      - api-development
+      - automated-testing
+    skill_domains:
+      - backend
+      - database
+      - testing
+      - architecture
+    tools:
+      required:
+        - filesystem
+      optional:
+        - github
+        - context7
+        - codegraph
+        - engram
+    permissions:
+      source_code: write
+      tests: write
+      git_commit: ask
+      git_push: ask
+      secrets: deny
+      production: deny
+    status: active
+
+  database-engineer:
+    id: database-engineer
+    role: database-engineer
+    mission: Design and maintain schemas, queries and persistence patterns while protecting data integrity.
+    capabilities:
+      - database-design
+      - code-review
+    skill_domains:
+      - database
+      - backend
+      - performance
+    tools:
+      required:
+        - filesystem
+      optional:
+        - github
+        - codegraph
+        - engram
+    permissions:
+      source_code: write
+      tests: write
+      git_commit: ask
+      git_push: ask
+      secrets: deny
+      production: deny
+    status: active
+
+  qa-engineer:
+    id: qa-engineer
+    role: qa-engineer
+    mission: Verify requested behavior through automated testing, regression analysis and reproducible evidence.
+    capabilities:
+      - automated-testing
+      - code-review
+    skill_domains:
+      - testing
+      - quality
+    tools:
+      required:
+        - filesystem
+      optional:
+        - github
+        - playwright
+        - engram
+    permissions:
+      source_code: read
+      tests: write
+      git_commit: ask
+      git_push: ask
+      secrets: deny
+      production: deny
+    status: active
+
+  reviewer:
+    id: reviewer
+    role: reviewer
+    mission: Independently review implementation quality, correctness, maintainability and relevant security risks.
+    capabilities:
+      - code-review
+      - security-review
+      - automated-testing
+    skill_domains:
+      - quality
+      - security
+      - testing
+      - architecture
+    tools:
+      required:
+        - filesystem
+      optional:
+        - github
+        - codegraph
+        - engram
+    permissions:
+      source_code: read
+      tests: read
+      git_commit: deny
+      git_push: deny
+      secrets: deny
+      production: deny
+    status: active
