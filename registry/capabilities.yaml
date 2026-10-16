@@ -1,0 +1,64 @@
+capabilities:
+  backend-development:
+    description: Build and maintain backend application logic and services.
+    category: engineering
+    aliases:
+      - backend
+      - server-side
+    status: active
+
+  api-development:
+    description: Design and implement application programming interfaces and their contracts.
+    category: engineering
+    aliases:
+      - rest-api
+      - http-api
+    status: active
+
+  frontend-development:
+    description: Build and maintain user-facing web application interfaces.
+    category: engineering
+    aliases:
+      - frontend
+      - ui-development
+    status: active
+
+  database-design:
+    description: Design schemas, persistence models, queries and data access patterns.
+    category: architecture
+    aliases:
+      - persistence
+      - data-modeling
+    status: active
+
+  code-review:
+    description: Review code for correctness, maintainability, consistency and regressions.
+    category: quality
+    aliases:
+      - review
+      - peer-review
+    status: active
+
+  automated-testing:
+    description: Design and implement automated tests that verify requested behavior.
+    category: quality
+    aliases:
+      - testing
+      - test-automation
+    status: active
+
+  security-review:
+    description: Identify security risks and verify controls in code and system design.
+    category: security
+    aliases:
+      - application-security
+      - appsec
+    status: active
+
+  technical-research:
+    description: Investigate technologies, APIs, documentation and implementation options.
+    category: research
+    aliases:
+      - research
+      - investigation
+    status: active
