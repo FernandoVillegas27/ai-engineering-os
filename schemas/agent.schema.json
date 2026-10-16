@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-os.local/schemas/agent.schema.json",
+  "title": "Agent",
+  "description": "Defines a role-based engineering agent independently from any model, IDE or runtime.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "role",
+    "mission",
+    "capabilities",
+    "skill_domains",
+    "tools",
+    "permissions",
+    "status"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "role": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "mission": {
+      "type": "string",
+      "minLength": 20
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "skill_domains": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+      },
+      "uniqueItems": true
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "optional"],
+      "properties": {
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "uniqueItems": true
+        },
+        "optional": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_code",
+        "tests",
+        "git_commit",
+        "git_push",
+        "secrets",
+        "production"
+      ],
+      "properties": {
+        "source_code": {
+          "type": "string",
+          "enum": ["deny", "read", "write", "ask"]
+        },
+        "tests": {
+          "type": "string",
+          "enum": ["deny", "read", "write", "ask"]
+        },
+        "git_commit": {
+          "type": "string",
+          "enum": ["deny", "allow", "ask"]
+        },
+        "git_push": {
+          "type": "string",
+          "enum": ["deny", "allow", "ask"]
+        },
+        "secrets": {
+          "type": "string",
+          "enum": ["deny", "read", "ask"]
+        },
+        "production": {
+          "type": "string",
+          "enum": ["deny", "read", "write", "ask"]
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["active", "deprecated"]
+    }
+  }
+}
