@@ -1,0 +1,117 @@
+schema_version: 1
+
+tools:
+  filesystem:
+    id: filesystem
+    description: Read and modify files inside the active project workspace.
+    category: filesystem
+    interface:
+      type: native
+      provider: local-runtime
+    operations:
+      - read-files
+      - write-files
+      - list-files
+    access:
+      - read
+      - write
+    risk: medium
+    requires_approval: false
+    availability_check: workspace-accessible
+    status: enabled
+
+  github:
+    id: github
+    description: Inspect repositories, branches, commits, issues and pull requests and perform authorized repository actions.
+    category: version-control
+    interface:
+      type: connector
+      provider: github
+    operations:
+      - read-repository
+      - create-branch
+      - create-commit
+      - create-pull-request
+      - review-pull-request
+    access:
+      - read
+      - write
+      - network
+    risk: high
+    requires_approval: true
+    availability_check: github-connection-available
+    status: enabled
+
+  context7:
+    id: context7
+    description: Retrieve current framework and library documentation for implementation and research tasks.
+    category: documentation
+    interface:
+      type: mcp
+      provider: context7
+    operations:
+      - search-documentation
+      - read-documentation
+    access:
+      - read
+      - network
+    risk: low
+    requires_approval: false
+    availability_check: context7-available
+    status: enabled
+
+  codegraph:
+    id: codegraph
+    description: Inspect symbols, references and structural relationships across a source code repository.
+    category: code-intelligence
+    interface:
+      type: mcp
+      provider: codegraph
+    operations:
+      - inspect-symbols
+      - find-references
+      - inspect-code-graph
+    access:
+      - read
+    risk: low
+    requires_approval: false
+    availability_check: codegraph-available
+    status: enabled
+
+  engram:
+    id: engram
+    description: Persist and retrieve engineering memory across sessions and project work.
+    category: memory
+    interface:
+      type: mcp
+      provider: engram
+    operations:
+      - read-memory
+      - write-memory
+    access:
+      - read
+      - write
+    risk: medium
+    requires_approval: false
+    availability_check: engram-available
+    status: enabled
+
+  playwright:
+    id: playwright
+    description: Automate browser interactions and verify user-facing application behavior.
+    category: testing
+    interface:
+      type: mcp
+      provider: playwright
+    operations:
+      - navigate-browser
+      - interact-browser
+      - verify-ui
+    access:
+      - read
+      - execute
+      - network
+    risk: medium
+    requires_approval: false
+    availability_check: playwright-available
+    status: enabled
