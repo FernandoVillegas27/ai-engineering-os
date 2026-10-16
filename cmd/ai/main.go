@@ -1,13 +1,18 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/project"
 )
+
+type inspectOptions struct {
+	root         string
+	registryPath string
+	write        bool
+}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -31,40 +36,23 @@ func main() {
 }
 
 func runInspect(args []string) error {
-	flags := flag.NewFlagSet("inspect", flag.ContinueOnError)
-	flags.SetOutput(os.Stderr)
-
-	registryPath := flags.String("registry", "", "Ruta al registry/skills.yaml")
-	write := flags.Bool("write", false, "Escribir el resultado en .ai/project.yaml")
-
-	flags.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Uso: ai inspect [ruta-del-proyecto] [--registry ruta] [--write]")
-	}
-
-	if err := flags.Parse(args); err != nil {
-		return err
-	}
-
-	root := "."
-	if flags.NArg() > 1 {
-		return fmt.Errorf("se esperaba una sola ruta de proyecto")
-	}
-	if flags.NArg() == 1 {
-		root = flags.Arg(0)
-	}
-
-	resolvedRegistry, err := resolveSkillRegistry(*registryPath)
+	options, err := parseInspectArgs(args)
 	if err != nil {
 		return err
 	}
 
-	context, err := project.Build(root, resolvedRegistry)
+	resolvedRegistry, err := resolveSkillRegistry(options.registryPath)
 	if err != nil {
 		return err
 	}
 
-	if *write {
-		outputPath, err := project.Write(root, context)
+	context, err := project.Build(options.root, resolvedRegistry)
+	if err != nil {
+		return err
+	}
+
+	if options.write {
+		outputPath, err := project.Write(options.root, context)
 		if err != nil {
 			return err
 		}
@@ -81,8 +69,46 @@ func runInspect(args []string) error {
 	return nil
 }
 
+func parseInspectArgs(args []string) (inspectOptions, error) {
+	options := inspectOptions{root: "."}
+	var positional []string
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--write":
+			options.write = true
+		case "--registry":
+			if i+1 >= len(args) {
+				return inspectOptions{}, fmt.Errorf("--registry requiere una ruta")
+			}
+			i++
+			options.registryPath = args[i]
+		case "-h", "--help":
+			printInspectUsage()
+			os.Exit(0)
+		default:
+			if len(args[i]) > 0 && args[i][0] == '-' {
+				return inspectOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
+			}
+			positional = append(positional, args[i])
+		}
+	}
+
+	if len(positional) > 1 {
+		return inspectOptions{}, fmt.Errorf("se esperaba una sola ruta de proyecto")
+	}
+	if len(positional) == 1 {
+		options.root = positional[0]
+	}
+
+	return options, nil
+}
+
 func resolveSkillRegistry(explicit string) (string, error) {
 	if explicit != "" {
+		if !fileExists(explicit) {
+			return "", fmt.Errorf("no existe el Skill Registry indicado: %s", explicit)
+		}
 		return explicit, nil
 	}
 
@@ -114,4 +140,10 @@ func printUsage() {
 	fmt.Println()
 	fmt.Println("Comandos:")
 	fmt.Println("  inspect   Detecta el stack y resuelve skills para un proyecto")
+}
+
+func printInspectUsage() {
+	fmt.Println("Uso: ai inspect [ruta-del-proyecto] [--registry ruta] [--write]")
+	fmt.Println()
+	fmt.Println("Sin --write, el resultado se imprime en YAML y no modifica el proyecto.")
 }
