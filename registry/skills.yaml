@@ -1,3 +1,310 @@
 schema_version: 1
 
-skills: {}
+skills:
+  angular-core:
+    id: angular-core
+    description: Modern Angular component, signal, dependency injection and control-flow patterns.
+    source:
+      type: external
+      provider: gentleman-skills
+      repository: Gentleman-Programming/Gentleman-Skills
+      path: curated/angular/core/SKILL.md
+      version: git:c8036a37893679dc5e942484975405d39689c63b
+    trust:
+      level: curated
+      reviewed: false
+    capabilities:
+      - frontend-development
+    domains:
+      - frontend
+      - architecture
+    technologies:
+      - name: angular
+    compatible_agents:
+      - frontend-engineer
+      - architect
+      - reviewer
+    tools:
+      required: []
+      recommended:
+        - context7
+    activation:
+      triggers:
+        - angular
+        - signals
+        - standalone components
+      project_signals:
+        - angular.json
+        - package.json
+    status: candidate
+
+  angular-architecture:
+    id: angular-architecture
+    description: Angular project structure, feature boundaries and frontend architecture conventions.
+    source:
+      type: external
+      provider: gentleman-skills
+      repository: Gentleman-Programming/Gentleman-Skills
+      path: curated/angular/architecture/SKILL.md
+      version: git:c8036a37893679dc5e942484975405d39689c63b
+    trust:
+      level: curated
+      reviewed: false
+    capabilities:
+      - frontend-development
+      - code-review
+    domains:
+      - frontend
+      - architecture
+    technologies:
+      - name: angular
+    compatible_agents:
+      - frontend-engineer
+      - architect
+      - reviewer
+    tools:
+      required: []
+      recommended:
+        - context7
+        - codegraph
+    activation:
+      triggers:
+        - angular architecture
+        - angular project structure
+      project_signals:
+        - angular.json
+    status: candidate
+
+  typescript:
+    id: typescript
+    description: TypeScript typing, strictness, interfaces, generics and maintainable type-system patterns.
+    source:
+      type: external
+      provider: gentleman-skills
+      repository: Gentleman-Programming/Gentleman-Skills
+      path: curated/typescript/SKILL.md
+      version: git:c8036a37893679dc5e942484975405d39689c63b
+    trust:
+      level: curated
+      reviewed: false
+    capabilities:
+      - frontend-development
+      - backend-development
+      - code-review
+    domains:
+      - frontend
+      - backend
+      - quality
+    technologies:
+      - name: typescript
+    compatible_agents:
+      - frontend-engineer
+      - backend-engineer
+      - reviewer
+    tools:
+      required: []
+      recommended: []
+    activation:
+      triggers:
+        - typescript
+        - strict types
+      project_signals:
+        - package.json
+        - tsconfig.json
+    status: candidate
+
+  playwright:
+    id: playwright
+    description: End-to-end browser testing patterns, page objects, selectors and UI verification workflows.
+    source:
+      type: external
+      provider: gentleman-skills
+      repository: Gentleman-Programming/Gentleman-Skills
+      path: curated/playwright/SKILL.md
+      version: git:c8036a37893679dc5e942484975405d39689c63b
+    trust:
+      level: curated
+      reviewed: false
+    capabilities:
+      - automated-testing
+    domains:
+      - testing
+      - frontend
+      - quality
+    technologies:
+      - name: playwright
+    compatible_agents:
+      - qa-engineer
+      - frontend-engineer
+      - reviewer
+    tools:
+      required: []
+      recommended:
+        - playwright
+    activation:
+      triggers:
+        - playwright
+        - e2e
+        - end-to-end
+      project_signals:
+        - package.json
+        - playwright.config.ts
+    status: candidate
+
+  pytest:
+    id: pytest
+    description: Python testing patterns covering fixtures, mocking, parametrization, markers and async tests.
+    source:
+      type: external
+      provider: gentleman-skills
+      repository: Gentleman-Programming/Gentleman-Skills
+      path: curated/pytest/SKILL.md
+      version: git:c8036a37893679dc5e942484975405d39689c63b
+    trust:
+      level: curated
+      reviewed: false
+    capabilities:
+      - automated-testing
+    domains:
+      - testing
+      - backend
+      - quality
+    technologies:
+      - name: pytest
+    compatible_agents:
+      - qa-engineer
+      - backend-engineer
+      - reviewer
+    tools:
+      required: []
+      recommended: []
+    activation:
+      triggers:
+        - pytest
+        - python tests
+      project_signals:
+        - pyproject.toml
+        - pytest.ini
+    status: candidate
+
+  django-drf:
+    id: django-drf
+    description: Django REST Framework patterns for serializers, viewsets, filters, permissions and API testing.
+    source:
+      type: external
+      provider: gentleman-skills
+      repository: Gentleman-Programming/Gentleman-Skills
+      path: curated/django-drf/SKILL.md
+      version: git:c8036a37893679dc5e942484975405d39689c63b
+    trust:
+      level: curated
+      reviewed: false
+    capabilities:
+      - backend-development
+      - api-development
+      - automated-testing
+    domains:
+      - backend
+      - testing
+      - architecture
+    technologies:
+      - name: django
+    compatible_agents:
+      - backend-engineer
+      - architect
+      - qa-engineer
+      - reviewer
+    tools:
+      required: []
+      recommended:
+        - context7
+    activation:
+      triggers:
+        - django
+        - django rest framework
+        - drf
+      project_signals:
+        - pyproject.toml
+    status: candidate
+
+  java-21:
+    id: java-21
+    description: Java 21 language and runtime patterns including records, sealed types and virtual threads.
+    source:
+      type: external
+      provider: gentleman-skills
+      repository: Gentleman-Programming/Gentleman-Skills
+      path: community/java-21/SKILL.md
+      version: git:c8036a37893679dc5e942484975405d39689c63b
+    trust:
+      level: community
+      reviewed: false
+    capabilities:
+      - backend-development
+      - code-review
+    domains:
+      - backend
+      - architecture
+    technologies:
+      - name: java
+        versions:
+          - "21"
+    compatible_agents:
+      - backend-engineer
+      - architect
+      - reviewer
+    tools:
+      required: []
+      recommended:
+        - context7
+    activation:
+      triggers:
+        - java 21
+        - virtual threads
+        - records
+      project_signals:
+        - pom.xml
+        - build.gradle
+    status: candidate
+
+  spring-boot-3:
+    id: spring-boot-3
+    description: Spring Boot 3 patterns for dependency injection, configuration, transactions and REST services.
+    source:
+      type: external
+      provider: gentleman-skills
+      repository: Gentleman-Programming/Gentleman-Skills
+      path: community/spring-boot-3/SKILL.md
+      version: git:c8036a37893679dc5e942484975405d39689c63b
+    trust:
+      level: community
+      reviewed: false
+    capabilities:
+      - backend-development
+      - api-development
+      - code-review
+    domains:
+      - backend
+      - architecture
+    technologies:
+      - name: spring-boot
+        versions:
+          - "3"
+    compatible_agents:
+      - backend-engineer
+      - architect
+      - reviewer
+    tools:
+      required: []
+      recommended:
+        - context7
+        - codegraph
+    activation:
+      triggers:
+        - spring boot
+        - spring boot 3
+        - rest controller
+      project_signals:
+        - pom.xml
+        - build.gradle
+    status: candidate
