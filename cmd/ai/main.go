@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/project"
+	engramintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/engram"
 )
 
 type inspectOptions struct {
@@ -23,6 +25,11 @@ func main() {
 	switch os.Args[1] {
 	case "inspect":
 		if err := runInspect(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "memory":
+		if err := runMemory(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -67,6 +74,41 @@ func runInspect(args []string) error {
 	}
 	fmt.Print(string(data))
 	return nil
+}
+
+func runMemory(args []string) error {
+	if len(args) == 0 || args[0] == "status" {
+		client := engramintegration.New()
+		status, err := client.Status(context.Background())
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("Memoria persistente")
+		fmt.Printf("Proveedor: %s\n", status.Provider)
+
+		if !status.Available {
+			fmt.Println("Estado: no instalado")
+			fmt.Println("Engram no fue encontrado en PATH.")
+			return nil
+		}
+
+		fmt.Println("Estado: instalado")
+		if status.Version != "" {
+			fmt.Printf("Versión: %s\n", status.Version)
+		}
+		if status.Healthy {
+			fmt.Println("Diagnóstico: OK")
+		} else {
+			fmt.Println("Diagnóstico: requiere atención")
+		}
+		if status.Details != "" {
+			fmt.Printf("Detalle: %s\n", status.Details)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("subcomando de memoria desconocido: %s", args[0])
 }
 
 func parseInspectArgs(args []string) (inspectOptions, error) {
@@ -137,9 +179,11 @@ func printUsage() {
 	fmt.Println()
 	fmt.Println("Uso:")
 	fmt.Println("  ai inspect [ruta-del-proyecto] [--registry ruta] [--write]")
+	fmt.Println("  ai memory status")
 	fmt.Println()
 	fmt.Println("Comandos:")
 	fmt.Println("  inspect   Detecta el stack y resuelve skills para un proyecto")
+	fmt.Println("  memory    Verifica el proveedor de memoria persistente")
 }
 
 func printInspectUsage() {
