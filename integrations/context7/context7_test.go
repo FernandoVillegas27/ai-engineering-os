@@ -2,7 +2,7 @@ package context7
 
 import (
 	"context"
-	"errors"
+	"os/exec"
 	"reflect"
 	"testing"
 )
@@ -51,7 +51,7 @@ func TestStatusMissingNPX(t *testing.T) {
 	client := Client{
 		NPX: "npx",
 		Runner: &fakeRunner{
-			lookPathErr: execNotFound(),
+			lookPathErr: exec.ErrNotFound,
 		},
 	}
 
@@ -79,8 +79,4 @@ func TestRecommendedOperations(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("RecommendedOperations() = %#v", got)
 	}
-}
-
-func execNotFound() error {
-	return errors.New("executable file not found in %PATH%")
 }
