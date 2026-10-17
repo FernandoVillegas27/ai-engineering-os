@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/project"
+	context7integration "github.com/FernandoVillegas27/ai-engineering-os/integrations/context7"
 	engramintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/engram"
 )
 
@@ -30,6 +31,11 @@ func main() {
 		}
 	case "memory":
 		if err := runMemory(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "docs":
+		if err := runDocs(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -112,6 +118,42 @@ func runMemory(args []string) error {
 	return fmt.Errorf("subcomando de memoria desconocido: %s", args[0])
 }
 
+
+func runDocs(args []string) error {
+	if len(args) == 0 || args[0] == "status" {
+		client := context7integration.New()
+		status, err := client.Status(context.Background())
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("Documentación externa")
+		fmt.Printf("Proveedor: %s\n", status.Provider)
+
+		if !status.Available {
+			fmt.Println("Estado: no disponible")
+			fmt.Println("npx no fue encontrado en PATH.")
+			return nil
+		}
+
+		if status.Ready {
+			fmt.Println("Estado: listo")
+		} else {
+			fmt.Println("Estado: requiere atención")
+		}
+		if status.Version != "" {
+			fmt.Printf("npx: %s\n", status.Version)
+		}
+		fmt.Printf("Paquete MCP: %s\n", context7integration.DefaultPackage)
+		if !status.Ready && status.Details != "" {
+			fmt.Printf("Detalle: %s\n", status.Details)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("subcomando de documentación desconocido: %s", args[0])
+}
+
 func parseInspectArgs(args []string) (inspectOptions, error) {
 	options := inspectOptions{root: "."}
 	var positional []string
@@ -181,10 +223,12 @@ func printUsage() {
 	fmt.Println("Uso:")
 	fmt.Println("  ai inspect [ruta-del-proyecto] [--registry ruta] [--write]")
 	fmt.Println("  ai memory status")
+	fmt.Println("  ai docs status")
 	fmt.Println()
 	fmt.Println("Comandos:")
 	fmt.Println("  inspect   Detecta el stack y resuelve skills para un proyecto")
 	fmt.Println("  memory    Verifica el proveedor de memoria persistente")
+	fmt.Println("  docs      Verifica el proveedor de documentación externa")
 }
 
 func printInspectUsage() {

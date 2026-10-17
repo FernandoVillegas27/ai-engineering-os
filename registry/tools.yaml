@@ -50,8 +50,8 @@ tools:
       type: mcp
       provider: context7
     operations:
-      - search-documentation
-      - read-documentation
+      - resolve-library-id
+      - query-docs
     access:
       - read
       - network
