@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/FernandoVillegas27/ai-engineering-os/core/documentation"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/docprovider"
 )
 
 const (
@@ -55,7 +55,7 @@ func (c Client) ID() string {
 	return ProviderID
 }
 
-func (c Client) Status(ctx context.Context) (documentation.Status, error) {
+func (c Client) Status(ctx context.Context) (docprovider.Status, error) {
 	npx := c.NPX
 	if npx == "" {
 		npx = "npx"
@@ -68,19 +68,19 @@ func (c Client) Status(ctx context.Context) (documentation.Status, error) {
 	path, err := runner.LookPath(npx)
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			return documentation.Status{
+			return docprovider.Status{
 				Provider:  ProviderID,
 				Available: false,
 				Ready:     false,
 				Details:   "npx not found in PATH",
 			}, nil
 		}
-		return documentation.Status{}, fmt.Errorf("locate npx: %w", err)
+		return docprovider.Status{}, fmt.Errorf("locate npx: %w", err)
 	}
 
 	version, versionErr := runner.Run(ctx, path, "--version")
 	if versionErr != nil {
-		return documentation.Status{
+		return docprovider.Status{
 			Provider:  ProviderID,
 			Available: true,
 			Ready:     false,
@@ -88,7 +88,7 @@ func (c Client) Status(ctx context.Context) (documentation.Status, error) {
 		}, nil
 	}
 
-	return documentation.Status{
+	return docprovider.Status{
 		Provider:  ProviderID,
 		Available: true,
 		Ready:     true,
