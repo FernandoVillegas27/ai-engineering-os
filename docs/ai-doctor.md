@@ -27,6 +27,7 @@ The first version checks:
 - persisted AI Engineering OS project context;
 - Engram project scoping;
 - Engram provider health;
+- Gentle-AI installation/health;
 - Context7 launcher readiness.
 
 ## Example
@@ -40,6 +41,7 @@ AI Engineering OS Doctor
 [WARN] Project Context .ai/project.yaml todavía no existe.
 [OK]   Engram Project  Scope fijado en ai-engineering-os.
 [OK]   Engram          engram 3.4.0
+[WARN] Gentle-AI        Gentle-AI todavía no está instalado.
 [OK]   Context7        npx 10.2.4 · @upstash/context7-mcp@4.4.2
 
 Resultado: listo con advertencias
@@ -86,7 +88,6 @@ Future fix commands may be added separately when explicit mutation is appropriat
 
 Possible later additions include:
 
-- Gentle-AI availability;
 - CodeGraph;
 - Playwright;
 - agent runtime projection;
