@@ -13,7 +13,7 @@ It is not a general reasoning engine and it is not the default tool for business
 ## Architecture
 
 ~~~text
-core/documentation
+core/docprovider
       ↓ provider contract
 integrations/context7
       ↓
