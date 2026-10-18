@@ -88,13 +88,34 @@ func (c Client) Status(ctx context.Context) (projection.Status, error) {
 		details = doctorErr.Error()
 	}
 
+	healthy := doctorErr == nil && doctorReportsHealthy(details)
+
 	return projection.Status{
 		Provider:  ProviderID,
 		Available: true,
-		Healthy:   doctorErr == nil,
+		Healthy:   healthy,
 		Version:   version,
 		Details:   details,
 	}, nil
+}
+
+func doctorReportsHealthy(output string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(output))
+
+	if strings.Contains(normalized, "status:") {
+		if strings.Contains(normalized, "status:  unhealthy") ||
+			strings.Contains(normalized, "status: unhealthy") {
+			return false
+		}
+		if strings.Contains(normalized, "status:  healthy") ||
+			strings.Contains(normalized, "status: healthy") {
+			return true
+		}
+	}
+
+	return !strings.Contains(normalized, "[xx]") &&
+		!strings.Contains(normalized, " failed") &&
+		!strings.Contains(normalized, "unhealthy")
 }
 
 func (c Client) PreviewInstall(target string) (projection.Plan, error) {
