@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/doctor"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/project"
 	context7integration "github.com/FernandoVillegas27/ai-engineering-os/integrations/context7"
 	engramintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/engram"
+	gentleaiintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/gentleai"
 )
 
 type inspectOptions struct {
@@ -47,6 +49,11 @@ func main() {
 		}
 	case "doctor":
 		if err := runDoctor(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "gentle":
+		if err := runGentle(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -164,6 +171,71 @@ func runDocs(args []string) error {
 	return fmt.Errorf("subcomando de documentación desconocido: %s", args[0])
 }
 
+
+func runGentle(args []string) error {
+	client := gentleaiintegration.New()
+
+	if len(args) == 0 || args[0] == "status" {
+		status, err := client.Status(context.Background())
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("Runtime projection")
+		fmt.Printf("Proveedor: %s\n", status.Provider)
+
+		if !status.Available {
+			fmt.Println("Estado: no instalado")
+			fmt.Printf("Versión estable objetivo: %s\n", gentleaiintegration.StableVersion)
+			fmt.Println("Gentle-AI no fue encontrado en PATH.")
+			return nil
+		}
+
+		fmt.Println("Estado: instalado")
+		if status.Version != "" {
+			fmt.Printf("Versión: %s\n", status.Version)
+		}
+		if status.Healthy {
+			fmt.Println("Diagnóstico: OK")
+		} else {
+			fmt.Println("Diagnóstico: requiere atención")
+		}
+		if !status.Healthy && status.Details != "" {
+			fmt.Printf("Detalle: %s\n", status.Details)
+		}
+		return nil
+	}
+
+	if args[0] == "plan" {
+		if len(args) != 2 {
+			return fmt.Errorf("uso: ai gentle plan <runtime>")
+		}
+		target := args[1]
+
+		installPlan, err := client.PreviewInstall(target)
+		if err != nil {
+			return err
+		}
+		syncPlan, err := client.PreviewSync(target)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("Plan de proyección para %s\n", target)
+		fmt.Println()
+		fmt.Println("Instalación (preview, no modifica):")
+		fmt.Printf("  %s %s\n", installPlan.Command, strings.Join(installPlan.Args, " "))
+		fmt.Println()
+		fmt.Println("Sincronización (preview, no modifica):")
+		fmt.Printf("  %s %s\n", syncPlan.Command, strings.Join(syncPlan.Args, " "))
+		fmt.Println()
+		fmt.Println("Aplicación real: requiere aprobación explícita.")
+		return nil
+	}
+
+	return fmt.Errorf("subcomando Gentle-AI desconocido: %s", args[0])
+}
+
 func runDoctor(args []string) error {
 	options, err := parseDoctorArgs(args)
 	if err != nil {
@@ -233,6 +305,46 @@ func runDoctor(args []string) error {
 		checks = append(checks, doctor.Check{
 			ID:      "engram",
 			Label:   "Engram",
+			Level:   doctor.LevelOK,
+			Message: message,
+		})
+	}
+
+	gentleClient := gentleaiintegration.New()
+	gentleStatus, gentleErr := gentleClient.Status(context.Background())
+	switch {
+	case gentleErr != nil:
+		checks = append(checks, doctor.Check{
+			ID:      "gentle-ai",
+			Label:   "Gentle-AI",
+			Level:   doctor.LevelWarn,
+			Message: "No se pudo diagnosticar Gentle-AI.",
+			Hint:    gentleErr.Error(),
+		})
+	case !gentleStatus.Available:
+		checks = append(checks, doctor.Check{
+			ID:      "gentle-ai",
+			Label:   "Gentle-AI",
+			Level:   doctor.LevelWarn,
+			Message: "Gentle-AI todavía no está instalado.",
+			Hint:    "Usá ai gentle status y ai gentle plan cursor antes de instalarlo.",
+		})
+	case !gentleStatus.Healthy:
+		checks = append(checks, doctor.Check{
+			ID:      "gentle-ai",
+			Label:   "Gentle-AI",
+			Level:   doctor.LevelWarn,
+			Message: "Gentle-AI está instalado pero requiere atención.",
+			Hint:    "Ejecutá gentle-ai doctor.",
+		})
+	default:
+		message := "Gentle-AI saludable."
+		if gentleStatus.Version != "" {
+			message = gentleStatus.Version
+		}
+		checks = append(checks, doctor.Check{
+			ID:      "gentle-ai",
+			Label:   "Gentle-AI",
 			Level:   doctor.LevelOK,
 			Message: message,
 		})
@@ -419,12 +531,15 @@ func printUsage() {
 	fmt.Println("  ai memory status")
 	fmt.Println("  ai docs status")
 	fmt.Println("  ai doctor [ruta-del-proyecto] [--registry ruta]")
+	fmt.Println("  ai gentle status")
+	fmt.Println("  ai gentle plan <runtime>")
 	fmt.Println()
 	fmt.Println("Comandos:")
 	fmt.Println("  inspect   Detecta el stack y resuelve skills para un proyecto")
 	fmt.Println("  memory    Verifica el proveedor de memoria persistente")
 	fmt.Println("  docs      Verifica el proveedor de documentación externa")
 	fmt.Println("  doctor    Diagnostica el entorno local de AI Engineering OS")
+	fmt.Println("  gentle    Descubre Gentle-AI y previsualiza proyección por runtime")
 }
 
 func printInspectUsage() {
