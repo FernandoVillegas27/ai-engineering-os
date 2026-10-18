@@ -43,7 +43,7 @@ func TestStatusHealthy(t *testing.T) {
 	runner := &fakeRunner{
 		path:          "/usr/local/bin/gentle-ai",
 		versionOutput: "gentle-ai 4.2.0",
-		doctorOutput:  "all checks passed",
+		doctorOutput:  "Summary: 8 passed, 0 failed, 0 warnings\nStatus:  healthy",
 	}
 
 	client := Client{Binary: "gentle-ai", Runner: runner}
@@ -57,6 +57,28 @@ func TestStatusHealthy(t *testing.T) {
 	}
 	if status.Version != "gentle-ai 4.2.0" {
 		t.Fatalf("version = %q", status.Version)
+	}
+}
+
+
+func TestStatusUnhealthyEvenWhenDoctorExitsZero(t *testing.T) {
+	runner := &fakeRunner{
+		path:          "C:/Users/test/go/bin/gentle-ai.exe",
+		versionOutput: "gentle-ai 4.2.0",
+		doctorOutput:  "Summary: 8 passed, 5 failed, 0 warnings\nStatus:  unhealthy",
+		doctorErr:     nil,
+	}
+
+	client := Client{Binary: "gentle-ai", Runner: runner}
+	status, err := client.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if !status.Available {
+		t.Fatal("expected Gentle-AI to be available")
+	}
+	if status.Healthy {
+		t.Fatalf("expected unhealthy status, got %#v", status)
 	}
 }
 
