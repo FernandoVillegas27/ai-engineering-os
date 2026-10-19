@@ -35,6 +35,7 @@ func Classify(task string, capabilities registry.CapabilityRegistry) (Result, er
 	normalized := normalize(task)
 	intent, intentReason := detectIntent(normalized)
 	matches, reasons := detectCapabilities(normalized, capabilities)
+	matches, reasons = applyIntentCapabilities(intent, matches, reasons, capabilities)
 
 	result := Result{
 		Task:         task,
@@ -58,6 +59,25 @@ func Classify(task string, capabilities registry.CapabilityRegistry) (Result, er
 	result.NeedsAI = false
 	sort.Strings(result.Reasons)
 	return result, nil
+}
+
+
+func applyIntentCapabilities(
+	intent orchestration.Intent,
+	matches []string,
+	reasons []string,
+	registry registry.CapabilityRegistry,
+) ([]string, []string) {
+	switch intent {
+	case orchestration.IntentReview:
+		capability, ok := registry.Capabilities["code-review"]
+		if ok && capability.Status == "active" && !contains(matches, "code-review") {
+			matches = append(matches, "code-review")
+			reasons = append(reasons, "capability:code-review implied by intent:review")
+		}
+	}
+
+	return uniqueSorted(matches), reasons
 }
 
 func detectIntent(text string) (orchestration.Intent, string) {
@@ -206,4 +226,13 @@ func uniqueSorted(values []string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func contains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
