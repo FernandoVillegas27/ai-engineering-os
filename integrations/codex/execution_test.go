@@ -97,6 +97,11 @@ func TestExecutionRuntimeRunsCodexReadOnlyInProject(t *testing.T) {
 	if runner.invocation.Dir == root {
 		t.Fatal("Codex must not run against the original project root")
 	}
+	projectParent := filepath.Dir(root)
+	runtimeWorkspace := filepath.Dir(runner.invocation.Dir)
+	if filepath.Dir(runtimeWorkspace) != projectParent {
+		t.Fatalf("runtime workspace %q is not beside project parent %q", runtimeWorkspace, projectParent)
+	}
 	if runner.sensitiveExists {
 		t.Fatal("sensitive .env file was visible to Codex runtime")
 	}
