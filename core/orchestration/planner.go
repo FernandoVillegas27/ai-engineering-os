@@ -9,8 +9,19 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/resolver"
 )
 
+type Intent string
+
+const (
+	IntentImplement Intent = "implement"
+	IntentDesign    Intent = "design"
+	IntentResearch  Intent = "research"
+	IntentReview    Intent = "review"
+	IntentVerify    Intent = "verify"
+)
+
 type Request struct {
 	Capabilities []string
+	Intent       Intent
 }
 
 type AgentPlan struct {
@@ -31,6 +42,7 @@ type ToolPlan struct {
 }
 
 type Plan struct {
+	Intent                Intent
 	RequestedCapabilities []string
 	Agents                []AgentPlan
 	UncoveredCapabilities []string
@@ -48,14 +60,17 @@ func Build(
 		return Plan{}, fmt.Errorf("at least one capability is required")
 	}
 
-	for _, capability := range required {
-		if capability == "" {
-			return Plan{}, fmt.Errorf("capability cannot be empty")
-		}
+	intent := request.Intent
+	if intent == "" {
+		intent = IntentImplement
+	}
+	if !validIntent(intent) {
+		return Plan{}, fmt.Errorf("unsupported execution intent %q", intent)
 	}
 
-	selected, uncovered := selectAgents(required, agents)
+	selected, uncovered := selectAgents(required, intent, agents)
 	plan := Plan{
+		Intent:                intent,
 		RequestedCapabilities: required,
 		UncoveredCapabilities: uncovered,
 	}
@@ -112,7 +127,14 @@ type selectedAgent struct {
 	Capabilities []string
 }
 
-func selectAgents(required []string, registry registry.AgentRegistry) ([]selectedAgent, []string) {
+type agentCandidate struct {
+	ID             string
+	Coverage       []string
+	IntentScore    int
+	Specialization int
+}
+
+func selectAgents(required []string, intent Intent, registry registry.AgentRegistry) ([]selectedAgent, []string) {
 	remaining := make(map[string]bool, len(required))
 	for _, capability := range required {
 		remaining[capability] = true
@@ -122,8 +144,7 @@ func selectAgents(required []string, registry registry.AgentRegistry) ([]selecte
 	used := map[string]bool{}
 
 	for len(remaining) > 0 {
-		bestID := ""
-		var bestCoverage []string
+		var best *agentCandidate
 
 		ids := make([]string, 0, len(registry.Agents))
 		for id := range registry.Agents {
@@ -136,6 +157,9 @@ func selectAgents(required []string, registry registry.AgentRegistry) ([]selecte
 			if agent.Status != "active" || agent.Role == "orchestrator" || used[id] {
 				continue
 			}
+			if !eligibleForIntent(agent, intent) {
+				continue
+			}
 
 			var coverage []string
 			for capability := range remaining {
@@ -144,23 +168,32 @@ func selectAgents(required []string, registry registry.AgentRegistry) ([]selecte
 				}
 			}
 			sort.Strings(coverage)
+			if len(coverage) == 0 {
+				continue
+			}
 
-			if len(coverage) > len(bestCoverage) {
-				bestID = id
-				bestCoverage = coverage
+			candidate := agentCandidate{
+				ID:             id,
+				Coverage:       coverage,
+				IntentScore:    intentScore(agent, intent),
+				Specialization: specializationScore(agent, coverage),
+			}
+			if best == nil || betterCandidate(candidate, *best) {
+				copy := candidate
+				best = &copy
 			}
 		}
 
-		if bestID == "" || len(bestCoverage) == 0 {
+		if best == nil {
 			break
 		}
 
 		selected = append(selected, selectedAgent{
-			AgentID:      bestID,
-			Capabilities: bestCoverage,
+			AgentID:      best.ID,
+			Capabilities: best.Coverage,
 		})
-		used[bestID] = true
-		for _, capability := range bestCoverage {
+		used[best.ID] = true
+		for _, capability := range best.Coverage {
 			delete(remaining, capability)
 		}
 	}
@@ -171,6 +204,104 @@ func selectAgents(required []string, registry registry.AgentRegistry) ([]selecte
 	}
 	sort.Strings(uncovered)
 	return selected, uncovered
+}
+
+func betterCandidate(left, right agentCandidate) bool {
+	if len(left.Coverage) != len(right.Coverage) {
+		return len(left.Coverage) > len(right.Coverage)
+	}
+	if left.IntentScore != right.IntentScore {
+		return left.IntentScore > right.IntentScore
+	}
+	if left.Specialization != right.Specialization {
+		return left.Specialization > right.Specialization
+	}
+	return left.ID < right.ID
+}
+
+func eligibleForIntent(agent registry.Agent, intent Intent) bool {
+	switch intent {
+	case IntentImplement:
+		return agent.Permissions.SourceCode == "write" || agent.Permissions.Tests == "write"
+	case IntentDesign, IntentResearch, IntentReview:
+		return agent.Permissions.SourceCode == "read" || agent.Permissions.SourceCode == "write"
+	case IntentVerify:
+		return agent.Permissions.Tests == "read" || agent.Permissions.Tests == "write"
+	default:
+		return false
+	}
+}
+
+func intentScore(agent registry.Agent, intent Intent) int {
+	score := 0
+
+	switch intent {
+	case IntentImplement:
+		if agent.Permissions.SourceCode == "write" {
+			score += 40
+		}
+		if agent.Permissions.Tests == "write" {
+			score += 20
+		}
+		if agent.Role == "frontend-engineer" || agent.Role == "backend-engineer" || agent.Role == "database-engineer" {
+			score += 20
+		}
+	case IntentDesign:
+		if agent.Role == "architect" {
+			score += 60
+		}
+		if agent.Role == "database-engineer" {
+			score += 25
+		}
+		if agent.Permissions.SourceCode == "read" {
+			score += 10
+		}
+	case IntentResearch:
+		if agent.Role == "researcher" {
+			score += 60
+		}
+		if contains(agent.SkillDomains, "research") {
+			score += 20
+		}
+	case IntentReview:
+		if agent.Role == "reviewer" {
+			score += 60
+		}
+		if agent.Permissions.GitCommit == "deny" && agent.Permissions.GitPush == "deny" {
+			score += 15
+		}
+		if contains(agent.Capabilities, "code-review") {
+			score += 10
+		}
+	case IntentVerify:
+		if agent.Role == "qa-engineer" {
+			score += 60
+		}
+		if agent.Permissions.Tests == "write" {
+			score += 25
+		}
+		if contains(agent.Capabilities, "automated-testing") {
+			score += 10
+		}
+	}
+
+	return score
+}
+
+func specializationScore(agent registry.Agent, coverage []string) int {
+	if len(agent.Capabilities) == 0 {
+		return 0
+	}
+	return len(coverage)*100 - len(agent.Capabilities)
+}
+
+func validIntent(intent Intent) bool {
+	switch intent {
+	case IntentImplement, IntentDesign, IntentResearch, IntentReview, IntentVerify:
+		return true
+	default:
+		return false
+	}
 }
 
 func skillIDs(matches []resolver.SkillMatch) []string {
