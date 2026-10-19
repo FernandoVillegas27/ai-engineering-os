@@ -104,12 +104,25 @@ func classificationPrompt(request modelprovider.ClassificationRequest) string {
 	for _, intent := range request.AllowedIntents {
 		b.WriteString("- ")
 		b.WriteString(string(intent))
+		if description := intentDescription(intent); description != "" {
+			b.WriteString(": ")
+			b.WriteString(description)
+		}
 		b.WriteString("\n")
 	}
 	b.WriteString("\nAllowed capabilities:\n")
 	for _, capability := range request.AllowedCapabilities {
 		b.WriteString("- ")
-		b.WriteString(capability)
+		b.WriteString(capability.ID)
+		if description := strings.TrimSpace(capability.Description); description != "" {
+			b.WriteString(": ")
+			b.WriteString(description)
+		}
+		if len(capability.Aliases) > 0 {
+			b.WriteString(" (aliases: ")
+			b.WriteString(strings.Join(capability.Aliases, ", "))
+			b.WriteString(")")
+		}
 		b.WriteString("\n")
 	}
 	if context := strings.TrimSpace(request.ProjectContext); context != "" {
