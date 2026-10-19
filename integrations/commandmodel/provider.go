@@ -14,6 +14,7 @@ type Invocation struct {
 	Args    []string
 	Stdin   string
 	Dir     string
+	Env     []string
 }
 
 type Adapter interface {
@@ -36,6 +37,9 @@ func (OSRunner) LookPath(file string) (string, error) {
 func (OSRunner) Run(ctx context.Context, invocation Invocation) (string, string, error) {
 	command := exec.CommandContext(ctx, invocation.Command, invocation.Args...)
 	command.Dir = invocation.Dir
+	if invocation.Env != nil {
+		command.Env = invocation.Env
+	}
 	command.Stdin = bytes.NewBufferString(invocation.Stdin)
 
 	var stdout bytes.Buffer
