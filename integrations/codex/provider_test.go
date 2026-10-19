@@ -38,7 +38,7 @@ func TestBuildUsesReadOnlyNonInteractiveStructuredOutput(t *testing.T) {
 	for _, expected := range []string{
 		"exec",
 		"--sandbox read-only",
-		"--ask-for-approval never",
+		-c approval_policy="never",
 		"--output-schema",
 		"--output-last-message",
 	} {
