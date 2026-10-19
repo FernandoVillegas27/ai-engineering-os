@@ -137,7 +137,6 @@ func classificationSchema(request modelprovider.ClassificationRequest) ([]byte, 
 					"type": "string",
 					"enum": request.AllowedCapabilities,
 				},
-				"uniqueItems": true,
 			},
 			"can_classify": map[string]any{
 				"type": "boolean",
