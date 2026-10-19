@@ -54,6 +54,12 @@ func (r ExecutionRuntime) Analyze(ctx context.Context, unit execution.WorkUnit) 
 	}
 	defer os.RemoveAll(tempDir)
 
+	safeViewPath := filepath.Join(tempDir, "project")
+	safeView, err := execution.PrepareSafeReadOnlyView(unit.ProjectRoot, safeViewPath)
+	if err != nil {
+		return execution.Analysis{}, err
+	}
+
 	schemaPath := filepath.Join(tempDir, executionSchemaFileName)
 	resultPath := filepath.Join(tempDir, executionResultFileName)
 
@@ -91,8 +97,8 @@ func (r ExecutionRuntime) Analyze(ctx context.Context, unit execution.WorkUnit) 
 	invocation := commandmodel.Invocation{
 		Command: resolved,
 		Args:    args,
-		Stdin:   executionPrompt(unit),
-		Dir:     unit.ProjectRoot,
+		Stdin:   executionPrompt(unit, safeView),
+		Dir:     safeView.Root,
 	}
 
 	_, stderr, runErr := runner.Run(ctx, invocation)
@@ -115,14 +121,15 @@ func (r ExecutionRuntime) Analyze(ctx context.Context, unit execution.WorkUnit) 
 	return result, nil
 }
 
-func executionPrompt(unit execution.WorkUnit) string {
+func executionPrompt(unit execution.WorkUnit, safeView execution.SafeViewReport) string {
 	var b strings.Builder
 	b.WriteString("Act as the assigned AI Engineering OS agent and perform a READ-ONLY analysis of the current project.\n")
 	b.WriteString("You may inspect project files and run read-only inspection commands, but you must not modify, create, delete, rename, format, patch, commit, push, install, or reconfigure anything.\n")
 	b.WriteString("Do not access secrets, credentials, environment values, or production systems.\n")
 	b.WriteString("Return only the structured result required by the supplied JSON schema. Write the summary, findings, and evidence details in Spanish.\n")
 	b.WriteString("Findings must be grounded in evidence from the project. If there are no findings, return an empty findings array.\n")
-	b.WriteString("The logical tools listed below are planning metadata only. Do not assume external integrations are available; inspect only the local project unless the runtime explicitly provides another capability.\n\n")
+	b.WriteString("The logical tools listed below are planning metadata only. Do not assume external integrations are available; inspect only the local project unless the runtime explicitly provides another capability.\n")
+	b.WriteString("You are operating on a sanitized project view. Sensitive files, credential material, repository metadata, symlinks, and other protected paths have been removed before execution. Do not attempt to locate or reconstruct excluded content.\n\n")
 
 	b.WriteString("Work unit:\n")
 	b.WriteString("task: ")
@@ -137,6 +144,8 @@ func executionPrompt(unit execution.WorkUnit) string {
 	b.WriteString(strings.Join(unit.Skills, ", "))
 	b.WriteString("\nlogical tools: ")
 	b.WriteString(strings.Join(unit.Tools, ", "))
+	b.WriteString("\nsafe view copied files: ")
+	b.WriteString(fmt.Sprintf("%d", safeView.CopiedFiles))
 	b.WriteString("\n")
 	return b.String()
 }
