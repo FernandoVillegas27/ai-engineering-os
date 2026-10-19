@@ -15,12 +15,14 @@ func TestBuildSelectsSingleAgentForBackendAPI(t *testing.T) {
 			Role:         "backend-engineer",
 			Capabilities: []string{"backend-development", "api-development", "automated-testing"},
 			Tools:        registry.AgentTools{Required: []string{"filesystem"}, Optional: []string{"context7", "engram"}},
+			Permissions:  registry.AgentPermissions{SourceCode: "write", Tests: "write"},
 			Status:       "active",
 		},
 		"architect": {
 			ID:           "architect",
 			Role:         "architect",
 			Capabilities: []string{"api-development"},
+			Permissions:  registry.AgentPermissions{SourceCode: "read", Tests: "read"},
 			Status:       "active",
 		},
 	}}
@@ -62,11 +64,15 @@ func TestBuildUsesMultipleAgentsWhenNeeded(t *testing.T) {
 	agents := registry.AgentRegistry{Agents: map[string]registry.Agent{
 		"frontend-engineer": {
 			ID: "frontend-engineer", Role: "frontend-engineer",
-			Capabilities: []string{"frontend-development"}, Status: "active",
+			Capabilities: []string{"frontend-development"},
+			Permissions: registry.AgentPermissions{SourceCode: "write", Tests: "write"},
+			Status: "active",
 		},
 		"database-engineer": {
 			ID: "database-engineer", Role: "database-engineer",
-			Capabilities: []string{"database-design"}, Status: "active",
+			Capabilities: []string{"database-design"},
+			Permissions: registry.AgentPermissions{SourceCode: "write", Tests: "write"},
+			Status: "active",
 		},
 	}}
 	plan, err := Build(
@@ -108,11 +114,13 @@ func TestBuildExcludesOrchestratorAsWorker(t *testing.T) {
 		},
 		"researcher": {
 			ID: "researcher", Role: "researcher",
-			Capabilities: []string{"technical-research"}, Status: "active",
+			Capabilities: []string{"technical-research"},
+			Permissions: registry.AgentPermissions{SourceCode: "read", Tests: "read"},
+			Status: "active",
 		},
 	}}
 	plan, err := Build(
-		Request{Capabilities: []string{"technical-research"}},
+		Request{Capabilities: []string{"technical-research"}, Intent: IntentResearch},
 		detector.Detection{},
 		agents,
 		registry.SkillRegistry{SchemaVersion: 1, Skills: map[string]registry.Skill{}},
@@ -123,5 +131,112 @@ func TestBuildExcludesOrchestratorAsWorker(t *testing.T) {
 	}
 	if len(plan.Agents) != 1 || plan.Agents[0].AgentID != "researcher" {
 		t.Fatalf("agents = %#v", plan.Agents)
+	}
+}
+
+
+func TestImplementIntentPrefersDatabaseEngineerOverArchitect(t *testing.T) {
+	agents := registry.AgentRegistry{Agents: map[string]registry.Agent{
+		"architect": {
+			ID: "architect", Role: "architect",
+			Capabilities: []string{"database-design", "api-development", "security-review"},
+			Permissions: registry.AgentPermissions{SourceCode: "read", Tests: "read"},
+			Status: "active",
+		},
+		"database-engineer": {
+			ID: "database-engineer", Role: "database-engineer",
+			Capabilities: []string{"database-design", "code-review"},
+			Permissions: registry.AgentPermissions{SourceCode: "write", Tests: "write"},
+			Status: "active",
+		},
+	}}
+
+	plan, err := Build(
+		Request{Capabilities: []string{"database-design"}, Intent: IntentImplement},
+		detector.Detection{},
+		agents,
+		registry.SkillRegistry{SchemaVersion: 1, Skills: map[string]registry.Skill{}},
+		registry.ToolRegistry{SchemaVersion: 1, Tools: map[string]registry.Tool{}},
+	)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(plan.Agents) != 1 || plan.Agents[0].AgentID != "database-engineer" {
+		t.Fatalf("agents = %#v", plan.Agents)
+	}
+}
+
+func TestDesignIntentPrefersArchitect(t *testing.T) {
+	agents := registry.AgentRegistry{Agents: map[string]registry.Agent{
+		"architect": {
+			ID: "architect", Role: "architect",
+			Capabilities: []string{"database-design", "api-development", "security-review"},
+			Permissions: registry.AgentPermissions{SourceCode: "read", Tests: "read"},
+			Status: "active",
+		},
+		"database-engineer": {
+			ID: "database-engineer", Role: "database-engineer",
+			Capabilities: []string{"database-design", "code-review"},
+			Permissions: registry.AgentPermissions{SourceCode: "write", Tests: "write"},
+			Status: "active",
+		},
+	}}
+
+	plan, err := Build(
+		Request{Capabilities: []string{"database-design"}, Intent: IntentDesign},
+		detector.Detection{},
+		agents,
+		registry.SkillRegistry{SchemaVersion: 1, Skills: map[string]registry.Skill{}},
+		registry.ToolRegistry{SchemaVersion: 1, Tools: map[string]registry.Tool{}},
+	)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(plan.Agents) != 1 || plan.Agents[0].AgentID != "architect" {
+		t.Fatalf("agents = %#v", plan.Agents)
+	}
+}
+
+func TestReviewIntentPrefersReviewer(t *testing.T) {
+	agents := registry.AgentRegistry{Agents: map[string]registry.Agent{
+		"database-engineer": {
+			ID: "database-engineer", Role: "database-engineer",
+			Capabilities: []string{"database-design", "code-review"},
+			Permissions: registry.AgentPermissions{SourceCode: "write", Tests: "write", GitCommit: "ask", GitPush: "ask"},
+			Status: "active",
+		},
+		"reviewer": {
+			ID: "reviewer", Role: "reviewer",
+			Capabilities: []string{"code-review", "security-review", "automated-testing"},
+			Permissions: registry.AgentPermissions{SourceCode: "read", Tests: "read", GitCommit: "deny", GitPush: "deny"},
+			Status: "active",
+		},
+	}}
+
+	plan, err := Build(
+		Request{Capabilities: []string{"code-review"}, Intent: IntentReview},
+		detector.Detection{},
+		agents,
+		registry.SkillRegistry{SchemaVersion: 1, Skills: map[string]registry.Skill{}},
+		registry.ToolRegistry{SchemaVersion: 1, Tools: map[string]registry.Tool{}},
+	)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(plan.Agents) != 1 || plan.Agents[0].AgentID != "reviewer" {
+		t.Fatalf("agents = %#v", plan.Agents)
+	}
+}
+
+func TestUnknownIntentFails(t *testing.T) {
+	_, err := Build(
+		Request{Capabilities: []string{"code-review"}, Intent: Intent("ship-it")},
+		detector.Detection{},
+		registry.AgentRegistry{Agents: map[string]registry.Agent{}},
+		registry.SkillRegistry{SchemaVersion: 1, Skills: map[string]registry.Skill{}},
+		registry.ToolRegistry{SchemaVersion: 1, Tools: map[string]registry.Tool{}},
+	)
+	if err == nil {
+		t.Fatal("expected unsupported intent error")
 	}
 }
