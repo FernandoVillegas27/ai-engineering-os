@@ -10,14 +10,14 @@ import (
 
 func testCapabilities() registry.CapabilityRegistry {
 	return registry.CapabilityRegistry{Capabilities: map[string]registry.Capability{
-		"backend-development": {Status: "active", Aliases: []string{"backend", "server-side"}},
-		"api-development":     {Status: "active", Aliases: []string{"rest-api", "http-api"}},
-		"frontend-development": {Status: "active", Aliases: []string{"frontend", "ui-development"}},
-		"database-design":     {Status: "active", Aliases: []string{"persistence", "data-modeling"}},
-		"code-review":         {Status: "active", Aliases: []string{"review", "peer-review"}},
-		"automated-testing":   {Status: "active", Aliases: []string{"testing", "test-automation"}},
-		"security-review":     {Status: "active", Aliases: []string{"application-security", "appsec"}},
-		"technical-research":  {Status: "active", Aliases: []string{"research", "investigation"}},
+		"backend-development": {Status: "active", Description: "Build and maintain backend application logic and services.", Aliases: []string{"backend", "server-side"}},
+		"api-development":     {Status: "active", Description: "Design and implement application programming interfaces and their contracts.", Aliases: []string{"rest-api", "http-api"}},
+		"frontend-development": {Status: "active", Description: "Build and maintain user-facing web application interfaces.", Aliases: []string{"frontend", "ui-development"}},
+		"database-design":     {Status: "active", Description: "Design schemas, persistence models, queries and data access patterns.", Aliases: []string{"persistence", "data-modeling"}},
+		"code-review":         {Status: "active", Description: "Review code for correctness, maintainability, consistency and regressions.", Aliases: []string{"review", "peer-review"}},
+		"automated-testing":   {Status: "active", Description: "Design and implement automated tests that verify requested behavior.", Aliases: []string{"testing", "test-automation"}},
+		"security-review":     {Status: "active", Description: "Identify security risks and verify controls in code and system design.", Aliases: []string{"application-security", "appsec"}},
+		"technical-research":  {Status: "active", Description: "Investigate technologies, APIs, documentation and implementation options.", Aliases: []string{"research", "investigation"}},
 	}}
 }
 
