@@ -75,7 +75,7 @@ The resolver rejects:
 - unknown capabilities;
 - disabled/deprecated capabilities;
 - an empty capability set;
-- a refusal to classify without a clarification question.
+- a successful classification with unknown or inactive taxonomy values.
 
 The model output is data, not authority.
 
@@ -104,3 +104,12 @@ This step defines:
 It does not yet connect a concrete model provider.
 
 The next adapter can target one or more providers without changing the classifier or orchestration planner.
+
+
+## Core-generated clarification fallback
+
+Providers may decline classification without returning a usable clarification question.
+
+In that case, AI Engineering OS does not fail and does not guess. The core synthesizes a neutral clarification question and returns `ClarificationRequired=true`.
+
+This keeps clarification policy inside the platform rather than trusting every provider to phrase one correctly.
