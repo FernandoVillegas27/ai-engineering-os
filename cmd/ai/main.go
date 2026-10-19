@@ -233,7 +233,60 @@ func runGentle(args []string) error {
 		return nil
 	}
 
+	if args[0] == "validate" {
+		if len(args) != 2 || args[1] != "cursor" {
+			return fmt.Errorf("uso: ai gentle validate cursor")
+		}
+
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("resolver home del usuario: %w", err)
+		}
+
+		report := gentleaiintegration.ValidateCursor(home)
+		printGentleValidation(report)
+		return nil
+	}
+
 	return fmt.Errorf("subcomando Gentle-AI desconocido: %s", args[0])
+}
+
+
+func printGentleValidation(report gentleaiintegration.ValidationReport) {
+	fmt.Println("Cursor Projection")
+	fmt.Println()
+
+	warnings := 0
+	errors := 0
+
+	for _, check := range report.Checks {
+		var marker string
+		switch check.Level {
+		case gentleaiintegration.ValidationOK:
+			marker = "[OK]"
+		case gentleaiintegration.ValidationWarn:
+			marker = "[WARN]"
+			warnings++
+		case gentleaiintegration.ValidationError:
+			marker = "[ERROR]"
+			errors++
+		}
+
+		fmt.Printf("%-7s %-16s %s\n", marker, check.Label, check.Message)
+		if check.Hint != "" && check.Level != gentleaiintegration.ValidationOK {
+			fmt.Printf("        %-16s → %s\n", "", check.Hint)
+		}
+	}
+
+	fmt.Println()
+	switch {
+	case errors > 0:
+		fmt.Printf("Resultado: requiere atención (%d error/es, %d advertencia/s).\n", errors, warnings)
+	case warnings > 0:
+		fmt.Printf("Resultado: listo con %d advertencia/s.\n", warnings)
+	default:
+		fmt.Println("Resultado: listo.")
+	}
 }
 
 func runDoctor(args []string) error {
@@ -533,6 +586,7 @@ func printUsage() {
 	fmt.Println("  ai doctor [ruta-del-proyecto] [--registry ruta]")
 	fmt.Println("  ai gentle status")
 	fmt.Println("  ai gentle plan <runtime>")
+	fmt.Println("  ai gentle validate cursor")
 	fmt.Println()
 	fmt.Println("Comandos:")
 	fmt.Println("  inspect   Detecta el stack y resuelve skills para un proyecto")
