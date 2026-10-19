@@ -6,11 +6,17 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
 )
 
+type CapabilityOption struct {
+	ID          string
+	Description string
+	Aliases     []string
+}
+
 type ClassificationRequest struct {
-	Task               string
-	ProjectContext     string
-	AllowedIntents     []orchestration.Intent
-	AllowedCapabilities []string
+	Task                string
+	ProjectContext      string
+	AllowedIntents      []orchestration.Intent
+	AllowedCapabilities []CapabilityOption
 }
 
 type ClassificationResponse struct {
