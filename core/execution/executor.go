@@ -8,7 +8,8 @@ import (
 type Status string
 
 const (
-	StatusDryRun Status = "dry-run"
+	StatusDryRun    Status = "dry-run"
+	StatusCompleted Status = "completed"
 )
 
 type Result struct {
@@ -17,8 +18,11 @@ type Result struct {
 	Status     Status
 	Mode       Mode
 	Summary    string
+	Findings   []Finding
+	Evidence   []Evidence
 	Changes    []string
 	Executed   bool
+	Runtime    string
 }
 
 type Executor interface {
@@ -28,19 +32,8 @@ type Executor interface {
 type DryRunExecutor struct{}
 
 func (DryRunExecutor) Execute(_ context.Context, unit WorkUnit) (Result, error) {
-	if unit.ID == "" || unit.AgentID == "" {
-		return Result{}, fmt.Errorf("invalid work unit")
-	}
-	if unit.Mode != ModeReadOnly {
-		return Result{}, fmt.Errorf("dry-run executor only accepts read-only work units")
-	}
-	if unit.Permissions.SourceCode == "write" ||
-		unit.Permissions.Tests == "write" ||
-		unit.Permissions.GitCommit != "deny" ||
-		unit.Permissions.GitPush != "deny" ||
-		unit.Permissions.Secrets != "deny" ||
-		unit.Permissions.Production != "deny" {
-		return Result{}, fmt.Errorf("work unit exceeds dry-run permission envelope")
+	if err := validateReadOnlyUnit(unit); err != nil {
+		return Result{}, err
 	}
 
 	return Result{
@@ -49,6 +42,8 @@ func (DryRunExecutor) Execute(_ context.Context, unit WorkUnit) (Result, error) 
 		Status:     StatusDryRun,
 		Mode:       unit.Mode,
 		Summary:    "Work unit validated. No runtime agent was invoked and no project changes were made.",
+		Findings:   []Finding{},
+		Evidence:   []Evidence{},
 		Changes:    []string{},
 		Executed:   false,
 	}, nil
