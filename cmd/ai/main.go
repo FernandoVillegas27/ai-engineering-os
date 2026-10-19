@@ -15,6 +15,7 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
 	context7integration "github.com/FernandoVillegas27/ai-engineering-os/integrations/context7"
 	engramintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/engram"
+	codexintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/codex"
 	gentleaiintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/gentleai"
 )
 
@@ -34,6 +35,12 @@ type planOptions struct {
 	capabilities []string
 	intent       orchestration.Intent
 	task         string
+	useAI        bool
+}
+
+type classifyOptions struct {
+	task  string
+	useAI bool
 }
 
 func main() {
@@ -124,8 +131,9 @@ func runInspect(args []string) error {
 
 
 func runClassify(args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("uso: ai classify <tarea>")
+	options, err := parseClassifyArgs(args)
+	if err != nil {
+		return err
 	}
 
 	capabilitiesPath, err := resolveRegistryFile("capabilities.yaml")
@@ -137,13 +145,40 @@ func runClassify(args []string) error {
 		return err
 	}
 
-	result, err := classifier.Classify(strings.Join(args, " "), capabilities)
+	if !options.useAI {
+		result, err := classifier.Classify(options.task, capabilities)
+		if err != nil {
+			return err
+		}
+		printClassification(result)
+		return nil
+	}
+
+	resolution, err := classifier.Resolve(
+		context.Background(),
+		options.task,
+		capabilities,
+		"",
+		codexintegration.New(),
+	)
 	if err != nil {
 		return err
 	}
 
-	printClassification(result)
+	printClassificationResolution(resolution)
 	return nil
+}
+
+
+func printClassificationResolution(resolution classifier.Resolution) {
+	printClassification(resolution.Result)
+	fmt.Printf("Fuente: %s\n", resolution.Source)
+	if resolution.Provider != "" {
+		fmt.Printf("Provider: %s\n", resolution.Provider)
+	}
+	if resolution.ClarificationRequired {
+		fmt.Printf("Aclaración requerida: %s\n", resolution.ClarificationQuestion)
+	}
 }
 
 func printClassification(result classifier.Result) {
@@ -200,19 +235,44 @@ func runPlan(args []string) error {
 			return err
 		}
 
-		classification, err := classifier.Classify(options.task, capabilityRegistry)
-		if err != nil {
-			return err
-		}
-		printClassification(classification)
-		fmt.Println()
+		if options.useAI {
+			projectContext := readNormalizedProjectContext(absoluteRoot)
+			resolution, err := classifier.Resolve(
+				context.Background(),
+				options.task,
+				capabilityRegistry,
+				projectContext,
+				codexintegration.New(),
+			)
+			if err != nil {
+				return err
+			}
+			printClassificationResolution(resolution)
+			fmt.Println()
 
-		if classification.NeedsAI {
-			return fmt.Errorf("la tarea es ambigua para el clasificador determinista; requiere clasificación por IA antes de planificar")
-		}
+			if resolution.ClarificationRequired {
+				return fmt.Errorf("se requiere aclaración antes de planificar: %s", resolution.ClarificationQuestion)
+			}
+			if resolution.Result.NeedsAI {
+				return fmt.Errorf("la tarea sigue ambigua y no pudo clasificarse")
+			}
+			options.intent = resolution.Result.Intent
+			options.capabilities = resolution.Result.Capabilities
+		} else {
+			classification, err := classifier.Classify(options.task, capabilityRegistry)
+			if err != nil {
+				return err
+			}
+			printClassification(classification)
+			fmt.Println()
 
-		options.intent = classification.Intent
-		options.capabilities = classification.Capabilities
+			if classification.NeedsAI {
+				return fmt.Errorf("la tarea es ambigua para el clasificador determinista; repetí con --ai para habilitar el fallback de Codex")
+			}
+
+			options.intent = classification.Intent
+			options.capabilities = classification.Capabilities
+		}
 	}
 
 	agentsPath, err := resolveRegistryFile("agents.yaml")
@@ -675,6 +735,42 @@ func printDoctorReport(report doctor.Report) {
 }
 
 
+
+func parseClassifyArgs(args []string) (classifyOptions, error) {
+	var options classifyOptions
+	var taskParts []string
+
+	for _, arg := range args {
+		switch arg {
+		case "--ai":
+			options.useAI = true
+		case "-h", "--help":
+			return classifyOptions{}, fmt.Errorf("uso: ai classify [--ai] <tarea>")
+		default:
+			taskParts = append(taskParts, arg)
+		}
+	}
+
+	options.task = strings.TrimSpace(strings.Join(taskParts, " "))
+	if options.task == "" {
+		return classifyOptions{}, fmt.Errorf("uso: ai classify [--ai] <tarea>")
+	}
+	return options, nil
+}
+
+func readNormalizedProjectContext(root string) string {
+	path := filepath.Join(root, ".ai", "project.yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	const maxContextBytes = 32 * 1024
+	if len(data) > maxContextBytes {
+		data = data[:maxContextBytes]
+	}
+	return string(data)
+}
+
 func parsePlanArgs(args []string) (planOptions, error) {
 	options := planOptions{root: ".", intent: orchestration.IntentImplement}
 	var positional []string
@@ -699,6 +795,8 @@ func parsePlanArgs(args []string) (planOptions, error) {
 			}
 			i++
 			options.task = args[i]
+		case "--ai":
+			options.useAI = true
 		case "-h", "--help":
 			printPlanUsage()
 			os.Exit(0)
@@ -721,6 +819,9 @@ func parsePlanArgs(args []string) (planOptions, error) {
 	}
 	if options.task != "" && options.intent != orchestration.IntentImplement {
 		return planOptions{}, fmt.Errorf("--task y --intent no se pueden usar juntos; el intent se clasifica desde la tarea")
+	}
+	if options.useAI && options.task == "" {
+		return planOptions{}, fmt.Errorf("--ai solo puede usarse junto con --task")
 	}
 	if options.task == "" && len(options.capabilities) == 0 {
 		return planOptions{}, fmt.Errorf("indicá --task o al menos una --capability")
@@ -850,8 +951,8 @@ func printUsage() {
 	fmt.Println("  ai memory status")
 	fmt.Println("  ai docs status")
 	fmt.Println("  ai doctor [ruta-del-proyecto] [--registry ruta]")
-	fmt.Println("  ai classify <tarea>")
-	fmt.Println("  ai plan [ruta-del-proyecto] --task <tarea>")
+	fmt.Println("  ai classify [--ai] <tarea>")
+	fmt.Println("  ai plan [ruta-del-proyecto] --task <tarea> [--ai]")
 	fmt.Println("  ai plan [ruta-del-proyecto] [--intent implement|design|research|review|verify] --capability <id> [--capability <id>...]")
 	fmt.Println("  ai gentle status")
 	fmt.Println("  ai gentle plan <runtime>")
@@ -862,7 +963,7 @@ func printUsage() {
 	fmt.Println("  memory    Verifica el proveedor de memoria persistente")
 	fmt.Println("  docs      Verifica el proveedor de documentación externa")
 	fmt.Println("  doctor    Diagnostica el entorno local de AI Engineering OS")
-	fmt.Println("  classify  Convierte una tarea natural en intent + capabilities")
+	fmt.Println("  classify  Convierte una tarea natural en intent + capabilities; --ai habilita fallback Codex")
 	fmt.Println("  plan      Resuelve agentes, skills y tools desde tarea o capabilities explícitas")
 	fmt.Println("  gentle    Descubre Gentle-AI y previsualiza proyección por runtime")
 }
@@ -881,10 +982,10 @@ func printDoctorUsage() {
 
 func printPlanUsage() {
 	fmt.Println("Uso:")
-	fmt.Println("  ai plan [ruta-del-proyecto] --task <tarea>")
+	fmt.Println("  ai plan [ruta-del-proyecto] --task <tarea> [--ai]")
 	fmt.Println("  ai plan [ruta-del-proyecto] [--intent implement|design|research|review|verify] --capability <id> [--capability <id>...]")
 	fmt.Println()
-	fmt.Println("Con --task, intent y capabilities se clasifican primero.")
+	fmt.Println("Con --task, intent y capabilities se clasifican primero. --ai habilita fallback Codex solo si hace falta.")
 	fmt.Println("Con --capability, el intent por defecto es implement.")
 	fmt.Println("Genera un plan determinista. No ejecuta agentes ni modifica el proyecto.")
 }
