@@ -42,16 +42,33 @@ This keeps the routing core testable and provider-independent.
 
 ## Agent selection
 
-The planner uses deterministic greedy set coverage.
+The planner uses deterministic greedy set coverage with intent-aware ranking.
 
 Rules:
 
 1. only active agents are candidates;
-2. the `orchestrator` role is not selected as an implementation worker;
-3. the agent covering the most still-uncovered capabilities wins;
-4. ties are resolved by stable agent ID order;
-5. selection repeats until all capabilities are covered or no active agent can cover the remainder;
-6. uncovered capabilities are returned explicitly.
+2. the `orchestrator` role is never selected as a worker;
+3. agents must be eligible for the requested execution intent;
+4. the agent covering the most still-uncovered capabilities wins first;
+5. ties are ranked by intent suitability and permissions;
+6. remaining ties prefer the more specialized agent;
+7. stable agent ID is the final tie-breaker;
+8. selection repeats until all capabilities are covered or no eligible active agent can cover the remainder;
+9. uncovered capabilities are returned explicitly.
+
+### Execution intents
+
+Supported initial intents are:
+
+- `implement` — requires a worker with source-code or test write permission;
+- `design` — favors the architect for architecture-oriented work;
+- `research` — favors the researcher;
+- `review` — favors independent reviewers and non-mutating Git permissions;
+- `verify` — favors QA/test-oriented workers.
+
+The default is `implement`.
+
+This prevents a read-oriented agent from winning implementation work only because its ID sorts first.
 
 The planner does not invent a missing specialist.
 
@@ -87,7 +104,7 @@ Runtime availability remains the responsibility of provider/tool health checks s
 Example:
 
 ~~~powershell
-go run ./cmd/ai plan . --capability backend-development --capability api-development
+go run ./cmd/ai plan . --intent implement --capability backend-development --capability api-development
 ~~~
 
 Expected shape:
@@ -126,3 +143,21 @@ This step does not:
 - authorize Git or production actions.
 
 Those are separate layers.
+
+
+## Intent example
+
+The same capability may route differently depending on intent:
+
+~~~text
+database-design + implement
+→ database-engineer
+
+database-design + design
+→ architect
+
+code-review + review
+→ reviewer
+~~~
+
+This is intentional. Capability answers **what work is needed**; intent answers **what kind of action is being performed**.
