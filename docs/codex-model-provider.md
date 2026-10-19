@@ -53,7 +53,7 @@ The classification task must not require filesystem writes, shell execution or a
 
 ## Structured output
 
-The temporary JSON Schema constrains:
+The temporary JSON Schema uses only the structured-output subset supported by Codex and constrains:
 
 - `intent` to the exact allowed intent enum;
 - every element in `capabilities` to the exact allowed capability enum;
@@ -103,3 +103,10 @@ The caller decides which normalized project context is safe and useful to send t
 Classification is analysis-only.
 
 The Codex process is launched read-only and the result is treated as untrusted structured data until canonical validation succeeds.
+
+
+## Structured-output compatibility
+
+Codex structured output accepts only a subset of JSON Schema keywords.
+
+The adapter intentionally does not use `uniqueItems` for capabilities. Duplicate capability IDs, if any, are normalized by the core validator before orchestration.
