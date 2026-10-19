@@ -20,9 +20,17 @@ func requestFixture() modelprovider.ClassificationRequest {
 			orchestration.IntentImplement,
 			orchestration.IntentReview,
 		},
-		AllowedCapabilities: []string{
-			"frontend-development",
-			"code-review",
+		AllowedCapabilities: []modelprovider.CapabilityOption{
+			{
+				ID:          "frontend-development",
+				Description: "Build and maintain user-facing web application interfaces.",
+				Aliases:     []string{"frontend", "ui-development"},
+			},
+			{
+				ID:          "code-review",
+				Description: "Review code for correctness and maintainability.",
+				Aliases:     []string{"review", "peer-review"},
+			},
 		},
 	}
 }
@@ -51,7 +59,9 @@ func TestBuildUsesReadOnlyNonInteractiveStructuredOutput(t *testing.T) {
 		t.Fatalf("last arg = %q, want stdin marker", invocation.Args[len(invocation.Args)-1])
 	}
 	if !strings.Contains(invocation.Stdin, "Allowed capabilities") ||
-		!strings.Contains(invocation.Stdin, "frontend-development") {
+		!strings.Contains(invocation.Stdin, "frontend-development") ||
+		!strings.Contains(invocation.Stdin, "Build and maintain user-facing") ||
+		!strings.Contains(invocation.Stdin, "inspect existing code or design") {
 		t.Fatalf("prompt = %q", invocation.Stdin)
 	}
 }
