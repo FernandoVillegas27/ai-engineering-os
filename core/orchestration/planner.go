@@ -92,11 +92,6 @@ func Build(
 			requiredTools = append(requiredTools, skill.Tools.Required...)
 			recommendedTools = append(recommendedTools, skill.Tools.Recommended...)
 		}
-		for _, match := range resolution.Candidates {
-			skill := skills.Skills[match.SkillID]
-			requiredTools = append(requiredTools, skill.Tools.Required...)
-			recommendedTools = append(recommendedTools, skill.Tools.Recommended...)
-		}
 
 		requiredTools = enabledToolIDs(uniqueSorted(requiredTools), tools)
 		recommendedTools = enabledToolIDs(uniqueSorted(recommendedTools), tools)
