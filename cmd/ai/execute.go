@@ -15,10 +15,11 @@ import (
 )
 
 type executeOptions struct {
-	root   string
-	task   string
-	useAI  bool
-	dryRun bool
+	root    string
+	task    string
+	useAI   bool
+	dryRun  bool
+	runtime string
 }
 
 func runExecute(args []string) error {
@@ -123,13 +124,26 @@ func runExecute(args []string) error {
 		return err
 	}
 
-	fmt.Println("Execution Dry Run")
+	var executor execution.Executor
+	title := "Execution Dry Run"
+	if options.dryRun {
+		executor = execution.DryRunExecutor{}
+	} else {
+		switch options.runtime {
+		case "codex":
+			executor = execution.RuntimeExecutor{Runtime: codexintegration.NewExecutionRuntime()}
+			title = "Execution Read-Only Runtime"
+		default:
+			return fmt.Errorf("runtime no soportado: %s", options.runtime)
+		}
+	}
+
+	fmt.Println(title)
 	fmt.Println()
 	fmt.Printf("Proyecto: %s\n", root)
 	fmt.Printf("Intent: %s\n", plan.Intent)
 	fmt.Printf("Work units: %d\n", len(units))
 
-	executor := execution.DryRunExecutor{}
 	for _, unit := range units {
 		result, err := executor.Execute(context.Background(), unit)
 		if err != nil {
@@ -152,11 +166,33 @@ func runExecute(args []string) error {
 		fmt.Printf("    git_push: %s\n", unit.Permissions.GitPush)
 		fmt.Printf("    status: %s\n", result.Status)
 		fmt.Printf("    executed: %t\n", result.Executed)
+		if result.Runtime != "" {
+			fmt.Printf("    runtime: %s\n", result.Runtime)
+		}
 		fmt.Printf("    changes: %d\n", len(result.Changes))
+		if strings.TrimSpace(result.Summary) != "" {
+			fmt.Printf("    summary: %s\n", result.Summary)
+		}
+		if len(result.Findings) > 0 {
+			fmt.Println("    findings:")
+			for _, finding := range result.Findings {
+				fmt.Printf("      - [%s] %s: %s\n", finding.Severity, finding.Title, finding.Detail)
+			}
+		}
+		if len(result.Evidence) > 0 {
+			fmt.Println("    evidence:")
+			for _, evidence := range result.Evidence {
+				fmt.Printf("      - %s: %s\n", evidence.Path, evidence.Detail)
+			}
+		}
 	}
 
 	fmt.Println()
-	fmt.Println("Dry-run completado: ningún runtime fue invocado y el proyecto no fue modificado.")
+	if options.dryRun {
+		fmt.Println("Dry-run completado: ningún runtime fue invocado y el proyecto no fue modificado.")
+	} else {
+		fmt.Println("Ejecución read-only completada: el runtime analizó el proyecto sin modificarlo.")
+	}
 	return nil
 }
 
@@ -176,8 +212,14 @@ func parseExecuteArgs(args []string) (executeOptions, error) {
 			options.useAI = true
 		case "--dry-run":
 			options.dryRun = true
+		case "--runtime":
+			if i+1 >= len(args) {
+				return executeOptions{}, fmt.Errorf("--runtime requiere un valor")
+			}
+			i++
+			options.runtime = args[i]
 		case "-h", "--help":
-			return executeOptions{}, fmt.Errorf("uso: ai execute [ruta-del-proyecto] --task <tarea> --dry-run [--ai]")
+			return executeOptions{}, fmt.Errorf("uso: ai execute [ruta-del-proyecto] --task <tarea> (--dry-run | --runtime codex) [--ai]")
 		default:
 			if strings.HasPrefix(args[i], "-") {
 				return executeOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
@@ -195,8 +237,14 @@ func parseExecuteArgs(args []string) (executeOptions, error) {
 	if strings.TrimSpace(options.task) == "" {
 		return executeOptions{}, fmt.Errorf("--task es obligatorio")
 	}
-	if !options.dryRun {
-		return executeOptions{}, fmt.Errorf("Execution Engine v1 requiere --dry-run")
+	if options.dryRun && options.runtime != "" {
+		return executeOptions{}, fmt.Errorf("--dry-run y --runtime no se pueden usar juntos")
+	}
+	if !options.dryRun && options.runtime == "" {
+		return executeOptions{}, fmt.Errorf("indicá --dry-run o --runtime codex")
+	}
+	if options.runtime != "" && options.runtime != "codex" {
+		return executeOptions{}, fmt.Errorf("runtime no soportado: %s", options.runtime)
 	}
 
 	return options, nil
