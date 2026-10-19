@@ -110,3 +110,10 @@ The Codex process is launched read-only and the result is treated as untrusted s
 Codex structured output accepts only a subset of JSON Schema keywords.
 
 The adapter intentionally does not use `uniqueItems` for capabilities. Duplicate capability IDs, if any, are normalized by the core validator before orchestration.
+
+
+## Classification guidance
+
+The Codex prompt includes short intent definitions plus capability descriptions and aliases from the canonical Capability Registry.
+
+The provider is instructed to classify when the requested action and engineering concern can be reasonably mapped to the allowed taxonomy. Clarification is reserved for genuinely missing or materially ambiguous routing information; implementation details such as file names are not required merely to classify a task.
