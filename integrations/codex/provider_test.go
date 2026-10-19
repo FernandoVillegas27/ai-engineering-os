@@ -70,7 +70,7 @@ func TestSchemaConstrainsTaxonomy(t *testing.T) {
 	capabilities := properties["capabilities"].(map[string]any)
 	items := capabilities["items"].(map[string]any)
 
-	if !reflect.DeepEqual(intent["enum"], []any{"implement", "review"}) {
+	if !reflect.DeepEqual(intent["enum"], []any{"", "implement", "review"}) {
 		t.Fatalf("intent enum = %#v", intent["enum"])
 	}
 	if !reflect.DeepEqual(items["enum"], []any{"frontend-development", "code-review"}) {
