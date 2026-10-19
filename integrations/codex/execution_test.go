@@ -14,7 +14,8 @@ import (
 )
 
 type executionFakeRunner struct {
-	invocation commandmodel.Invocation
+	invocation      commandmodel.Invocation
+	sensitiveExists bool
 }
 
 func (f *executionFakeRunner) LookPath(file string) (string, error) {
@@ -23,6 +24,8 @@ func (f *executionFakeRunner) LookPath(file string) (string, error) {
 
 func (f *executionFakeRunner) Run(_ context.Context, invocation commandmodel.Invocation) (string, string, error) {
 	f.invocation = invocation
+	_, envErr := os.Stat(filepath.Join(invocation.Dir, ".env"))
+	f.sensitiveExists = envErr == nil
 
 	var resultPath string
 	for i := 0; i < len(invocation.Args)-1; i++ {
@@ -77,6 +80,12 @@ func executionUnitFixture(root string) execution.WorkUnit {
 
 func TestExecutionRuntimeRunsCodexReadOnlyInProject(t *testing.T) {
 	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".env"), []byte("TOKEN=secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	runner := &executionFakeRunner{}
 	runtime := ExecutionRuntime{Binary: "codex", Runner: runner}
 
@@ -85,8 +94,11 @@ func TestExecutionRuntimeRunsCodexReadOnlyInProject(t *testing.T) {
 		t.Fatalf("Analyze() error = %v", err)
 	}
 
-	if runner.invocation.Dir != root {
-		t.Fatalf("dir = %q, want %q", runner.invocation.Dir, root)
+	if runner.invocation.Dir == root {
+		t.Fatal("Codex must not run against the original project root")
+	}
+	if runner.sensitiveExists {
+		t.Fatal("sensitive .env file was visible to Codex runtime")
 	}
 	joined := strings.Join(runner.invocation.Args, " ")
 	for _, expected := range []string{
@@ -101,7 +113,8 @@ func TestExecutionRuntimeRunsCodexReadOnlyInProject(t *testing.T) {
 			t.Fatalf("args %q missing %q", joined, expected)
 		}
 	}
-	if !strings.Contains(runner.invocation.Stdin, "READ-ONLY") {
+	if !strings.Contains(runner.invocation.Stdin, "READ-ONLY") ||
+		!strings.Contains(runner.invocation.Stdin, "sanitized project view") {
 		t.Fatalf("prompt = %q", runner.invocation.Stdin)
 	}
 	if len(result.Findings) != 1 || len(result.Evidence) != 1 {
