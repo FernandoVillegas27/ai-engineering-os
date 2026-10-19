@@ -1,9 +1,6 @@
 package execution
 
-import (
-	"context"
-	"fmt"
-)
+import "context"
 
 type Status string
 
