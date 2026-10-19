@@ -103,3 +103,14 @@ func TestDecodeReadsStructuredResult(t *testing.T) {
 		t.Fatalf("capabilities = %#v", response.Capabilities)
 	}
 }
+
+
+func TestSchemaAvoidsUnsupportedUniqueItems(t *testing.T) {
+	data, err := classificationSchema(requestFixture())
+	if err != nil {
+		t.Fatalf("classificationSchema() error = %v", err)
+	}
+	if strings.Contains(string(data), "uniqueItems") {
+		t.Fatalf("schema contains unsupported uniqueItems: %s", string(data))
+	}
+}
