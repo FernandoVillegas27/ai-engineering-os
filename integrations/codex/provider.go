@@ -92,7 +92,7 @@ func (a Adapter) Decode(workDir string) (modelprovider.ClassificationResponse, e
 func classificationPrompt(request modelprovider.ClassificationRequest) string {
 	var b strings.Builder
 	b.WriteString("Classify the software-engineering task using only the allowed taxonomy below.\n")
-	b.WriteString("Do not invent intents or capabilities. If the task is genuinely underspecified, set can_classify=false and ask exactly one focused clarification question.\n")
+	b.WriteString("Do not invent intents or capabilities. If the task is genuinely underspecified, set can_classify=false, intent=\"\", capabilities=[], and ask exactly one focused clarification question.\n")
 	b.WriteString("Return only the structured output required by the supplied JSON schema.\n\n")
 	b.WriteString("Task:\n")
 	b.WriteString(request.Task)
@@ -117,7 +117,7 @@ func classificationPrompt(request modelprovider.ClassificationRequest) string {
 }
 
 func classificationSchema(request modelprovider.ClassificationRequest) ([]byte, error) {
-	intents := make([]string, 0, len(request.AllowedIntents))
+	intents := []string{""}
 	for _, intent := range request.AllowedIntents {
 		intents = append(intents, string(intent))
 	}
