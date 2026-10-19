@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/FernandoVillegas27/ai-engineering-os/core/classifier"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/detector"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/doctor"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
@@ -32,6 +33,7 @@ type planOptions struct {
 	root         string
 	capabilities []string
 	intent       orchestration.Intent
+	task         string
 }
 
 func main() {
@@ -63,6 +65,11 @@ func main() {
 		}
 	case "plan":
 		if err := runPlan(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "classify":
+		if err := runClassify(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -115,6 +122,58 @@ func runInspect(args []string) error {
 }
 
 
+
+func runClassify(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("uso: ai classify <tarea>")
+	}
+
+	capabilitiesPath, err := resolveRegistryFile("capabilities.yaml")
+	if err != nil {
+		return err
+	}
+	capabilities, err := registry.LoadCapabilities(capabilitiesPath)
+	if err != nil {
+		return err
+	}
+
+	result, err := classifier.Classify(strings.Join(args, " "), capabilities)
+	if err != nil {
+		return err
+	}
+
+	printClassification(result)
+	return nil
+}
+
+func printClassification(result classifier.Result) {
+	fmt.Println("Task Classification")
+	fmt.Println()
+	fmt.Printf("Tarea: %s\n", result.Task)
+	if result.Intent != "" {
+		fmt.Printf("Intent: %s\n", result.Intent)
+	} else {
+		fmt.Println("Intent: sin resolver")
+	}
+	if len(result.Capabilities) > 0 {
+		fmt.Printf("Capabilities: %s\n", strings.Join(result.Capabilities, ", "))
+	} else {
+		fmt.Println("Capabilities: sin resolver")
+	}
+	fmt.Printf("Confianza: %s\n", result.Confidence)
+	if result.NeedsAI {
+		fmt.Println("Escalado IA: requerido")
+	} else {
+		fmt.Println("Escalado IA: no requerido")
+	}
+	if len(result.Reasons) > 0 {
+		fmt.Println("Evidencia:")
+		for _, reason := range result.Reasons {
+			fmt.Printf("  - %s\n", reason)
+		}
+	}
+}
+
 func runPlan(args []string) error {
 	options, err := parsePlanArgs(args)
 	if err != nil {
@@ -129,6 +188,31 @@ func runPlan(args []string) error {
 	detection, err := detector.Inspect(absoluteRoot)
 	if err != nil {
 		return fmt.Errorf("inspeccionar proyecto: %w", err)
+	}
+
+	if options.task != "" {
+		capabilitiesPath, err := resolveRegistryFile("capabilities.yaml")
+		if err != nil {
+			return err
+		}
+		capabilityRegistry, err := registry.LoadCapabilities(capabilitiesPath)
+		if err != nil {
+			return err
+		}
+
+		classification, err := classifier.Classify(options.task, capabilityRegistry)
+		if err != nil {
+			return err
+		}
+		printClassification(classification)
+		fmt.Println()
+
+		if classification.NeedsAI {
+			return fmt.Errorf("la tarea es ambigua para el clasificador determinista; requiere clasificación por IA antes de planificar")
+		}
+
+		options.intent = classification.Intent
+		options.capabilities = classification.Capabilities
 	}
 
 	agentsPath, err := resolveRegistryFile("agents.yaml")
@@ -609,6 +693,12 @@ func parsePlanArgs(args []string) (planOptions, error) {
 			}
 			i++
 			options.intent = orchestration.Intent(args[i])
+		case "--task":
+			if i+1 >= len(args) {
+				return planOptions{}, fmt.Errorf("--task requiere texto")
+			}
+			i++
+			options.task = args[i]
 		case "-h", "--help":
 			printPlanUsage()
 			os.Exit(0)
@@ -626,8 +716,14 @@ func parsePlanArgs(args []string) (planOptions, error) {
 	if len(positional) == 1 {
 		options.root = positional[0]
 	}
-	if len(options.capabilities) == 0 {
-		return planOptions{}, fmt.Errorf("indicá al menos una --capability")
+	if options.task != "" && len(options.capabilities) > 0 {
+		return planOptions{}, fmt.Errorf("--task y --capability no se pueden usar juntos")
+	}
+	if options.task != "" && options.intent != orchestration.IntentImplement {
+		return planOptions{}, fmt.Errorf("--task y --intent no se pueden usar juntos; el intent se clasifica desde la tarea")
+	}
+	if options.task == "" && len(options.capabilities) == 0 {
+		return planOptions{}, fmt.Errorf("indicá --task o al menos una --capability")
 	}
 
 	return options, nil
@@ -754,6 +850,8 @@ func printUsage() {
 	fmt.Println("  ai memory status")
 	fmt.Println("  ai docs status")
 	fmt.Println("  ai doctor [ruta-del-proyecto] [--registry ruta]")
+	fmt.Println("  ai classify <tarea>")
+	fmt.Println("  ai plan [ruta-del-proyecto] --task <tarea>")
 	fmt.Println("  ai plan [ruta-del-proyecto] [--intent implement|design|research|review|verify] --capability <id> [--capability <id>...]")
 	fmt.Println("  ai gentle status")
 	fmt.Println("  ai gentle plan <runtime>")
@@ -764,7 +862,8 @@ func printUsage() {
 	fmt.Println("  memory    Verifica el proveedor de memoria persistente")
 	fmt.Println("  docs      Verifica el proveedor de documentación externa")
 	fmt.Println("  doctor    Diagnostica el entorno local de AI Engineering OS")
-	fmt.Println("  plan      Resuelve agentes, skills y tools desde capabilities explícitas")
+	fmt.Println("  classify  Convierte una tarea natural en intent + capabilities")
+	fmt.Println("  plan      Resuelve agentes, skills y tools desde tarea o capabilities explícitas")
 	fmt.Println("  gentle    Descubre Gentle-AI y previsualiza proyección por runtime")
 }
 
@@ -781,8 +880,11 @@ func printDoctorUsage() {
 }
 
 func printPlanUsage() {
-	fmt.Println("Uso: ai plan [ruta-del-proyecto] [--intent implement|design|research|review|verify] --capability <id> [--capability <id>...]")
+	fmt.Println("Uso:")
+	fmt.Println("  ai plan [ruta-del-proyecto] --task <tarea>")
+	fmt.Println("  ai plan [ruta-del-proyecto] [--intent implement|design|research|review|verify] --capability <id> [--capability <id>...]")
 	fmt.Println()
-	fmt.Println("Intent por defecto: implement.")
+	fmt.Println("Con --task, intent y capabilities se clasifican primero.")
+	fmt.Println("Con --capability, el intent por defecto es implement.")
 	fmt.Println("Genera un plan determinista. No ejecuta agentes ni modifica el proyecto.")
 }
