@@ -38,7 +38,7 @@ Classification runs with:
 
 ~~~text
 --sandbox read-only
---ask-for-approval never
+-c 'approval_policy="never"'
 --output-schema <temporary-schema>
 --output-last-message <temporary-result>
 -

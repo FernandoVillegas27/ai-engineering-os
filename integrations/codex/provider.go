@@ -59,7 +59,7 @@ func (a Adapter) Build(request modelprovider.ClassificationRequest, workDir stri
 	args := []string{
 		"exec",
 		"--sandbox", "read-only",
-		"--ask-for-approval", "never",
+		"-c", `approval_policy="never"`,
 		"--output-schema", schemaPath,
 		"--output-last-message", resultPath,
 	}
