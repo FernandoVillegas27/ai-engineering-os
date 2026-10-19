@@ -104,6 +104,7 @@ func (r ExecutionRuntime) Analyze(ctx context.Context, unit execution.WorkUnit) 
 		Args:    args,
 		Stdin:   executionPrompt(unit, safeView),
 		Dir:     safeView.Root,
+		Env:     safeRuntimeEnvironment(),
 	}
 
 	_, stderr, runErr := runner.Run(ctx, invocation)
@@ -208,4 +209,37 @@ func executionSchema() ([]byte, error) {
 		return nil, fmt.Errorf("marshal Codex execution schema: %w", err)
 	}
 	return data, nil
+}
+
+
+func safeRuntimeEnvironment() []string {
+	allowed := []string{
+		"PATH",
+		"PATHEXT",
+		"SYSTEMROOT",
+		"WINDIR",
+		"COMSPEC",
+		"TEMP",
+		"TMP",
+		"TMPDIR",
+		"USERPROFILE",
+		"HOME",
+		"APPDATA",
+		"LOCALAPPDATA",
+		"PROGRAMDATA",
+		"PROGRAMFILES",
+		"PROGRAMFILES(X86)",
+		"PROGRAMW6432",
+		"LANG",
+		"LC_ALL",
+		"TERM",
+	}
+
+	env := make([]string, 0, len(allowed))
+	for _, key := range allowed {
+		if value, ok := os.LookupEnv(key); ok {
+			env = append(env, key+"="+value)
+		}
+	}
+	return env
 }
