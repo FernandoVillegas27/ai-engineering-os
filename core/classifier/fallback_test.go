@@ -206,3 +206,30 @@ func TestResolveConstrainsProviderRequest(t *testing.T) {
 		t.Fatal("expected allowed capabilities")
 	}
 }
+
+
+func TestResolveSynthesizesClarificationWhenProviderOmitsQuestion(t *testing.T) {
+	provider := &fakeProvider{
+		id: "fake",
+		response: modelprovider.ClassificationResponse{
+			CanClassify: false,
+		},
+	}
+
+	resolution, err := Resolve(
+		context.Background(),
+		"Necesito mejorar esto",
+		testCapabilities(),
+		"",
+		provider,
+	)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if !resolution.ClarificationRequired {
+		t.Fatal("expected clarification")
+	}
+	if resolution.ClarificationQuestion == "" {
+		t.Fatal("expected synthesized clarification question")
+	}
+}

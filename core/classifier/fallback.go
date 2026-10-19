@@ -67,7 +67,7 @@ func Resolve(
 	if !response.CanClassify {
 		question := strings.TrimSpace(response.ClarificationQuestion)
 		if question == "" {
-			return Resolution{}, fmt.Errorf("AI provider %s declined classification without a clarification question", provider.ID())
+			question = defaultClarificationQuestion(activeCapabilityIDs(capabilities))
 		}
 
 		return Resolution{
@@ -166,4 +166,11 @@ func validAIIntent(intent orchestration.Intent) bool {
 		}
 	}
 	return false
+}
+
+func defaultClarificationQuestion(activeCapabilities []string) string {
+	if len(activeCapabilities) == 0 {
+		return "¿Qué querés lograr exactamente con esta tarea?"
+	}
+	return "¿Qué querés lograr exactamente y sobre qué parte del sistema querés trabajar?"
 }
