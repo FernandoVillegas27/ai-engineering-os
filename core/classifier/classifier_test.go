@@ -90,3 +90,18 @@ func TestClassifyResearch(t *testing.T) {
 		t.Fatalf("capabilities = %#v, want %#v", got.Capabilities, want)
 	}
 }
+
+
+func TestReviewIntentDoesNotInventMissingCapability(t *testing.T) {
+	capabilities := testCapabilities()
+	delete(capabilities.Capabilities, "code-review")
+
+	got, err := Classify("Revisá este cambio de base de datos", capabilities)
+	if err != nil {
+		t.Fatalf("Classify() error = %v", err)
+	}
+
+	if !reflect.DeepEqual(got.Capabilities, []string{"database-design"}) {
+		t.Fatalf("capabilities = %#v", got.Capabilities)
+	}
+}
