@@ -58,6 +58,7 @@ func (a Adapter) Build(request modelprovider.ClassificationRequest, workDir stri
 
 	args := []string{
 		"exec",
+		"--skip-git-repo-check",
 		"--sandbox", "read-only",
 		"-c", `approval_policy="never"`,
 		"--output-schema", schemaPath,
