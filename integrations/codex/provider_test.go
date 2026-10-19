@@ -37,6 +37,7 @@ func TestBuildUsesReadOnlyNonInteractiveStructuredOutput(t *testing.T) {
 	joined := strings.Join(invocation.Args, " ")
 	for _, expected := range []string{
 		"exec",
+		"--skip-git-repo-check",
 		"--sandbox read-only",
 		`-c approval_policy="never"`,
 		"--output-schema",

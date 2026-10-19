@@ -34,9 +34,12 @@ It does not know Codex prompts, flags or schemas.
 
 The Codex adapter uses non-interactive `codex exec`.
 
+The adapter runs in an isolated temporary directory, so it explicitly skips the repository trust check.
+
 Classification runs with:
 
 ~~~text
+--skip-git-repo-check
 --sandbox read-only
 -c 'approval_policy="never"'
 --output-schema <temporary-schema>
