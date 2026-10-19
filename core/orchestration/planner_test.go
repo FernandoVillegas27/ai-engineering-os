@@ -15,12 +15,14 @@ func TestBuildSelectsSingleAgentForBackendAPI(t *testing.T) {
 			Role:         "backend-engineer",
 			Capabilities: []string{"backend-development", "api-development", "automated-testing"},
 			Tools:        registry.AgentTools{Required: []string{"filesystem"}, Optional: []string{"context7", "engram"}},
+			Permissions:  registry.AgentPermissions{SourceCode: "write", Tests: "write"},
 			Status:       "active",
 		},
 		"architect": {
 			ID:           "architect",
 			Role:         "architect",
 			Capabilities: []string{"api-development"},
+			Permissions:  registry.AgentPermissions{SourceCode: "read", Tests: "read"},
 			Status:       "active",
 		},
 	}}
@@ -62,11 +64,15 @@ func TestBuildUsesMultipleAgentsWhenNeeded(t *testing.T) {
 	agents := registry.AgentRegistry{Agents: map[string]registry.Agent{
 		"frontend-engineer": {
 			ID: "frontend-engineer", Role: "frontend-engineer",
-			Capabilities: []string{"frontend-development"}, Status: "active",
+			Capabilities: []string{"frontend-development"},
+			Permissions: registry.AgentPermissions{SourceCode: "write", Tests: "write"},
+			Status: "active",
 		},
 		"database-engineer": {
 			ID: "database-engineer", Role: "database-engineer",
-			Capabilities: []string{"database-design"}, Status: "active",
+			Capabilities: []string{"database-design"},
+			Permissions: registry.AgentPermissions{SourceCode: "write", Tests: "write"},
+			Status: "active",
 		},
 	}}
 	plan, err := Build(
@@ -108,11 +114,13 @@ func TestBuildExcludesOrchestratorAsWorker(t *testing.T) {
 		},
 		"researcher": {
 			ID: "researcher", Role: "researcher",
-			Capabilities: []string{"technical-research"}, Status: "active",
+			Capabilities: []string{"technical-research"},
+			Permissions: registry.AgentPermissions{SourceCode: "read", Tests: "read"},
+			Status: "active",
 		},
 	}}
 	plan, err := Build(
-		Request{Capabilities: []string{"technical-research"}},
+		Request{Capabilities: []string{"technical-research"}, Intent: IntentResearch},
 		detector.Detection{},
 		agents,
 		registry.SkillRegistry{SchemaVersion: 1, Skills: map[string]registry.Skill{}},
