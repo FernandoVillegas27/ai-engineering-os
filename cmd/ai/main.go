@@ -31,6 +31,7 @@ type doctorOptions struct {
 type planOptions struct {
 	root         string
 	capabilities []string
+	intent       orchestration.Intent
 }
 
 func main() {
@@ -157,7 +158,10 @@ func runPlan(args []string) error {
 	}
 
 	plan, err := orchestration.Build(
-		orchestration.Request{Capabilities: options.capabilities},
+		orchestration.Request{
+			Capabilities: options.capabilities,
+			Intent:       options.intent,
+		},
 		detection,
 		agents,
 		skills,
@@ -170,6 +174,7 @@ func runPlan(args []string) error {
 	fmt.Println("Execution Plan")
 	fmt.Println()
 	fmt.Printf("Proyecto: %s\n", absoluteRoot)
+	fmt.Printf("Intent: %s\n", plan.Intent)
 	fmt.Printf("Capabilities: %s\n", strings.Join(plan.RequestedCapabilities, ", "))
 
 	if len(plan.Agents) == 0 {
@@ -587,7 +592,7 @@ func printDoctorReport(report doctor.Report) {
 
 
 func parsePlanArgs(args []string) (planOptions, error) {
-	options := planOptions{root: "."}
+	options := planOptions{root: ".", intent: orchestration.IntentImplement}
 	var positional []string
 
 	for i := 0; i < len(args); i++ {
@@ -598,6 +603,12 @@ func parsePlanArgs(args []string) (planOptions, error) {
 			}
 			i++
 			options.capabilities = append(options.capabilities, args[i])
+		case "--intent":
+			if i+1 >= len(args) {
+				return planOptions{}, fmt.Errorf("--intent requiere un valor")
+			}
+			i++
+			options.intent = orchestration.Intent(args[i])
 		case "-h", "--help":
 			printPlanUsage()
 			os.Exit(0)
@@ -743,7 +754,7 @@ func printUsage() {
 	fmt.Println("  ai memory status")
 	fmt.Println("  ai docs status")
 	fmt.Println("  ai doctor [ruta-del-proyecto] [--registry ruta]")
-	fmt.Println("  ai plan [ruta-del-proyecto] --capability <id> [--capability <id>...]")
+	fmt.Println("  ai plan [ruta-del-proyecto] [--intent implement|design|research|review|verify] --capability <id> [--capability <id>...]")
 	fmt.Println("  ai gentle status")
 	fmt.Println("  ai gentle plan <runtime>")
 	fmt.Println("  ai gentle validate cursor")
@@ -770,7 +781,8 @@ func printDoctorUsage() {
 }
 
 func printPlanUsage() {
-	fmt.Println("Uso: ai plan [ruta-del-proyecto] --capability <id> [--capability <id>...]")
+	fmt.Println("Uso: ai plan [ruta-del-proyecto] [--intent implement|design|research|review|verify] --capability <id> [--capability <id>...]")
 	fmt.Println()
+	fmt.Println("Intent por defecto: implement.")
 	fmt.Println("Genera un plan determinista. No ejecuta agentes ni modifica el proyecto.")
 }
