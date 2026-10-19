@@ -32,7 +32,7 @@ func TestBuildSelectsSingleAgentForBackendAPI(t *testing.T) {
 			Capabilities:     []string{"backend-development", "api-development"},
 			Technologies:     []registry.Technology{{Name: "spring-boot", Versions: []string{"3"}}},
 			CompatibleAgents: []string{"backend-engineer"},
-			Tools:            registry.SkillTools{Recommended: []string{"context7"}},
+			Tools:            registry.SkillTools{Required: []string{"context7"}},
 			Status:           "candidate",
 		},
 	}}
@@ -57,6 +57,13 @@ func TestBuildSelectsSingleAgentForBackendAPI(t *testing.T) {
 	}
 	if !reflect.DeepEqual(plan.Agents[0].Skills.Candidates, []string{"spring-boot-3"}) {
 		t.Fatalf("candidate skills = %#v", plan.Agents[0].Skills.Candidates)
+	}
+	if reflect.DeepEqual(plan.Agents[0].Tools.Required, []string{"context7", "filesystem"}) ||
+		reflect.DeepEqual(plan.Agents[0].Tools.Required, []string{"filesystem", "context7"}) {
+		t.Fatalf("candidate skill must not contribute executable tools: %#v", plan.Agents[0].Tools.Required)
+	}
+	if !reflect.DeepEqual(plan.Agents[0].Tools.Required, []string{"filesystem"}) {
+		t.Fatalf("required tools = %#v", plan.Agents[0].Tools.Required)
 	}
 }
 
