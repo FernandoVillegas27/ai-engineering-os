@@ -7,8 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/FernandoVillegas27/ai-engineering-os/core/detector"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/doctor"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/project"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
 	context7integration "github.com/FernandoVillegas27/ai-engineering-os/integrations/context7"
 	engramintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/engram"
 	gentleaiintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/gentleai"
@@ -23,6 +26,11 @@ type inspectOptions struct {
 type doctorOptions struct {
 	root         string
 	registryPath string
+}
+
+type planOptions struct {
+	root         string
+	capabilities []string
 }
 
 func main() {
@@ -49,6 +57,11 @@ func main() {
 		}
 	case "doctor":
 		if err := runDoctor(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "plan":
+		if err := runPlan(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -97,6 +110,98 @@ func runInspect(args []string) error {
 		return err
 	}
 	fmt.Print(string(data))
+	return nil
+}
+
+
+func runPlan(args []string) error {
+	options, err := parsePlanArgs(args)
+	if err != nil {
+		return err
+	}
+
+	absoluteRoot, err := filepath.Abs(options.root)
+	if err != nil {
+		return fmt.Errorf("resolver ruta del proyecto: %w", err)
+	}
+
+	detection, err := detector.Inspect(absoluteRoot)
+	if err != nil {
+		return fmt.Errorf("inspeccionar proyecto: %w", err)
+	}
+
+	agentsPath, err := resolveRegistryFile("agents.yaml")
+	if err != nil {
+		return err
+	}
+	skillsPath, err := resolveRegistryFile("skills.yaml")
+	if err != nil {
+		return err
+	}
+	toolsPath, err := resolveRegistryFile("tools.yaml")
+	if err != nil {
+		return err
+	}
+
+	agents, err := registry.LoadAgents(agentsPath)
+	if err != nil {
+		return err
+	}
+	skills, err := registry.LoadSkills(skillsPath)
+	if err != nil {
+		return err
+	}
+	toolRegistry, err := registry.LoadTools(toolsPath)
+	if err != nil {
+		return err
+	}
+
+	plan, err := orchestration.Build(
+		orchestration.Request{Capabilities: options.capabilities},
+		detection,
+		agents,
+		skills,
+		toolRegistry,
+	)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Execution Plan")
+	fmt.Println()
+	fmt.Printf("Proyecto: %s\n", absoluteRoot)
+	fmt.Printf("Capabilities: %s\n", strings.Join(plan.RequestedCapabilities, ", "))
+
+	if len(plan.Agents) == 0 {
+		fmt.Println("Agentes: ninguno")
+	} else {
+		fmt.Println("Agentes:")
+		for _, agent := range plan.Agents {
+			fmt.Printf("  - %s\n", agent.AgentID)
+			fmt.Printf("    capabilities: %s\n", strings.Join(agent.Capabilities, ", "))
+			if len(agent.Skills.Enabled) > 0 {
+				fmt.Printf("    skills enabled: %s\n", strings.Join(agent.Skills.Enabled, ", "))
+			}
+			if len(agent.Skills.Candidates) > 0 {
+				fmt.Printf("    skills candidate: %s\n", strings.Join(agent.Skills.Candidates, ", "))
+			}
+			if len(agent.Tools.Required) > 0 {
+				fmt.Printf("    tools required: %s\n", strings.Join(agent.Tools.Required, ", "))
+			}
+			if len(agent.Tools.Recommended) > 0 {
+				fmt.Printf("    tools recommended: %s\n", strings.Join(agent.Tools.Recommended, ", "))
+			}
+		}
+	}
+
+	if len(plan.UncoveredCapabilities) > 0 {
+		fmt.Printf("Sin cobertura: %s\n", strings.Join(plan.UncoveredCapabilities, ", "))
+	} else {
+		fmt.Println("Sin cobertura: ninguna")
+	}
+
+	fmt.Println()
+	fmt.Println("Este plan no ejecuta agentes ni modifica el proyecto.")
 	return nil
 }
 
@@ -480,6 +585,43 @@ func printDoctorReport(report doctor.Report) {
 	}
 }
 
+
+func parsePlanArgs(args []string) (planOptions, error) {
+	options := planOptions{root: "."}
+	var positional []string
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--capability":
+			if i+1 >= len(args) {
+				return planOptions{}, fmt.Errorf("--capability requiere un id")
+			}
+			i++
+			options.capabilities = append(options.capabilities, args[i])
+		case "-h", "--help":
+			printPlanUsage()
+			os.Exit(0)
+		default:
+			if len(args[i]) > 0 && args[i][0] == '-' {
+				return planOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
+			}
+			positional = append(positional, args[i])
+		}
+	}
+
+	if len(positional) > 1 {
+		return planOptions{}, fmt.Errorf("se esperaba una sola ruta de proyecto")
+	}
+	if len(positional) == 1 {
+		options.root = positional[0]
+	}
+	if len(options.capabilities) == 0 {
+		return planOptions{}, fmt.Errorf("indicá al menos una --capability")
+	}
+
+	return options, nil
+}
+
 func parseInspectArgs(args []string) (inspectOptions, error) {
 	options := inspectOptions{root: "."}
 	var positional []string
@@ -548,6 +690,23 @@ func parseDoctorArgs(args []string) (doctorOptions, error) {
 	return options, nil
 }
 
+
+func resolveRegistryFile(name string) (string, error) {
+	if home := os.Getenv("AI_ENGINEERING_OS_HOME"); home != "" {
+		path := filepath.Join(home, "registry", name)
+		if fileExists(path) {
+			return path, nil
+		}
+	}
+
+	local := filepath.Join("registry", name)
+	if fileExists(local) {
+		return local, nil
+	}
+
+	return "", fmt.Errorf("no se encontró registry/%s; ejecutá desde AI Engineering OS o configurá AI_ENGINEERING_OS_HOME", name)
+}
+
 func resolveSkillRegistry(explicit string) (string, error) {
 	if explicit != "" {
 		if !fileExists(explicit) {
@@ -584,6 +743,7 @@ func printUsage() {
 	fmt.Println("  ai memory status")
 	fmt.Println("  ai docs status")
 	fmt.Println("  ai doctor [ruta-del-proyecto] [--registry ruta]")
+	fmt.Println("  ai plan [ruta-del-proyecto] --capability <id> [--capability <id>...]")
 	fmt.Println("  ai gentle status")
 	fmt.Println("  ai gentle plan <runtime>")
 	fmt.Println("  ai gentle validate cursor")
@@ -593,6 +753,7 @@ func printUsage() {
 	fmt.Println("  memory    Verifica el proveedor de memoria persistente")
 	fmt.Println("  docs      Verifica el proveedor de documentación externa")
 	fmt.Println("  doctor    Diagnostica el entorno local de AI Engineering OS")
+	fmt.Println("  plan      Resuelve agentes, skills y tools desde capabilities explícitas")
 	fmt.Println("  gentle    Descubre Gentle-AI y previsualiza proyección por runtime")
 }
 
@@ -606,4 +767,10 @@ func printDoctorUsage() {
 	fmt.Println("Uso: ai doctor [ruta-del-proyecto] [--registry ruta]")
 	fmt.Println()
 	fmt.Println("Ejecuta diagnósticos deterministas sin reparar ni modificar el entorno.")
+}
+
+func printPlanUsage() {
+	fmt.Println("Uso: ai plan [ruta-del-proyecto] --capability <id> [--capability <id>...]")
+	fmt.Println()
+	fmt.Println("Genera un plan determinista. No ejecuta agentes ni modifica el proyecto.")
 }
