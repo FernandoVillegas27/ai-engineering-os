@@ -105,3 +105,25 @@ func TestReviewIntentDoesNotInventMissingCapability(t *testing.T) {
 		t.Fatalf("capabilities = %#v", got.Capabilities)
 	}
 }
+
+
+func TestClassifySpanishPermissionReviewWithoutAI(t *testing.T) {
+	got, err := Classify(
+		"Quiero que revises si la forma en que manejamos los permisos puede tener problemas",
+		testCapabilities(),
+	)
+	if err != nil {
+		t.Fatalf("Classify() error = %v", err)
+	}
+
+	if got.Intent != orchestration.IntentReview {
+		t.Fatalf("intent = %q", got.Intent)
+	}
+	want := []string{"code-review", "security-review"}
+	if !reflect.DeepEqual(got.Capabilities, want) {
+		t.Fatalf("capabilities = %#v, want %#v", got.Capabilities, want)
+	}
+	if got.NeedsAI {
+		t.Fatal("expected deterministic classification without AI")
+	}
+}

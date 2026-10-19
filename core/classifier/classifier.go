@@ -88,7 +88,7 @@ func detectIntent(text string) (orchestration.Intent, string) {
 
 	rules := []intentRule{
 		{Intent: orchestration.IntentReview, Terms: []string{
-			"revisar", "revisa", "review", "code review", "auditar", "audita", "inspeccionar cambio", "revisar cambio",
+			"revisar", "revisa", "revises", "review", "code review", "auditar", "audita", "inspeccionar cambio", "revisar cambio",
 		}},
 		{Intent: orchestration.IntentVerify, Terms: []string{
 			"verificar", "verifica", "validar", "valida", "probar", "prueba", "testear", "test", "comprobar",
@@ -136,7 +136,7 @@ func detectCapabilities(text string, registry registry.CapabilityRegistry) ([]st
 			"test", "tests", "testing", "prueba automatizada", "pruebas automatizadas", "e2e", "unit test", "integration test",
 		},
 		"security-review": {
-			"security", "seguridad", "vulnerabilidad", "auth", "authentication", "authorization", "permiso", "permission",
+			"security", "seguridad", "vulnerabilidad", "auth", "authentication", "authorization", "permiso", "permisos", "permission", "permissions",
 		},
 		"technical-research": {
 			"research", "investigar", "documentacion", "documentation", "comparar opciones", "evaluar tecnologia", "averiguar",

@@ -112,3 +112,25 @@ classification
 ~~~
 
 Agent permissions, tool policy and runtime execution remain separate layers.
+
+
+## Language variants
+
+Deterministic classification includes curated language variants for common engineering requests when they are unambiguous.
+
+For example:
+
+~~~text
+"Quiero que revises si la forma en que manejamos los permisos puede tener problemas"
+~~~
+
+resolves deterministically to:
+
+~~~yaml
+intent: review
+capabilities:
+  - code-review
+  - security-review
+~~~
+
+This keeps clear requests on the deterministic fast path instead of escalating them to a model provider.
