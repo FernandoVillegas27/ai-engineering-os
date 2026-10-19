@@ -169,3 +169,23 @@ production: deny
 ~~~
 
 Unknown, empty or newly introduced permission values are rejected until explicitly supported.
+
+
+## Windows sandbox compatibility
+
+On Windows, Codex's restricted sandbox may not be able to traverse arbitrary user temp paths under `AppData\\Local\\Temp`.
+
+The sanitized runtime workspace is therefore created as a temporary sibling of the project directory rather than inside the OS temp directory.
+
+Example:
+
+~~~text
+C:\work\
+├─ project\
+└─ .ai-engineering-os-execution-12345\
+   └─ project\
+~~~
+
+The original repository is still not used as the runtime working directory, and the sibling workspace is removed after execution.
+
+Copied files use ordinary host-readable permissions. Immutability is enforced by the Codex `read-only` sandbox and the AI Engineering OS permission envelope rather than Unix-style `0400` modes, which do not map cleanly to Windows sandbox ACL behavior.

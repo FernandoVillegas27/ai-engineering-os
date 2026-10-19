@@ -23,7 +23,7 @@ func PrepareSafeReadOnlyView(projectRoot string, destination string) (SafeViewRe
 	if destination == "" {
 		return SafeViewReport{}, fmt.Errorf("safe view destination is required")
 	}
-	if err := os.MkdirAll(destination, 0o700); err != nil {
+	if err := os.MkdirAll(destination, 0o755); err != nil {
 		return SafeViewReport{}, fmt.Errorf("create safe view: %w", err)
 	}
 
@@ -61,7 +61,7 @@ func PrepareSafeReadOnlyView(projectRoot string, destination string) (SafeViewRe
 
 		target := filepath.Join(destination, relative)
 		if entry.IsDir() {
-			return os.MkdirAll(target, 0o700)
+			return os.MkdirAll(target, 0o755)
 		}
 		if !info.Mode().IsRegular() {
 			report.ExcludedPaths = append(report.ExcludedPaths, filepath.ToSlash(relative))
@@ -116,7 +116,7 @@ func IsSensitivePath(relativePath string) bool {
 }
 
 func copyReadOnlyFile(source, target string) error {
-	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err
 	}
 
@@ -126,7 +126,7 @@ func copyReadOnlyFile(source, target string) error {
 	}
 	defer input.Close()
 
-	output, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o400)
+	output, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
 		return err
 	}
@@ -139,5 +139,5 @@ func copyReadOnlyFile(source, target string) error {
 	if closeErr != nil {
 		return closeErr
 	}
-	return os.Chmod(target, 0o400)
+	return os.Chmod(target, 0o644)
 }

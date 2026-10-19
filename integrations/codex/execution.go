@@ -48,9 +48,14 @@ func (r ExecutionRuntime) Analyze(ctx context.Context, unit execution.WorkUnit) 
 		runner = commandmodel.OSRunner{}
 	}
 
-	tempDir, err := os.MkdirTemp("", "ai-engineering-os-execution-*")
+	projectRoot, err := filepath.Abs(unit.ProjectRoot)
 	if err != nil {
-		return execution.Analysis{}, fmt.Errorf("create Codex execution workspace: %w", err)
+		return execution.Analysis{}, fmt.Errorf("resolve project root: %w", err)
+	}
+	tempParent := filepath.Dir(projectRoot)
+	tempDir, err := os.MkdirTemp(tempParent, ".ai-engineering-os-execution-*")
+	if err != nil {
+		return execution.Analysis{}, fmt.Errorf("create Codex execution workspace beside project: %w", err)
 	}
 	defer os.RemoveAll(tempDir)
 
