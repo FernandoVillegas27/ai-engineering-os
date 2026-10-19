@@ -80,6 +80,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+	case "execute":
+		if err := runExecute(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	case "gentle":
 		if err := runGentle(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -953,6 +958,7 @@ func printUsage() {
 	fmt.Println("  ai doctor [ruta-del-proyecto] [--registry ruta]")
 	fmt.Println("  ai classify [--ai] <tarea>")
 	fmt.Println("  ai plan [ruta-del-proyecto] --task <tarea> [--ai]")
+	fmt.Println("  ai execute [ruta-del-proyecto] --task <tarea> --dry-run [--ai]")
 	fmt.Println("  ai plan [ruta-del-proyecto] [--intent implement|design|research|review|verify] --capability <id> [--capability <id>...]")
 	fmt.Println("  ai gentle status")
 	fmt.Println("  ai gentle plan <runtime>")
@@ -965,6 +971,7 @@ func printUsage() {
 	fmt.Println("  doctor    Diagnostica el entorno local de AI Engineering OS")
 	fmt.Println("  classify  Convierte una tarea natural en intent + capabilities; --ai habilita fallback Codex")
 	fmt.Println("  plan      Resuelve agentes, skills y tools desde tarea o capabilities explícitas")
+	fmt.Println("  execute   Construye work units y valida ejecución segura en dry-run")
 	fmt.Println("  gentle    Descubre Gentle-AI y previsualiza proyección por runtime")
 }
 
