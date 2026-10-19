@@ -205,6 +205,19 @@ func TestResolveConstrainsProviderRequest(t *testing.T) {
 	if len(provider.request.AllowedCapabilities) == 0 {
 		t.Fatal("expected allowed capabilities")
 	}
+	if provider.request.AllowedCapabilities[0].ID == "" {
+		t.Fatal("expected capability id")
+	}
+	hasDescription := false
+	for _, capability := range provider.request.AllowedCapabilities {
+		if capability.Description != "" {
+			hasDescription = true
+			break
+		}
+	}
+	if !hasDescription {
+		t.Fatal("expected capability descriptions")
+	}
 }
 
 

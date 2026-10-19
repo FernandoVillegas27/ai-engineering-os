@@ -113,3 +113,14 @@ Providers may decline classification without returning a usable clarification qu
 In that case, AI Engineering OS does not fail and does not guess. The core synthesizes a neutral clarification question and returns `ClarificationRequired=true`.
 
 This keeps clarification policy inside the platform rather than trusting every provider to phrase one correctly.
+
+
+## Semantic taxonomy context
+
+Model providers receive capability metadata, not only capability IDs:
+
+- canonical ID;
+- description;
+- aliases.
+
+This gives the model enough semantic context to map natural language to the existing taxonomy without inventing new categories.

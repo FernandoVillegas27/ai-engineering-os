@@ -56,7 +56,7 @@ func Resolve(
 		Task:                task,
 		ProjectContext:      projectContext,
 		AllowedIntents:      allowedIntents(),
-		AllowedCapabilities: activeCapabilityIDs(capabilities),
+		AllowedCapabilities: activeCapabilityOptions(capabilities),
 	}
 
 	response, err := provider.Classify(ctx, request)
@@ -67,7 +67,7 @@ func Resolve(
 	if !response.CanClassify {
 		question := strings.TrimSpace(response.ClarificationQuestion)
 		if question == "" {
-			question = defaultClarificationQuestion(activeCapabilityIDs(capabilities))
+			question = defaultClarificationQuestion(activeCapabilityOptions(capabilities))
 		}
 
 		return Resolution{
@@ -138,15 +138,22 @@ func validateAIClassification(
 	return response.Intent, uniqueSorted(resolved), nil
 }
 
-func activeCapabilityIDs(registry registry.CapabilityRegistry) []string {
-	var ids []string
+func activeCapabilityOptions(registry registry.CapabilityRegistry) []modelprovider.CapabilityOption {
+	var options []modelprovider.CapabilityOption
 	for id, capability := range registry.Capabilities {
-		if capability.Status == "active" {
-			ids = append(ids, id)
+		if capability.Status != "active" {
+			continue
 		}
+		options = append(options, modelprovider.CapabilityOption{
+			ID:          id,
+			Description: capability.Description,
+			Aliases:     append([]string(nil), capability.Aliases...),
+		})
 	}
-	sort.Strings(ids)
-	return ids
+	sort.Slice(options, func(i, j int) bool {
+		return options[i].ID < options[j].ID
+	})
+	return options
 }
 
 func allowedIntents() []orchestration.Intent {
@@ -168,7 +175,7 @@ func validAIIntent(intent orchestration.Intent) bool {
 	return false
 }
 
-func defaultClarificationQuestion(activeCapabilities []string) string {
+func defaultClarificationQuestion(activeCapabilities []modelprovider.CapabilityOption) string {
 	if len(activeCapabilities) == 0 {
 		return "¿Qué querés lograr exactamente con esta tarea?"
 	}

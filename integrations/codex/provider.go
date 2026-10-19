@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/modelprovider"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
 	"github.com/FernandoVillegas27/ai-engineering-os/integrations/commandmodel"
 )
 
@@ -93,7 +94,9 @@ func (a Adapter) Decode(workDir string) (modelprovider.ClassificationResponse, e
 func classificationPrompt(request modelprovider.ClassificationRequest) string {
 	var b strings.Builder
 	b.WriteString("Classify the software-engineering task using only the allowed taxonomy below.\n")
-	b.WriteString("Do not invent intents or capabilities. If the task is genuinely underspecified, set can_classify=false, intent=\"\", capabilities=[], and ask exactly one focused clarification question.\n")
+	b.WriteString("Prefer classification when the user's requested action and engineering concern can be reasonably mapped to the allowed taxonomy. Do not require implementation details, file names, or project-specific context just to classify intent/capabilities.\n")
+	b.WriteString("Use clarification only when the requested action or engineering concern is genuinely missing or could map to materially different allowed categories.\n")
+	b.WriteString("Do not invent intents or capabilities. If clarification is required, set can_classify=false, intent=\"\", capabilities=[], and ask exactly one focused clarification question.\n")
 	b.WriteString("Return only the structured output required by the supplied JSON schema.\n\n")
 	b.WriteString("Task:\n")
 	b.WriteString(request.Task)
@@ -101,12 +104,25 @@ func classificationPrompt(request modelprovider.ClassificationRequest) string {
 	for _, intent := range request.AllowedIntents {
 		b.WriteString("- ")
 		b.WriteString(string(intent))
+		if description := intentDescription(intent); description != "" {
+			b.WriteString(": ")
+			b.WriteString(description)
+		}
 		b.WriteString("\n")
 	}
 	b.WriteString("\nAllowed capabilities:\n")
 	for _, capability := range request.AllowedCapabilities {
 		b.WriteString("- ")
-		b.WriteString(capability)
+		b.WriteString(capability.ID)
+		if description := strings.TrimSpace(capability.Description); description != "" {
+			b.WriteString(": ")
+			b.WriteString(description)
+		}
+		if len(capability.Aliases) > 0 {
+			b.WriteString(" (aliases: ")
+			b.WriteString(strings.Join(capability.Aliases, ", "))
+			b.WriteString(")")
+		}
 		b.WriteString("\n")
 	}
 	if context := strings.TrimSpace(request.ProjectContext); context != "" {
@@ -135,7 +151,7 @@ func classificationSchema(request modelprovider.ClassificationRequest) ([]byte, 
 				"type": "array",
 				"items": map[string]any{
 					"type": "string",
-					"enum": request.AllowedCapabilities,
+					"enum": capabilityIDs(request.AllowedCapabilities),
 				},
 			},
 			"can_classify": map[string]any{
@@ -162,4 +178,30 @@ func classificationSchema(request modelprovider.ClassificationRequest) ([]byte, 
 		return nil, fmt.Errorf("marshal Codex output schema: %w", err)
 	}
 	return data, nil
+}
+
+
+func capabilityIDs(options []modelprovider.CapabilityOption) []string {
+	ids := make([]string, 0, len(options))
+	for _, option := range options {
+		ids = append(ids, option.ID)
+	}
+	return ids
+}
+
+func intentDescription(intent orchestration.Intent) string {
+	switch intent {
+	case orchestration.IntentImplement:
+		return "create, modify, fix, or extend software behavior"
+	case orchestration.IntentDesign:
+		return "design architecture, data models, contracts, or technical structure"
+	case orchestration.IntentResearch:
+		return "investigate technologies, documentation, or implementation options"
+	case orchestration.IntentReview:
+		return "inspect existing code or design for correctness, quality, risk, or security"
+	case orchestration.IntentVerify:
+		return "validate behavior through tests, checks, or evidence"
+	default:
+		return ""
+	}
 }
