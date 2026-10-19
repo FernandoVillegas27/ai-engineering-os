@@ -4,7 +4,10 @@
 
 Execution Engine v1 converts an orchestration plan into explicit work units under a safe permission envelope.
 
-It does not invoke a model or coding agent yet.
+It supports two execution paths:
+
+- dry-run validation without invoking a runtime;
+- real read-only analysis through an approved runtime.
 
 ~~~text
 Execution Plan
@@ -13,7 +16,7 @@ Work Unit
       ↓
 Read-only permission envelope
       ↓
-Dry-run Executor
+Dry-run Executor OR Read-only Runtime Executor
       ↓
 Execution Result
 ~~~
@@ -86,8 +89,52 @@ Execution Engine v1 guarantees:
 - no secret access;
 - no production access;
 - no candidate skill execution;
-- no runtime agent invocation.
+- no runtime agent invocation in dry-run mode;
+- real runtime execution only under the read-only envelope.
+
+## Read-only runtime executor
+
+The runtime executor invokes an approved runtime only after validating the same read-only permission envelope.
+
+A successful runtime analysis returns:
+
+~~~yaml
+status: completed
+executed: true
+runtime: codex-cli
+changes: []
+summary: ...
+findings:
+  - severity: ...
+    title: ...
+    detail: ...
+evidence:
+  - path: ...
+    detail: ...
+~~~
+
+The first concrete runtime is Codex CLI.
+
+## Tool boundary
+
+Logical tools in the orchestration plan are metadata until a runtime/tool resolver proves they are actually available.
+
+Candidate skills do not contribute executable tools. Only enabled skills may add tool requirements to a plan.
+
+## CLI
+
+Dry-run:
+
+~~~powershell
+go run ./cmd/ai execute . --task "..." --dry-run
+~~~
+
+Real read-only analysis:
+
+~~~powershell
+go run ./cmd/ai execute . --task "..." --runtime codex
+~~~
 
 ## Next step
 
-A future read-only runtime executor can implement the same Executor contract and produce findings/evidence from Codex, Claude, Copilot or another runtime without changing the Work Unit contract.
+Future runtimes such as Claude or Copilot can implement the same Runtime contract without changing Work Units or the permission envelope.
