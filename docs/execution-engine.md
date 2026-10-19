@@ -138,3 +138,34 @@ go run ./cmd/ai execute . --task "..." --runtime codex
 ## Next step
 
 Future runtimes such as Claude or Copilot can implement the same Runtime contract without changing Work Units or the permission envelope.
+
+
+## Runtime Safety Guard
+
+Read-only execution does not expose the original project tree directly to the runtime.
+
+Before invoking a runtime, AI Engineering OS builds a temporary sanitized project view.
+
+The guard excludes:
+
+- `.env` and `.env.*`;
+- Git metadata;
+- SSH/cloud credential directories;
+- common credential and secret files;
+- private keys, certificates and keystores;
+- symlinks and non-regular files.
+
+The runtime executes inside this temporary view. The original project remains outside its working directory.
+
+The permission validator also fails closed. Read-only execution accepts only:
+
+~~~yaml
+source_code: read | deny
+tests: read | deny
+git_commit: deny
+git_push: deny
+secrets: deny
+production: deny
+~~~
+
+Unknown, empty or newly introduced permission values are rejected until explicitly supported.
