@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
@@ -171,5 +172,49 @@ func TestSafeRuntimeEnvironmentDoesNotPassArbitrarySecrets(t *testing.T) {
 			strings.HasPrefix(entry, "OPENAI_API_KEY=") {
 			t.Fatalf("secret environment variable leaked: %s", entry)
 		}
+	}
+}
+
+
+type blockingExecutionRunner struct{}
+
+func (blockingExecutionRunner) LookPath(file string) (string, error) {
+	return file, nil
+}
+
+func (blockingExecutionRunner) Run(ctx context.Context, _ commandmodel.Invocation) (string, string, error) {
+	<-ctx.Done()
+	return "", "", ctx.Err()
+}
+
+func TestExecutionRuntimeTimesOut(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	runtime := ExecutionRuntime{
+		Binary:  "codex",
+		Runner:  blockingExecutionRunner{},
+		Timeout: 20 * time.Millisecond,
+	}
+
+	_, err := runtime.Analyze(context.Background(), executionUnitFixture(root))
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("expected timeout error, got %v", err)
+	}
+}
+
+func TestSafeRuntimeEnvironmentPreservesCodexHomePathOnly(t *testing.T) {
+	t.Setenv("CODEX_HOME", `C:\\Users\\Fernando\\.codex`)
+	t.Setenv("OPENAI_API_KEY", "do-not-leak")
+
+	env := safeRuntimeEnvironment()
+	joined := strings.Join(env, "\n")
+	if !strings.Contains(joined, "CODEX_HOME=") {
+		t.Fatal("expected CODEX_HOME to be preserved")
+	}
+	if strings.Contains(joined, "OPENAI_API_KEY=") {
+		t.Fatal("OPENAI_API_KEY must not be forwarded")
 	}
 }

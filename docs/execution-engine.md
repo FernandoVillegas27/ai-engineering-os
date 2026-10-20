@@ -244,3 +244,18 @@ The policy is represented by `SafeViewPolicy` and can be extended deliberately f
 The Codex classification provider now uses the same allowlisted subprocess environment as the read-only execution runtime.
 
 Classification therefore no longer inherits arbitrary parent-process variables before Work Unit construction.
+
+
+## Codex runtime authentication path
+
+The runtime environment allowlist preserves `CODEX_HOME` when it is configured.
+
+`CODEX_HOME` is treated as runtime configuration metadata (a filesystem path), not as a credential value. Codex uses that location to resolve its own configuration and credential store.
+
+Credential-bearing variables such as `OPENAI_API_KEY` remain excluded.
+
+## Runtime timeout
+
+Codex read-only execution has a hard timeout of two minutes by default.
+
+A runtime that does not finish within that window is cancelled and returns an explicit timeout error instead of leaving the CLI waiting indefinitely.
