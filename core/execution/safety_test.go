@@ -21,6 +21,8 @@ func TestIsSensitivePath(t *testing.T) {
 		"config/secrets.yaml",
 		".npmrc",
 		"gradle.properties",
+		"config/id_ecdsa",
+		"config/service-account.json",
 	}
 	for _, path := range sensitive {
 		if !IsSensitivePath(path) {
@@ -59,6 +61,9 @@ func TestPrepareSafeReadOnlyViewExcludesSecretsAndSymlinks(t *testing.T) {
 	write(".env", "TOKEN=secret")
 	write("config/credentials.json", "{}")
 	write("certs/server.pem", "secret pem")
+	write("config/id_ecdsa", "private key")
+	write("config/service-account.json", "{}")
+	write("assets/logo.png", "binary-ish")
 
 	if err := os.Symlink(filepath.Join(root, ".env"), filepath.Join(root, "linked-secret")); err != nil && !os.IsPermission(err) {
 		t.Fatal(err)
@@ -72,7 +77,7 @@ func TestPrepareSafeReadOnlyViewExcludesSecretsAndSymlinks(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(view, "src", "app.go")); err != nil {
 		t.Fatalf("expected safe file: %v", err)
 	}
-	for _, relative := range []string{".env", "config/credentials.json", "certs/server.pem", "linked-secret"} {
+	for _, relative := range []string{".env", "config/credentials.json", "certs/server.pem", "config/id_ecdsa", "config/service-account.json", "assets/logo.png", "linked-secret"} {
 		if _, err := os.Stat(filepath.Join(view, filepath.FromSlash(relative))); !os.IsNotExist(err) {
 			t.Fatalf("sensitive path copied into safe view: %s", relative)
 		}
@@ -118,5 +123,43 @@ func TestSensitivePathClassificationStable(t *testing.T) {
 	want := []bool{true, false, true}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("classification = %#v, want %#v", got, want)
+	}
+}
+
+
+func TestPositiveRuntimeFilePolicyExcludesUnknownFiles(t *testing.T) {
+	policy := DefaultSafeViewPolicy()
+
+	allowed := []string{
+		"src/app.go",
+		"web/app.ts",
+		"pom.xml",
+		"package.json",
+		"docs/security.md",
+	}
+	for _, path := range allowed {
+		if !IsAllowedRuntimeFile(path, policy) {
+			t.Fatalf("expected allowed runtime file: %s", path)
+		}
+	}
+
+	blocked := []string{
+		"assets/logo.png",
+		"config/id_ecdsa",
+		"bin/tool.exe",
+		"archive/data.bin",
+	}
+	for _, path := range blocked {
+		if IsAllowedRuntimeFile(path, policy) {
+			t.Fatalf("unexpected runtime file allowed: %s", path)
+		}
+	}
+}
+
+func TestCustomSafeViewPolicyCanAuthorizeAdditionalExtension(t *testing.T) {
+	policy := DefaultSafeViewPolicy()
+	policy.AllowedExtensions[".tf"] = true
+	if !IsAllowedRuntimeFile("infra/main.tf", policy) {
+		t.Fatal("expected custom extension to be allowed")
 	}
 }
