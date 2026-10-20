@@ -259,3 +259,24 @@ Credential-bearing variables such as `OPENAI_API_KEY` remain excluded.
 Codex read-only execution has a hard timeout of two minutes by default.
 
 A runtime that does not finish within that window is cancelled and returns an explicit timeout error instead of leaving the CLI waiting indefinitely.
+
+
+## Defense in depth at the runtime boundary
+
+Concrete runtimes must validate the Work Unit again even when the normal CLI path already passed through `RuntimeExecutor`.
+
+The Codex runtime now calls the core read-only validator at the start of `Analyze`. Direct callers therefore cannot bypass the permission envelope by invoking the runtime adapter themselves.
+
+## File identity verification
+
+Safe-view copying now binds validation to the opened file identity.
+
+For every authorized regular file:
+
+1. the walker records the expected file identity;
+2. the copy step performs `Lstat` immediately before opening and rejects symlinks/non-regular files;
+3. it verifies that the pre-open identity still matches the walker identity;
+4. after opening, it verifies that the opened handle refers to that same file;
+5. only then is content copied into the sanitized view.
+
+This does not claim to replace OS-specific secure-open primitives, but it prevents content from being copied when the path is replaced between discovery and open, including common symlink-swap races.
