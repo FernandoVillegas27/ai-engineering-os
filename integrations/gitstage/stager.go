@@ -69,7 +69,7 @@ func (s Stager) Stage(ctx context.Context, projectRoot string, p proposal.Propos
 		Command: gitPath,
 		Stdin:   p.Patch,
 		Dir:     workspace,
-		Env:     safeGitEnvironment(),
+		Env:     safeGitEnvironment(workspace),
 	}
 	check := base
 	check.Args = []string{"apply", "--check", "--whitespace=nowarn", "-"}
@@ -136,7 +136,7 @@ func verifyPostconditions(workspace string, files []staging.PatchFile) error {
 	return nil
 }
 
-func safeGitEnvironment() []string {
+func safeGitEnvironment(workspace string) []string {
 	allowed := []string{
 		"SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP", "TMPDIR",
 		"LANG", "LC_ALL", "TERM",
@@ -148,6 +148,8 @@ func safeGitEnvironment() []string {
 		}
 	}
 	env = append(env,
+		"HOME="+workspace,
+		"XDG_CONFIG_HOME="+workspace,
 		"GIT_CONFIG_NOSYSTEM=1",
 		"GIT_TERMINAL_PROMPT=0",
 	)
