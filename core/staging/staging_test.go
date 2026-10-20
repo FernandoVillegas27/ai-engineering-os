@@ -78,3 +78,19 @@ func TestValidateProposalRejectsRename(t *testing.T) {
 		t.Fatal("expected rename rejection")
 	}
 }
+
+
+func TestValidateProposalRejectsWindowsAndBackslashPaths(t *testing.T) {
+	cases := []string{"C:/outside.go", "..\\outside.go", "src\\service.go"}
+	for _, candidate := range cases {
+		t.Run(candidate, func(t *testing.T) {
+			p := proposal.Proposal{
+				Files: []proposal.FileChange{{Path: candidate, Action: "modify"}},
+				Patch: "diff --git a/src/service.go b/src/service.go\n--- a/src/service.go\n+++ b/src/service.go\n@@ -1 +1 @@\n-a\n+b",
+			}
+			if _, err := ValidateProposal(p, execution.DefaultSafeViewPolicy()); err == nil {
+				t.Fatalf("expected path rejection for %q", candidate)
+			}
+		})
+	}
+}
