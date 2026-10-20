@@ -58,6 +58,10 @@ func (e RuntimeExecutor) Execute(ctx context.Context, unit WorkUnit) (Result, er
 	}, nil
 }
 
+func ValidateReadOnlyUnit(unit WorkUnit) error {
+	return validateReadOnlyUnit(unit)
+}
+
 func validateReadOnlyUnit(unit WorkUnit) error {
 	if unit.ID == "" || unit.AgentID == "" {
 		return fmt.Errorf("invalid work unit")
