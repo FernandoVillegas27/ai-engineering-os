@@ -127,3 +127,36 @@ func TestClassifySpanishPermissionReviewWithoutAI(t *testing.T) {
 		t.Fatal("expected deterministic classification without AI")
 	}
 }
+
+
+func TestClassifyRuntimeImplementationAsBackendDevelopment(t *testing.T) {
+	registry := registry.CapabilityRegistry{
+		Capabilities: map[string]registry.Capability{
+			"backend-development": {
+				Description: "Build and maintain backend application logic and services.",
+				Aliases:     []string{"backend", "server-side"},
+				Status:      "active",
+			},
+		},
+	}
+
+	result, err := Classify(
+		"Agregá una validación para que el timeout del runtime Codex no pueda configurarse en menos de 5 segundos",
+		registry,
+	)
+	if err != nil {
+		t.Fatalf("Classify() error = %v", err)
+	}
+	if result.Intent != orchestration.IntentImplement {
+		t.Fatalf("intent = %q, want implement", result.Intent)
+	}
+	if result.NeedsAI {
+		t.Fatal("expected deterministic classification")
+	}
+	if result.Confidence != ConfidenceHigh {
+		t.Fatalf("confidence = %q, want high", result.Confidence)
+	}
+	if !contains(result.Capabilities, "backend-development") {
+		t.Fatalf("capabilities = %#v, want backend-development", result.Capabilities)
+	}
+}
