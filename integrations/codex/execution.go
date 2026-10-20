@@ -3,10 +3,12 @@ package codex
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
 	"github.com/FernandoVillegas27/ai-engineering-os/integrations/commandmodel"
@@ -19,15 +21,17 @@ const (
 )
 
 type ExecutionRuntime struct {
-	Binary string
-	Model  string
-	Runner commandmodel.Runner
+	Binary  string
+	Model   string
+	Runner  commandmodel.Runner
+	Timeout time.Duration
 }
 
 func NewExecutionRuntime() ExecutionRuntime {
 	return ExecutionRuntime{
-		Binary: "codex",
-		Runner: commandmodel.OSRunner{},
+		Binary:  "codex",
+		Runner:  commandmodel.OSRunner{},
+		Timeout: 2 * time.Minute,
 	}
 }
 
@@ -107,8 +111,18 @@ func (r ExecutionRuntime) Analyze(ctx context.Context, unit execution.WorkUnit) 
 		Env:     safeRuntimeEnvironment(),
 	}
 
-	_, stderr, runErr := runner.Run(ctx, invocation)
+	timeout := r.Timeout
+	if timeout <= 0 {
+		timeout = 2 * time.Minute
+	}
+	runCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	_, stderr, runErr := runner.Run(runCtx, invocation)
 	if runErr != nil {
+		if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+			return execution.Analysis{}, fmt.Errorf("Codex execution timed out after %s", timeout)
+		}
 		if strings.TrimSpace(stderr) != "" {
 			return execution.Analysis{}, fmt.Errorf("Codex execution failed: %w: %s", runErr, stderr)
 		}
@@ -233,6 +247,7 @@ func safeRuntimeEnvironment() []string {
 		"LANG",
 		"LC_ALL",
 		"TERM",
+		"CODEX_HOME",
 	}
 
 	env := make([]string, 0, len(allowed))
