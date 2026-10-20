@@ -178,10 +178,14 @@ func TestCopyVerifiedRegularFileRejectsIdentityChange(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	replacement := filepath.Join(root, "replacement.go")
+	if err := os.WriteFile(replacement, []byte("replacement"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Remove(source); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(source, []byte("replacement"), 0o600); err != nil {
+	if err := os.Rename(replacement, source); err != nil {
 		t.Fatal(err)
 	}
 
