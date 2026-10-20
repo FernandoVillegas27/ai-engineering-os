@@ -95,3 +95,23 @@ func TestRuntimeExecutorPropagatesRuntimeFailure(t *testing.T) {
 		t.Fatal("expected runtime error")
 	}
 }
+
+
+func TestRuntimeExecutorRejectsDeniedSourceOrTestsUntilCategoryFilteringExists(t *testing.T) {
+	for _, mutate := range []func(*WorkUnit){
+		func(unit *WorkUnit) { unit.Permissions.SourceCode = "deny" },
+		func(unit *WorkUnit) { unit.Permissions.Tests = "deny" },
+	} {
+		unit := readOnlyUnit()
+		mutate(&unit)
+		runtime := &fakeRuntime{id: "fake-runtime"}
+
+		_, err := (RuntimeExecutor{Runtime: runtime}).Execute(context.Background(), unit)
+		if err == nil {
+			t.Fatal("expected denied category to block runtime v1")
+		}
+		if runtime.called {
+			t.Fatal("runtime must not be called when category permission is deny")
+		}
+	}
+}

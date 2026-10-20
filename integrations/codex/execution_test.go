@@ -105,6 +105,16 @@ func TestExecutionRuntimeRunsCodexReadOnlyInProject(t *testing.T) {
 	if runner.sensitiveExists {
 		t.Fatal("sensitive .env file was visible to Codex runtime")
 	}
+	for _, entry := range runner.invocation.Env {
+		key := strings.SplitN(entry, "=", 2)[0]
+		upper := strings.ToUpper(key)
+		if strings.Contains(upper, "TOKEN") ||
+			strings.Contains(upper, "SECRET") ||
+			strings.Contains(upper, "PASSWORD") ||
+			strings.Contains(upper, "API_KEY") {
+			t.Fatalf("sensitive environment variable leaked to Codex: %s", key)
+		}
+	}
 	joined := strings.Join(runner.invocation.Args, " ")
 	for _, expected := range []string{
 		"exec",
@@ -147,5 +157,19 @@ func TestExecutionRuntimeRejectsNonReadOnlyUnit(t *testing.T) {
 	_, err := (ExecutionRuntime{}).Analyze(context.Background(), unit)
 	if err == nil {
 		t.Fatal("expected read-only mode error")
+	}
+}
+
+
+func TestSafeRuntimeEnvironmentDoesNotPassArbitrarySecrets(t *testing.T) {
+	t.Setenv("AI_ENGINEERING_OS_TEST_SECRET_TOKEN", "do-not-leak")
+	t.Setenv("OPENAI_API_KEY", "do-not-leak")
+
+	env := safeRuntimeEnvironment()
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "AI_ENGINEERING_OS_TEST_SECRET_TOKEN=") ||
+			strings.HasPrefix(entry, "OPENAI_API_KEY=") {
+			t.Fatalf("secret environment variable leaked: %s", entry)
+		}
 	}
 }

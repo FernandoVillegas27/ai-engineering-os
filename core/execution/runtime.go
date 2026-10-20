@@ -65,11 +65,11 @@ func validateReadOnlyUnit(unit WorkUnit) error {
 	if unit.Mode != ModeReadOnly {
 		return fmt.Errorf("runtime executor only accepts read-only work units")
 	}
-	if unit.Permissions.SourceCode != "read" && unit.Permissions.SourceCode != "deny" {
-		return fmt.Errorf("invalid source_code permission %q for read-only execution", unit.Permissions.SourceCode)
+	if unit.Permissions.SourceCode != "read" {
+		return fmt.Errorf("read-only runtime v1 requires source_code=read, got %q", unit.Permissions.SourceCode)
 	}
-	if unit.Permissions.Tests != "read" && unit.Permissions.Tests != "deny" {
-		return fmt.Errorf("invalid tests permission %q for read-only execution", unit.Permissions.Tests)
+	if unit.Permissions.Tests != "read" {
+		return fmt.Errorf("read-only runtime v1 requires tests=read, got %q", unit.Permissions.Tests)
 	}
 	if unit.Permissions.GitCommit != "deny" {
 		return fmt.Errorf("git_commit must be deny for read-only execution")

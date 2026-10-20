@@ -189,3 +189,34 @@ C:\work\
 The original repository is still not used as the runtime working directory, and the sibling workspace is removed after execution.
 
 Copied files use ordinary host-readable permissions. Immutability is enforced by the Codex `read-only` sandbox and the AI Engineering OS permission envelope rather than Unix-style `0400` modes, which do not map cleanly to Windows sandbox ACL behavior.
+
+
+## Runtime v1 category semantics
+
+The current sanitized project view does not attempt to infer which files are source code versus tests across every supported technology.
+
+Therefore runtime v1 requires explicit read access to both categories:
+
+~~~yaml
+source_code: read
+tests: read
+~~~
+
+A work unit with `deny` for either category is rejected before runtime invocation.
+
+This is intentionally conservative. Future category-aware views may support `deny` by physically excluding that category from the runtime workspace.
+
+## Environment isolation
+
+Runtime subprocesses do not inherit the parent process environment.
+
+Codex receives an allowlisted operational environment containing only values needed to launch and locate the CLI/runtime on the host, such as PATH, Windows system paths, user-home locations and temporary-directory settings.
+
+Arbitrary variables such as API keys, tokens, passwords and application secrets are not forwarded.
+
+This complements project-file sanitization:
+
+~~~text
+project secrets → removed from sanitized view
+process secrets → not inherited by runtime subprocess
+~~~
