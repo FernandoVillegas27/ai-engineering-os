@@ -218,3 +218,24 @@ func TestSafeRuntimeEnvironmentPreservesCodexHomePathOnly(t *testing.T) {
 		t.Fatal("OPENAI_API_KEY must not be forwarded")
 	}
 }
+
+
+func TestExecutionRuntimeValidatesPermissionsDefensively(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	unit := executionUnitFixture(root)
+	unit.Permissions.Secrets = "read"
+	runner := &executionFakeRunner{}
+	runtime := ExecutionRuntime{Binary: "codex", Runner: runner}
+
+	_, err := runtime.Analyze(context.Background(), unit)
+	if err == nil {
+		t.Fatal("expected direct runtime permission validation error")
+	}
+	if runner.invocation.Command != "" {
+		t.Fatal("runner must not be invoked for invalid direct runtime work unit")
+	}
+}

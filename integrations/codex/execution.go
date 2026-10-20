@@ -40,8 +40,8 @@ func (r ExecutionRuntime) ID() string {
 }
 
 func (r ExecutionRuntime) Analyze(ctx context.Context, unit execution.WorkUnit) (execution.Analysis, error) {
-	if unit.Mode != execution.ModeReadOnly {
-		return execution.Analysis{}, fmt.Errorf("Codex execution runtime requires read-only mode")
+	if err := execution.ValidateReadOnlyUnit(unit); err != nil {
+		return execution.Analysis{}, fmt.Errorf("invalid Codex work unit: %w", err)
 	}
 	if strings.TrimSpace(unit.ProjectRoot) == "" {
 		return execution.Analysis{}, fmt.Errorf("project root is required")

@@ -120,7 +120,7 @@ func PrepareSafeReadOnlyViewWithPolicy(projectRoot string, destination string, p
 		}
 
 		target := filepath.Join(destination, relative)
-		if err := copyReadOnlyFile(path, target); err != nil {
+		if err := copyVerifiedRegularFile(path, target, info); err != nil {
 			return err
 		}
 		report.CopiedFiles++
@@ -178,9 +178,20 @@ func IsSensitivePathWithPolicy(relativePath string, policy SafeViewPolicy) bool 
 	return false
 }
 
-func copyReadOnlyFile(source, target string) error {
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+func copyVerifiedRegularFile(source, target string, expected fs.FileInfo) error {
+	if expected == nil || !expected.Mode().IsRegular() {
+		return fmt.Errorf("source is not an expected regular file: %s", source)
+	}
+
+	beforeOpen, err := os.Lstat(source)
+	if err != nil {
 		return err
+	}
+	if beforeOpen.Mode()&os.ModeSymlink != 0 || !beforeOpen.Mode().IsRegular() {
+		return fmt.Errorf("source changed to a non-regular file before copy: %s", source)
+	}
+	if !os.SameFile(expected, beforeOpen) {
+		return fmt.Errorf("source identity changed before copy: %s", source)
 	}
 
 	input, err := os.Open(source)
@@ -189,6 +200,17 @@ func copyReadOnlyFile(source, target string) error {
 	}
 	defer input.Close()
 
+	opened, err := input.Stat()
+	if err != nil {
+		return err
+	}
+	if !opened.Mode().IsRegular() || !os.SameFile(beforeOpen, opened) {
+		return fmt.Errorf("source identity changed while opening: %s", source)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return err
+	}
 	output, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
 		return err
