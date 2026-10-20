@@ -220,3 +220,27 @@ This complements project-file sanitization:
 project secrets → removed from sanitized view
 process secrets → not inherited by runtime subprocess
 ~~~
+
+
+## Positive file authorization
+
+The sanitized project view no longer copies every regular file that merely escapes the sensitive-name blacklist.
+
+Runtime v1 uses an explicit file policy:
+
+- known source-code extensions;
+- known configuration and build manifests;
+- documentation/text formats needed for review;
+- explicit basename exceptions for extensionless build files.
+
+Unknown and binary-like file types are excluded by default.
+
+Sensitive-path rules still take precedence over the allowlist. For example, a JSON extension is not sufficient to authorize `service-account.json`.
+
+The policy is represented by `SafeViewPolicy` and can be extended deliberately for additional technology-specific files. This is a risk-reduction boundary, not a claim that automatic filename filtering can prove a repository contains no secrets.
+
+## Classifier environment isolation
+
+The Codex classification provider now uses the same allowlisted subprocess environment as the read-only execution runtime.
+
+Classification therefore no longer inherits arbitrary parent-process variables before Work Unit construction.
