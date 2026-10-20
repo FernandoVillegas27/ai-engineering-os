@@ -2,7 +2,7 @@ package staging
 
 import (
 	"fmt"
-	"path/filepath"
+	"path"
 	"sort"
 	"strings"
 
@@ -108,7 +108,7 @@ func parsePatchFiles(patch string) ([]PatchFile, error) {
 			if oldPath != newPath {
 				return nil, fmt.Errorf("renames are not supported in controlled staging: %s -> %s", oldPath, newPath)
 			}
-			current = &PatchFile{Path: filepath.ToSlash(filepath.Clean(filepath.FromSlash(newPath)))}
+			current = &PatchFile{Path: path.Clean(newPath)}
 			sawOld, sawNew, oldNull, newNull = false, false, false, false
 			continue
 		}
@@ -130,27 +130,27 @@ func parsePatchFiles(patch string) ([]PatchFile, error) {
 	return files, nil
 }
 
-func validatePath(path string, policy execution.SafeViewPolicy) (string, error) {
-	path = strings.TrimSpace(path)
-	if path == "" {
+func validatePath(value string, policy execution.SafeViewPolicy) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
 		return "", fmt.Errorf("path is empty")
 	}
-	if strings.Contains(path, "\\") {
-		path = filepath.ToSlash(filepath.Clean(path))
+	if strings.Contains(value, "\\") {
+		return "", fmt.Errorf("backslash paths are not supported")
 	}
-	clean := filepath.Clean(filepath.FromSlash(path))
-	if filepath.IsAbs(clean) || filepath.VolumeName(clean) != "" {
+	if strings.HasPrefix(value, "/") || (len(value) >= 2 && value[1] == ':') {
 		return "", fmt.Errorf("absolute paths are not allowed")
 	}
-	slash := filepath.ToSlash(clean)
-	if slash == "." || slash == ".." || strings.HasPrefix(slash, "../") {
+
+	clean := path.Clean(value)
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
 		return "", fmt.Errorf("path traversal is not allowed")
 	}
-	if execution.IsSensitivePathWithPolicy(slash, policy) {
+	if execution.IsSensitivePathWithPolicy(clean, policy) {
 		return "", fmt.Errorf("sensitive path is not allowed")
 	}
-	if !execution.IsAllowedRuntimeFile(slash, policy) {
+	if !execution.IsAllowedRuntimeFile(clean, policy) {
 		return "", fmt.Errorf("file type is not authorized by safe-view policy")
 	}
-	return slash, nil
+	return clean, nil
 }
