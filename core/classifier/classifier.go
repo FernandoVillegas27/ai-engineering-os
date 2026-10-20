@@ -119,6 +119,7 @@ func detectCapabilities(text string, registry registry.CapabilityRegistry) ([]st
 	hints := map[string][]string{
 		"backend-development": {
 			"backend", "server side", "server-side", "servicio", "service layer", "logica de negocio",
+			"runtime", "cli", "command line", "command-line", "core logic",
 		},
 		"api-development": {
 			"api", "endpoint", "rest", "rest controller", "controller", "http endpoint", "webhook",
