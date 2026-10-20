@@ -210,8 +210,7 @@ func TestSafeRuntimeEnvironmentPreservesCodexHomePathOnly(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "do-not-leak")
 
 	env := safeRuntimeEnvironment()
-	joined := strings.Join(env, "
-")
+	joined := strings.Join(env, "\n")
 	if !strings.Contains(joined, "CODEX_HOME=") {
 		t.Fatal("expected CODEX_HOME to be preserved")
 	}
