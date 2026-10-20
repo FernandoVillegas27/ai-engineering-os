@@ -163,3 +163,63 @@ func TestCustomSafeViewPolicyCanAuthorizeAdditionalExtension(t *testing.T) {
 		t.Fatal("expected custom extension to be allowed")
 	}
 }
+
+
+func TestCopyVerifiedRegularFileRejectsIdentityChange(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source.go")
+	target := filepath.Join(root, "copy.go")
+
+	if err := os.WriteFile(source, []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	expected, err := os.Lstat(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Remove(source); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, []byte("replacement"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := copyVerifiedRegularFile(source, target, expected); err == nil {
+		t.Fatal("expected identity-change rejection")
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatal("target must not be created after identity mismatch")
+	}
+}
+
+func TestCopyVerifiedRegularFileRejectsSymlinkReplacement(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source.go")
+	secret := filepath.Join(root, "secret.txt")
+	target := filepath.Join(root, "copy.go")
+
+	if err := os.WriteFile(source, []byte("safe"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(secret, []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	expected, err := os.Lstat(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(source); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secret, source); err != nil {
+		t.Skipf("symlink creation unavailable: %v", err)
+	}
+
+	if err := copyVerifiedRegularFile(source, target, expected); err == nil {
+		t.Fatal("expected symlink replacement rejection")
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatal("target must not be created for symlink replacement")
+	}
+}
