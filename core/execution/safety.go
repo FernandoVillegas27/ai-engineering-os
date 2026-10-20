@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -15,7 +16,58 @@ type SafeViewReport struct {
 	ExcludedPaths []string
 }
 
+type SafeViewPolicy struct {
+	AllowedExtensions map[string]bool
+	AllowedBasenames  map[string]bool
+	ExcludedBasenames map[string]bool
+	ExcludedPrefixes  []string
+}
+
+func DefaultSafeViewPolicy() SafeViewPolicy {
+	extensions := []string{
+		".c", ".cc", ".cpp", ".cs", ".css", ".dart", ".go", ".graphql", ".gql",
+		".h", ".hpp", ".html", ".java", ".js", ".jsx", ".kt", ".kts", ".less",
+		".md", ".mjs", ".mts", ".php", ".proto", ".py", ".rb", ".rs", ".sass",
+		".scala", ".scss", ".sh", ".sql", ".svelte", ".swift", ".toml", ".ts",
+		".tsx", ".vue", ".xml", ".yaml", ".yml",
+	}
+	basenames := []string{
+		".dockerignore", ".editorconfig", ".eslintignore", ".eslintrc", ".gitignore",
+		".prettierignore", ".prettierrc", "Dockerfile", "Gemfile", "Makefile",
+		"Procfile", "Rakefile", "go.mod", "go.sum", "package.json", "package-lock.json",
+		"pnpm-lock.yaml", "pom.xml", "settings.gradle", "settings.gradle.kts",
+		"build.gradle", "build.gradle.kts", "tsconfig.json", "vite.config.js",
+		"vite.config.ts", "angular.json",
+	}
+	excluded := []string{
+		".npmrc", ".pypirc", ".netrc", "netrc", "credentials", "credentials.json",
+		"secrets", "secrets.json", "secrets.yaml", "secrets.yml", "gradle.properties",
+		"id_rsa", "id_ed25519", "id_dsa", "id_ecdsa", "service-account.json",
+	}
+
+	policy := SafeViewPolicy{
+		AllowedExtensions: map[string]bool{},
+		AllowedBasenames:  map[string]bool{},
+		ExcludedBasenames: map[string]bool{},
+		ExcludedPrefixes:  []string{"credential.", "credentials.", "secret.", "secrets.", "service-account."},
+	}
+	for _, extension := range extensions {
+		policy.AllowedExtensions[strings.ToLower(extension)] = true
+	}
+	for _, basename := range basenames {
+		policy.AllowedBasenames[strings.ToLower(basename)] = true
+	}
+	for _, basename := range excluded {
+		policy.ExcludedBasenames[strings.ToLower(basename)] = true
+	}
+	return policy
+}
+
 func PrepareSafeReadOnlyView(projectRoot string, destination string) (SafeViewReport, error) {
+	return PrepareSafeReadOnlyViewWithPolicy(projectRoot, destination, DefaultSafeViewPolicy())
+}
+
+func PrepareSafeReadOnlyViewWithPolicy(projectRoot string, destination string, policy SafeViewPolicy) (SafeViewReport, error) {
 	root, err := filepath.Abs(projectRoot)
 	if err != nil {
 		return SafeViewReport{}, fmt.Errorf("resolve project root: %w", err)
@@ -42,7 +94,7 @@ func PrepareSafeReadOnlyView(projectRoot string, destination string) (SafeViewRe
 		}
 		relative = filepath.Clean(relative)
 
-		if IsSensitivePath(relative) {
+		if IsSensitivePathWithPolicy(relative, policy) {
 			report.ExcludedPaths = append(report.ExcludedPaths, filepath.ToSlash(relative))
 			if entry.IsDir() {
 				return filepath.SkipDir
@@ -59,14 +111,15 @@ func PrepareSafeReadOnlyView(projectRoot string, destination string) (SafeViewRe
 			return nil
 		}
 
-		target := filepath.Join(destination, relative)
 		if entry.IsDir() {
-			return os.MkdirAll(target, 0o755)
+			return nil
 		}
-		if !info.Mode().IsRegular() {
+		if !info.Mode().IsRegular() || !IsAllowedRuntimeFile(relative, policy) {
 			report.ExcludedPaths = append(report.ExcludedPaths, filepath.ToSlash(relative))
 			return nil
 		}
+
+		target := filepath.Join(destination, relative)
 		if err := copyReadOnlyFile(path, target); err != nil {
 			return err
 		}
@@ -76,11 +129,23 @@ func PrepareSafeReadOnlyView(projectRoot string, destination string) (SafeViewRe
 	if err != nil {
 		return SafeViewReport{}, fmt.Errorf("prepare safe read-only view: %w", err)
 	}
-
+	sort.Strings(report.ExcludedPaths)
 	return report, nil
 }
 
+func IsAllowedRuntimeFile(relativePath string, policy SafeViewPolicy) bool {
+	base := strings.ToLower(filepath.Base(relativePath))
+	if policy.AllowedBasenames[base] {
+		return true
+	}
+	return policy.AllowedExtensions[strings.ToLower(filepath.Ext(base))]
+}
+
 func IsSensitivePath(relativePath string) bool {
+	return IsSensitivePathWithPolicy(relativePath, DefaultSafeViewPolicy())
+}
+
+func IsSensitivePathWithPolicy(relativePath string, policy SafeViewPolicy) bool {
 	clean := filepath.ToSlash(filepath.Clean(relativePath))
 	lower := strings.ToLower(clean)
 	parts := strings.Split(lower, "/")
@@ -96,15 +161,13 @@ func IsSensitivePath(relativePath string) bool {
 	if base == ".env" || strings.HasPrefix(base, ".env.") {
 		return true
 	}
-	switch base {
-	case ".npmrc", ".pypirc", "netrc", ".netrc", "credentials", "credentials.json",
-		"secrets", "secrets.json", "secrets.yaml", "secrets.yml",
-		"id_rsa", "id_ed25519", "gradle.properties":
+	if policy.ExcludedBasenames[base] {
 		return true
 	}
-
-	if strings.HasPrefix(base, "credentials.") || strings.HasPrefix(base, "secret.") || strings.HasPrefix(base, "secrets.") {
-		return true
+	for _, prefix := range policy.ExcludedPrefixes {
+		if strings.HasPrefix(base, strings.ToLower(prefix)) {
+			return true
+		}
 	}
 
 	switch strings.ToLower(filepath.Ext(base)) {
