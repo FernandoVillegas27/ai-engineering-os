@@ -1,0 +1,253 @@
+package main
+
+import (
+	"bufio"
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/FernandoVillegas27/ai-engineering-os/core/classifier"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/detector"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/proposal"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
+	codexintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/codex"
+	"github.com/FernandoVillegas27/ai-engineering-os/integrations/gitstage"
+)
+
+type stageOptions struct {
+	root    string
+	task    string
+	useAI   bool
+	runtime string
+}
+
+func runStage(args []string) error {
+	options, err := parseStageArgs(args)
+	if err != nil {
+		return err
+	}
+
+	root, err := filepath.Abs(options.root)
+	if err != nil {
+		return fmt.Errorf("resolver ruta del proyecto: %w", err)
+	}
+
+	capabilitiesPath, err := resolveRegistryFile("capabilities.yaml")
+	if err != nil {
+		return err
+	}
+	agentsPath, err := resolveRegistryFile("agents.yaml")
+	if err != nil {
+		return err
+	}
+	skillsPath, err := resolveRegistryFile("skills.yaml")
+	if err != nil {
+		return err
+	}
+	toolsPath, err := resolveRegistryFile("tools.yaml")
+	if err != nil {
+		return err
+	}
+
+	capabilities, err := registry.LoadCapabilities(capabilitiesPath)
+	if err != nil {
+		return err
+	}
+	agents, err := registry.LoadAgents(agentsPath)
+	if err != nil {
+		return err
+	}
+	skills, err := registry.LoadSkills(skillsPath)
+	if err != nil {
+		return err
+	}
+	tools, err := registry.LoadTools(toolsPath)
+	if err != nil {
+		return err
+	}
+	detection, err := detector.Inspect(root)
+	if err != nil {
+		return fmt.Errorf("inspeccionar proyecto: %w", err)
+	}
+
+	var classified classifier.Result
+	if options.useAI {
+		resolution, err := classifier.Resolve(
+			context.Background(),
+			options.task,
+			capabilities,
+			readNormalizedProjectContext(root),
+			codexintegration.New(),
+		)
+		if err != nil {
+			return err
+		}
+		printClassificationResolution(resolution)
+		fmt.Println()
+		if resolution.ClarificationRequired {
+			return fmt.Errorf("se requiere aclaración antes de preparar cambios: %s", resolution.ClarificationQuestion)
+		}
+		if resolution.Result.NeedsAI {
+			return fmt.Errorf("la tarea sigue ambigua y no pudo clasificarse")
+		}
+		classified = resolution.Result
+	} else {
+		classified, err = classifier.Classify(options.task, capabilities)
+		if err != nil {
+			return err
+		}
+		printClassification(classified)
+		fmt.Println()
+		if classified.NeedsAI {
+			return fmt.Errorf("la tarea es ambigua; repetí con --ai para habilitar el fallback de Codex")
+		}
+	}
+
+	plan, err := orchestration.Build(
+		orchestration.Request{
+			Capabilities: classified.Capabilities,
+			Intent:       classified.Intent,
+		},
+		detection,
+		agents,
+		skills,
+		tools,
+	)
+	if err != nil {
+		return err
+	}
+
+	units, err := execution.BuildWorkUnits(options.task, root, plan, agents)
+	if err != nil {
+		return err
+	}
+	if len(units) != 1 {
+		return fmt.Errorf("controlled staging v1 requires exactly one work unit, got %d", len(units))
+	}
+
+	var runtime proposal.Runtime
+	switch options.runtime {
+	case "codex":
+		r := codexintegration.NewProposalRuntime()
+		runtime = r
+	default:
+		return fmt.Errorf("runtime no soportado: %s", options.runtime)
+	}
+
+	unit := units[0]
+	generated, err := (proposal.Generator{Runtime: runtime}).Generate(context.Background(), unit)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Controlled Stage Proposal")
+	fmt.Println()
+	fmt.Printf("Proyecto original: %s\n", root)
+	fmt.Printf("Agent: %s\n", unit.AgentID)
+	fmt.Printf("Runtime: %s\n", runtime.ID())
+	fmt.Printf("Summary: %s\n", generated.Summary)
+
+	if len(generated.Files) > 0 {
+		fmt.Println("Files:")
+		for _, file := range generated.Files {
+			fmt.Printf("  - [%s] %s: %s\n", file.Action, file.Path, file.Rationale)
+		}
+	}
+	if len(generated.Risks) > 0 {
+		fmt.Println("Risks:")
+		for _, risk := range generated.Risks {
+			fmt.Printf("  - [%s] %s\n", risk.Severity, risk.Detail)
+		}
+	}
+	if len(generated.Verification) > 0 {
+		fmt.Println("Verification:")
+		for _, step := range generated.Verification {
+			fmt.Printf("  - %s\n", step)
+		}
+	}
+	fmt.Println("Patch:")
+	for _, line := range strings.Split(generated.Patch, "\n") {
+		fmt.Printf("  %s\n", line)
+	}
+
+	fmt.Println()
+	fmt.Println("El patch todavía NO fue aplicado.")
+	fmt.Print("Escribí APPLY para aplicarlo únicamente en un workspace aislado: ")
+
+	reader := bufio.NewReader(os.Stdin)
+	answer, err := reader.ReadString('\n')
+	if err != nil && strings.TrimSpace(answer) == "" {
+		return fmt.Errorf("leer aprobación: %w", err)
+	}
+	if strings.TrimSpace(answer) != "APPLY" {
+		fmt.Println("Operación cancelada. El proyecto original no fue modificado.")
+		return nil
+	}
+
+	stager := gitstage.New()
+	result, err := stager.Stage(context.Background(), root, generated)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println()
+	fmt.Println("Controlled Stage Completed")
+	fmt.Printf("Workspace aislado: %s\n", result.Workspace)
+	fmt.Printf("Archivos cambiados: %d\n", len(result.ChangedFiles))
+	for _, file := range result.ChangedFiles {
+		fmt.Printf("  - [%s] %s\n", file.Action, file.Path)
+	}
+	fmt.Println()
+	fmt.Println("El proyecto original no fue modificado. No se ejecutaron tests, commit ni push.")
+	fmt.Println("El workspace queda disponible para inspección manual y verificación posterior.")
+	return nil
+}
+
+func parseStageArgs(args []string) (stageOptions, error) {
+	options := stageOptions{root: ".", runtime: "codex"}
+	var positional []string
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--task":
+			if i+1 >= len(args) {
+				return stageOptions{}, fmt.Errorf("--task requiere texto")
+			}
+			i++
+			options.task = args[i]
+		case "--ai":
+			options.useAI = true
+		case "--runtime":
+			if i+1 >= len(args) {
+				return stageOptions{}, fmt.Errorf("--runtime requiere un valor")
+			}
+			i++
+			options.runtime = args[i]
+		case "-h", "--help":
+			return stageOptions{}, fmt.Errorf("uso: ai stage [ruta-del-proyecto] --task <tarea> [--runtime codex] [--ai]")
+		default:
+			if strings.HasPrefix(args[i], "-") {
+				return stageOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
+			}
+			positional = append(positional, args[i])
+		}
+	}
+
+	if len(positional) > 1 {
+		return stageOptions{}, fmt.Errorf("se esperaba una sola ruta de proyecto")
+	}
+	if len(positional) == 1 {
+		options.root = positional[0]
+	}
+	if strings.TrimSpace(options.task) == "" {
+		return stageOptions{}, fmt.Errorf("--task es obligatorio")
+	}
+	if options.runtime != "codex" {
+		return stageOptions{}, fmt.Errorf("runtime no soportado: %s", options.runtime)
+	}
+	return options, nil
+}
