@@ -58,6 +58,19 @@ func TestBuildUsesReadOnlyNonInteractiveStructuredOutput(t *testing.T) {
 	if invocation.Args[len(invocation.Args)-1] != "-" {
 		t.Fatalf("last arg = %q, want stdin marker", invocation.Args[len(invocation.Args)-1])
 	}
+	if invocation.Env == nil {
+		t.Fatal("expected isolated classifier environment")
+	}
+	for _, entry := range invocation.Env {
+		key := strings.SplitN(entry, "=", 2)[0]
+		upper := strings.ToUpper(key)
+		if strings.Contains(upper, "TOKEN") ||
+			strings.Contains(upper, "SECRET") ||
+			strings.Contains(upper, "PASSWORD") ||
+			strings.Contains(upper, "API_KEY") {
+			t.Fatalf("sensitive environment variable leaked to classifier: %s", key)
+		}
+	}
 	if !strings.Contains(invocation.Stdin, "Allowed capabilities") ||
 		!strings.Contains(invocation.Stdin, "frontend-development") ||
 		!strings.Contains(invocation.Stdin, "Build and maintain user-facing") ||
@@ -122,5 +135,22 @@ func TestSchemaAvoidsUnsupportedUniqueItems(t *testing.T) {
 	}
 	if strings.Contains(string(data), "uniqueItems") {
 		t.Fatalf("schema contains unsupported uniqueItems: %s", string(data))
+	}
+}
+
+
+func TestClassifierEnvironmentDoesNotPassArbitrarySecrets(t *testing.T) {
+	t.Setenv("AI_ENGINEERING_OS_CLASSIFIER_SECRET_TOKEN", "do-not-leak")
+	t.Setenv("OPENAI_API_KEY", "do-not-leak")
+
+	invocation, err := (Adapter{Binary: "codex"}).Build(requestFixture(), t.TempDir())
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	for _, entry := range invocation.Env {
+		if strings.HasPrefix(entry, "AI_ENGINEERING_OS_CLASSIFIER_SECRET_TOKEN=") ||
+			strings.HasPrefix(entry, "OPENAI_API_KEY=") {
+			t.Fatalf("secret environment variable leaked: %s", entry)
+		}
 	}
 }

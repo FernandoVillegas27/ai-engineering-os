@@ -75,6 +75,7 @@ func (a Adapter) Build(request modelprovider.ClassificationRequest, workDir stri
 		Args:    args,
 		Stdin:   classificationPrompt(request),
 		Dir:     workDir,
+		Env:     safeRuntimeEnvironment(),
 	}, nil
 }
 
