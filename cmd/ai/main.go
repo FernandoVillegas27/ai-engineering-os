@@ -90,6 +90,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+	case "stage":
+		if err := runStage(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	case "gentle":
 		if err := runGentle(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -965,6 +970,7 @@ func printUsage() {
 	fmt.Println("  ai plan [ruta-del-proyecto] --task <tarea> [--ai]")
 	fmt.Println("  ai execute [ruta-del-proyecto] --task <tarea> (--dry-run | --runtime codex) [--ai]")
 	fmt.Println("  ai propose [ruta-del-proyecto] --task <tarea> [--runtime codex] [--ai]")
+	fmt.Println("  ai stage [ruta-del-proyecto] --task <tarea> [--runtime codex] [--ai]")
 	fmt.Println("  ai plan [ruta-del-proyecto] [--intent implement|design|research|review|verify] --capability <id> [--capability <id>...]")
 	fmt.Println("  ai gentle status")
 	fmt.Println("  ai gentle plan <runtime>")
@@ -979,6 +985,7 @@ func printUsage() {
 	fmt.Println("  plan      Resuelve agentes, skills y tools desde tarea o capabilities explícitas")
 	fmt.Println("  execute   Ejecuta work units en dry-run o análisis read-only con un runtime")
 	fmt.Println("  propose   Genera una propuesta estructurada y diff sin modificar el proyecto")
+	fmt.Println("  stage     Aplica un patch aprobado únicamente en un workspace aislado")
 	fmt.Println("  gentle    Descubre Gentle-AI y previsualiza proyección por runtime")
 }
 
