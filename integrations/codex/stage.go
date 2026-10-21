@@ -15,11 +15,7 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/integrations/commandmodel"
 )
 
-type StageResult struct {
-	Workspace string
-	Changes   []staging.WorkspaceChange
-	Summary   string
-}
+type StageResult = staging.StageResult
 
 type StageRuntime struct {
 	Binary  string
@@ -35,6 +31,8 @@ func NewStageRuntime() StageRuntime {
 		Timeout: defaultRuntimeTimeout,
 	}
 }
+
+func (r StageRuntime) ID() string { return "codex-stage" }
 
 func (r StageRuntime) Stage(ctx context.Context, unit execution.WorkUnit, p proposal.Proposal) (StageResult, error) {
 	if err := execution.ValidateReadOnlyUnit(unit); err != nil {
