@@ -46,9 +46,7 @@ func generateProposalWithRouting(
 		}, nil
 	}
 
-	if options.Policy != modelpolicy.PolicyAuto || options.Override != "" ||
-		(runtimeName != "cursor" && runtimeName != "auto") ||
-		!proposal.IsTaskAlignmentError(err) {
+	if !shouldEscalateProposal(runtimeName, options, err) {
 		return generatedProposal{}, err
 	}
 
@@ -141,4 +139,15 @@ func displayModel(model string) string {
 		return "auto"
 	}
 	return model
+}
+
+
+func shouldEscalateProposal(runtimeName string, options modelRoutingOptions, err error) bool {
+	if options.Policy != modelpolicy.PolicyAuto || options.Override != "" {
+		return false
+	}
+	if runtimeName != "cursor" && runtimeName != "auto" {
+		return false
+	}
+	return proposal.IsTaskAlignmentError(err)
 }
