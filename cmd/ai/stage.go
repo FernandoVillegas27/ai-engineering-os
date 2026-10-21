@@ -14,6 +14,7 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/proposal"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/staging"
 	codexintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/codex"
 	"github.com/FernandoVillegas27/ai-engineering-os/integrations/gitstage"
 )
@@ -143,6 +144,10 @@ func runStage(args []string) error {
 	if err != nil {
 		return err
 	}
+	validatedFiles, err := staging.ValidateProposal(generated, execution.DefaultSafeViewPolicy())
+	if err != nil {
+		return fmt.Errorf("la propuesta generada no es segura para staging: %w", err)
+	}
 
 	fmt.Println("Controlled Stage Proposal")
 	fmt.Println()
@@ -175,6 +180,7 @@ func runStage(args []string) error {
 	}
 
 	fmt.Println()
+	fmt.Printf("Patch validado para staging: %d archivo(s).\n", len(validatedFiles))
 	fmt.Println("El patch todavía NO fue aplicado.")
 	fmt.Print("Escribí APPLY para aplicarlo únicamente en un workspace aislado: ")
 
