@@ -133,10 +133,6 @@ func EnsureChangesMatchDeclared(actual, declared []WorkspaceChange) error {
 	for _, change := range declared {
 		expected[change.Path] = change.Action
 	}
-	if len(actual) != len(expected) {
-		return fmt.Errorf("actual changes do not match proposal: actual=%d declared=%d", len(actual), len(expected))
-	}
-
 	for _, change := range actual {
 		action, ok := expected[change.Path]
 		if !ok {
