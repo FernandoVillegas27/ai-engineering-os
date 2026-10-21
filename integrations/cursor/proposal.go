@@ -2,6 +2,7 @@ package cursor
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -41,7 +42,8 @@ func (r ProposalRuntime) Propose(ctx context.Context, unit execution.WorkUnit) (
 		return proposal.Proposal{}, err
 	}
 
-	out, err := runAgentWithFormat(ctx, r.Config, view.Root, "ask", proposalPrompt(unit, view), "stream-json")
+	prompt := proposalPrompt(unit, view)
+	out, err := runAgentWithFormat(ctx, r.Config, view.Root, "ask", prompt, "stream-json")
 	if err != nil {
 		return proposal.Proposal{}, err
 	}
@@ -51,6 +53,9 @@ func (r ProposalRuntime) Propose(ctx context.Context, unit execution.WorkUnit) (
 	}
 	var result proposal.Proposal
 	if err := decodeModelJSONObject(finalText, &result); err != nil {
+		if os.Getenv("AI_CURSOR_DIAGNOSTICS") == "1" {
+			return proposal.Proposal{}, fmt.Errorf("%w; cursor proposal diagnostics: prompt_bytes=%d prompt_sha256=%x task_in_prompt=%t sanitized_files=%d mode=ask output_format=stream-json (prompt contents not logged)", err, len(prompt), sha256.Sum256([]byte(prompt)), strings.Contains(prompt, unit.Task), view.CopiedFiles)
+		}
 		return proposal.Proposal{}, err
 	}
 	return result, nil

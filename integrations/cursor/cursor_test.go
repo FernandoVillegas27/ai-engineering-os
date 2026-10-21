@@ -322,3 +322,34 @@ func TestRunAgentWithFormatUsesStreamJSON(t *testing.T) {
 		t.Fatalf("args=%q", args)
 	}
 }
+
+func TestProposalPassesFullTaskPromptAsSingleArgument(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "service.go"), []byte("package sample\n"), 0o600); err != nil { t.Fatal(err) }
+	runner := &fakeRunner{stdout: `{"type":"result","subtype":"success","result":"{\"Summary\":\"OK\",\"Files\":[],\"Patch\":\"\",\"Risks\":[],\"Verification\":[]}" }`}
+	unit := unitFixture(root)
+	unit.Task = "Validar que Codex timeout no sea menor a 5 segundos"
+	_, err := (ProposalRuntime{Config: RunnerConfig{Runner:runner}}).Propose(context.Background(), unit)
+	if err != nil { t.Fatal(err) }
+	args := runner.invocations[0].Args
+	if len(args) < 2 { t.Fatal("missing arguments") }
+	prompt := args[len(args)-1]
+	if !strings.Contains(prompt, unit.Task) || strings.Count(prompt, unit.Task) < 2 { t.Fatal("original task missing from CLI prompt argument") }
+	if !strings.Contains(prompt, "Return EXACTLY one JSON object") { t.Fatal("JSON contract missing from CLI prompt") }
+}
+
+func TestProposalOptionalDiagnosticsDoNotLogPrompt(t *testing.T) {
+	t.Setenv("AI_CURSOR_DIAGNOSTICS", "1")
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "service.go"), []byte("package sample\n"), 0o600); err != nil { t.Fatal(err) }
+	runner := &fakeRunner{stdout: `{"type":"result","subtype":"success","result":"Please specify the task"}`}
+	unit := unitFixture(root)
+	unit.Task = "Sensitive test marker that must not be in diagnostics"
+	_, err := (ProposalRuntime{Config: RunnerConfig{Runner:runner}}).Propose(context.Background(), unit)
+	if err == nil { t.Fatal("expected non-JSON response error") }
+	message := err.Error()
+	for _, marker := range []string{"prompt_bytes=", "prompt_sha256=", "task_in_prompt=true", "sanitized_files="} {
+		if !strings.Contains(message, marker) { t.Fatalf("missing %q in %s", marker, message) }
+	}
+	if strings.Contains(message, unit.Task) { t.Fatal("diagnostics leaked the prompt") }
+}
