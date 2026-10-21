@@ -212,15 +212,12 @@ func runStage(args []string) error {
 		allowedFiles = append(allowedFiles, file.Path)
 	}
 
-	qualityResult, err := (quality.Loop{
+	qualityResult, qualityErr := (quality.Loop{
 		Verifier:    localverify.New(),
 		Reviewer:    codexintegration.NewReviewRuntime(),
 		Corrector:   codexintegration.NewCorrectionRuntime(),
 		MaxAttempts: 3,
 	}).Run(context.Background(), result.Workspace, options.task, allowedFiles)
-	if err != nil {
-		return fmt.Errorf("quality loop: %w", err)
-	}
 
 	fmt.Println()
 	fmt.Println("Quality Loop")
@@ -238,7 +235,20 @@ func runStage(args []string) error {
 			}
 			fmt.Println()
 			if !check.Passed {
-				if detail := strings.TrimSpace(check.Stderr); detail != "" {
+				if check.FailureKind != "" {
+					fmt.Printf("      Tipo: %s", check.FailureKind)
+					if check.Correctable {
+						fmt.Print(" (corregible por código)")
+					} else {
+						fmt.Print(" (no corregible por código)")
+					}
+					fmt.Println()
+				}
+				detail := strings.TrimSpace(check.Stderr)
+				if detail == "" {
+					detail = strings.TrimSpace(check.Stdout)
+				}
+				if detail != "" {
 					fmt.Printf("      %s\n", strings.ReplaceAll(detail, "\n", "\n      "))
 				}
 			}
@@ -253,6 +263,19 @@ func runStage(args []string) error {
 		if attempt.Corrected {
 			fmt.Println("  Correction: aplicada en el workspace aislado")
 		}
+		if attempt.Blocked {
+			fmt.Println("  Correction: omitida; el fallo requiere resolver infraestructura/entorno")
+		}
+		if strings.TrimSpace(attempt.CorrectionError) != "" {
+			fmt.Printf("  Correction: no produjo una corrección aplicable: %s\n", attempt.CorrectionError)
+		}
+	}
+
+	if qualityErr != nil {
+		fmt.Println()
+		fmt.Println("Quality Loop ERROR")
+		fmt.Println("Se preservaron los diagnósticos disponibles. El proyecto original sigue intacto.")
+		return fmt.Errorf("quality loop: %w", qualityErr)
 	}
 
 	fmt.Println()
