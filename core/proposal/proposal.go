@@ -3,7 +3,6 @@ package proposal
 import (
 	"context"
 	"fmt"
-	"math"
 	"regexp"
 	"strings"
 
@@ -60,7 +59,7 @@ func (g Generator) Generate(ctx context.Context, unit execution.WorkUnit) (Propo
 }
 
 
-var taskTokenPattern = regexp.MustCompile("[[:alnum:]_./:-]+")
+var taskTokenPattern = regexp.MustCompile("[[:alnum:]_]+")
 
 func ValidateTaskAlignment(task string, p Proposal) error {
 	anchors := taskAnchors(task)
@@ -82,20 +81,34 @@ func ValidateTaskAlignment(task string, p Proposal) error {
 		b.WriteString(" ")
 	}
 	haystack := normalizeText(b.String())
+	proposalTokens := map[string]bool{}
+	for _, token := range taskTokenPattern.FindAllString(haystack, -1) {
+		proposalTokens[token] = true
+	}
 
 	hits := 0
 	var missing []string
+	var missingRequired []string
 	for _, anchor := range anchors {
-		if strings.Contains(haystack, anchor) {
+		if proposalTokens[anchor] {
 			hits++
-		} else {
-			missing = append(missing, anchor)
+			continue
 		}
+		missing = append(missing, anchor)
+		if isNumericToken(anchor) {
+			missingRequired = append(missingRequired, anchor)
+		}
+	}
+
+	if len(missingRequired) > 0 {
+		return fmt.Errorf("required task anchors are missing: %s", strings.Join(missingRequired, ", "))
 	}
 
 	required := 1
 	if len(anchors) > 1 {
-		required = int(math.Ceil(float64(len(anchors)) * 0.6))
+		// Require 75% coverage so generic overlap (for example runtime/codex)
+		// cannot authorize a proposal that omits the actual requested concern.
+		required = (len(anchors)*3 + 3) / 4
 	}
 	if hits < required {
 		return fmt.Errorf("task anchors matched %d/%d, need at least %d; missing: %s", hits, len(anchors), required, strings.Join(missing, ", "))
@@ -112,6 +125,7 @@ func taskAnchors(task string) []string {
 		"para": true, "que": true, "una": true, "uno": true, "unos": true, "unas": true, "del": true, "las": true, "los": true,
 		"pueda": true, "puede": true, "puedan": true, "debe": true, "deberia": true, "configurarse": true, "configurar": true,
 		"menos": true, "mas": true, "segundo": true, "segundos": true, "second": true, "seconds": true,
+		"validacion": true, "validar": true, "validation": true, "validate": true,
 		"the": true, "and": true, "for": true, "with": true, "from": true, "into": true, "this": true, "that": true, "than": true,
 	}
 	seen := map[string]bool{}
@@ -138,6 +152,19 @@ func taskAnchors(task string) []string {
 		anchors = append(anchors, token)
 	}
 	return anchors
+}
+
+
+func isNumericToken(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizeText(value string) string {
