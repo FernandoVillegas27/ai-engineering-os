@@ -60,9 +60,16 @@ func (l Loop) Run(ctx context.Context, workspace, task string, allowedFiles []st
 			return result, fmt.Errorf("verification attempt %d: %w", attempt, err)
 		}
 
-		reviewReport, err := l.Reviewer.Review(ctx, workspace, task, allowedFiles)
-		if err != nil {
-			return result, fmt.Errorf("review attempt %d: %w", attempt, err)
+		verificationOK := verificationReport.Status == verification.StatusPassed || verificationReport.Status == verification.StatusSkipped
+		reviewReport := review.Report{
+			Verdict: review.VerdictRejected,
+			Summary: "Independent review deferred until deterministic verification passes.",
+		}
+		if verificationOK {
+			reviewReport, err = l.Reviewer.Review(ctx, workspace, task, allowedFiles)
+			if err != nil {
+				return result, fmt.Errorf("review attempt %d: %w", attempt, err)
+			}
 		}
 
 		entry := Attempt{
@@ -71,7 +78,7 @@ func (l Loop) Run(ctx context.Context, workspace, task string, allowedFiles []st
 			Review:       reviewReport,
 		}
 
-		if verificationReport.Status == verification.StatusPassed && reviewReport.Verdict == review.VerdictApproved {
+		if verificationOK && reviewReport.Verdict == review.VerdictApproved {
 			result.Attempts = append(result.Attempts, entry)
 			result.Passed = true
 			return result, nil
