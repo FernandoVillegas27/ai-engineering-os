@@ -220,3 +220,35 @@ func TestProposalPromptRepeatsTaskForGrounding(t *testing.T) {
 		t.Fatalf("task occurrence count=%d, want at least 2", count)
 	}
 }
+
+
+func TestCursorRuntimeConstructorsPinExplicitModels(t *testing.T) {
+	if got := NewProposalRuntime().Config.Model; got != defaultEngineeringModel {
+		t.Fatalf("proposal model=%q want=%q", got, defaultEngineeringModel)
+	}
+	if got := NewStageRuntime().Config.Model; got != defaultEngineeringModel {
+		t.Fatalf("stage model=%q want=%q", got, defaultEngineeringModel)
+	}
+	if got := NewCorrectionRuntime().Config.Model; got != defaultEngineeringModel {
+		t.Fatalf("correction model=%q want=%q", got, defaultEngineeringModel)
+	}
+	if got := NewReviewRuntime().Config.Model; got != defaultReviewModel {
+		t.Fatalf("review model=%q want=%q", got, defaultReviewModel)
+	}
+}
+
+func TestRunAgentPassesConfiguredModel(t *testing.T) {
+	root := t.TempDir()
+	runner := &fakeRunner{stdout: `{"Summary":"ok","Findings":[]}`}
+	_, err := runAgent(context.Background(), RunnerConfig{
+		Runner: runner,
+		Model:  defaultEngineeringModel,
+	}, root, "ask", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := strings.Join(runner.invocations[0].Args, " ")
+	if !strings.Contains(args, "--model "+defaultEngineeringModel) {
+		t.Fatalf("args=%q", args)
+	}
+}
