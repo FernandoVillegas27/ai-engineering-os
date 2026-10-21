@@ -9,7 +9,6 @@ import (
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/proposal"
-	"github.com/FernandoVillegas27/ai-engineering-os/integrations/commandmodel"
 )
 
 type ProposalRuntime struct{ Config RunnerConfig }
@@ -67,4 +66,3 @@ Sanitized files available: %d
 `, unit.Task, unit.Intent, unit.AgentID, strings.Join(unit.Capabilities, ", "), strings.Join(unit.Skills, ", "), view.CopiedFiles)
 }
 
-var _ commandmodel.Runner
