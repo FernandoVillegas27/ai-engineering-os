@@ -31,7 +31,7 @@ func NewProposalRuntime() ProposalRuntime {
 	return ProposalRuntime{
 		Binary:  "codex",
 		Runner:  commandmodel.OSRunner{},
-		Timeout: 2 * time.Minute,
+		Timeout: defaultRuntimeTimeout,
 	}
 }
 
@@ -112,7 +112,7 @@ func (r ProposalRuntime) Propose(ctx context.Context, unit execution.WorkUnit) (
 
 	timeout := r.Timeout
 	if timeout <= 0 {
-		timeout = 2 * time.Minute
+		timeout = defaultRuntimeTimeout
 	}
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
