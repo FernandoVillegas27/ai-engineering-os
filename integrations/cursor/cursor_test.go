@@ -68,7 +68,9 @@ func TestProposalRuntimeUsesReadOnlyAskModeAndParsesJSON(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "service.go"), []byte("package sample\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	runner := &fakeRunner{stdout: `{"Summary":"Actualizar","Files":[{"Path":"service.go","Action":"modify","Rationale":"pedido"}],"Patch":"","Risks":[],"Verification":["go test ./..."]}`}
+	runner := &fakeRunner{stdout: `{"type":"system","subtype":"init"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"{\"Summary\":\"Actualizar\",\"Files\":[{\"Path\":\"service.go\",\"Action\":\"modify\",\"Rationale\":\"pedido\"}],\"Patch\":\"\",\"Risks\":[],\"Verification\":[\"go test ./...\"]}"}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"{\"Summary\":\"Actualizar\",\"Files\":[{\"Path\":\"service.go\",\"Action\":\"modify\",\"Rationale\":\"pedido\"}],\"Patch\":\"\",\"Risks\":[],\"Verification\":[\"go test ./...\"]}"}`}
 	runtime := ProposalRuntime{Config: RunnerConfig{Binary: "agent", Runner: runner}}
 
 	got, err := runtime.Propose(context.Background(), unitFixture(root))
@@ -79,7 +81,7 @@ func TestProposalRuntimeUsesReadOnlyAskModeAndParsesJSON(t *testing.T) {
 		t.Fatalf("proposal=%#v", got)
 	}
 	args := strings.Join(runner.invocations[0].Args, " ")
-	if !strings.Contains(args, "--mode ask") || !strings.Contains(args, "--sandbox enabled") || !strings.Contains(args, "--output-format json") || !strings.Contains(args, "--trust") {
+	if !strings.Contains(args, "--mode ask") || !strings.Contains(args, "--sandbox enabled") || !strings.Contains(args, "--output-format stream-json") || !strings.Contains(args, "--trust") {
 		t.Fatalf("args=%q", args)
 	}
 	if runner.invocations[0].Dir == root {
@@ -138,7 +140,8 @@ func TestStageRuntimeRejectsUndeclaredChange(t *testing.T) {
 
 func TestReviewRuntimeConvertsBlockingFinding(t *testing.T) {
 	root := t.TempDir()
-	runner := &fakeRunner{stdout: `{"Summary":"Revisión","Findings":[{"Severity":"high","Title":"Bug","Detail":"detalle"}]}`}
+	runner := &fakeRunner{stdout: `{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"{\"Summary\":\"Revisión\",\"Findings\":[{\"Severity\":\"high\",\"Title\":\"Bug\",\"Detail\":\"detalle\"}]}"}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"{\"Summary\":\"Revisión\",\"Findings\":[{\"Severity\":\"high\",\"Title\":\"Bug\",\"Detail\":\"detalle\"}]}"}`}
 	report, err := (ReviewRuntime{Config: RunnerConfig{Runner: runner}}).Review(context.Background(), root, "task", []string{"service.go"})
 	if err != nil {
 		t.Fatal(err)
@@ -239,44 +242,6 @@ func TestCursorRuntimeConstructorsAcceptExplicitModel(t *testing.T) {
 }
 
 
-func TestDecodeStructuredResponseSupportsCursorResultEnvelope(t *testing.T) {
-	raw := `{"type":"result","result":"{\"Summary\":\"Actualizar\",\"Files\":[],\"Patch\":\"\",\"Risks\":[],\"Verification\":[]}" }`
-	var got proposal.Proposal
-	if err := decodeStructuredResponse(raw, &got); err != nil {
-		t.Fatal(err)
-	}
-	if got.Summary != "Actualizar" {
-		t.Fatalf("proposal=%#v", got)
-	}
-}
-
-func TestDecodeStructuredResponseSupportsNestedContentEnvelope(t *testing.T) {
-	raw := `{"message":{"content":"{\"Summary\":\"Revisión\",\"Findings\":[]}"}}`
-	var got struct {
-		Summary string
-		Findings []review.Finding
-	}
-	if err := decodeStructuredResponse(raw, &got); err != nil {
-		t.Fatal(err)
-	}
-	if got.Summary != "Revisión" {
-		t.Fatalf("payload=%#v", got)
-	}
-}
-
-func TestRunAgentWithFormatUsesRequestedOutputFormat(t *testing.T) {
-	root := t.TempDir()
-	runner := &fakeRunner{stdout: `{"ok":true}`}
-	_, err := runAgentWithFormat(context.Background(), RunnerConfig{Runner: runner}, root, "ask", "test", "json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	args := strings.Join(runner.invocations[0].Args, " ")
-	if !strings.Contains(args, "--output-format json") {
-		t.Fatalf("args=%q", args)
-	}
-}
-
 func TestStageRuntimeStillUsesTextOutput(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "service.go"), []byte("package sample\n"), 0o600); err != nil {
@@ -293,6 +258,67 @@ func TestStageRuntimeStillUsesTextOutput(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(result.Workspace) })
 	args := strings.Join(runner.invocations[0].Args, " ")
 	if !strings.Contains(args, "--output-format text") {
+		t.Fatalf("args=%q", args)
+	}
+}
+
+
+func TestDecodeStreamFinalResponsePrefersTerminalResult(t *testing.T) {
+	raw := `{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"partial"}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"final response"}`
+	got, err := decodeStreamFinalResponse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "final response" {
+		t.Fatalf("got=%q", got)
+	}
+}
+
+func TestDecodeStreamFinalResponseFallsBackToAssistantDeltas(t *testing.T) {
+	raw := `{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello "}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"world"}]}}
+{"type":"result","subtype":"success","is_error":false,"result":""}`
+	got, err := decodeStreamFinalResponse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "hello world" {
+		t.Fatalf("got=%q", got)
+	}
+}
+
+func TestDecodeStreamFinalResponseRequiresTerminalResult(t *testing.T) {
+	raw := `{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello"}]}}`
+	if _, err := decodeStreamFinalResponse(raw); err == nil {
+		t.Fatal("expected missing terminal result error")
+	}
+}
+
+func TestDecodeStreamFinalResponseRejectsTerminalError(t *testing.T) {
+	raw := `{"type":"result","subtype":"error","is_error":true,"result":"failed"}`
+	if _, err := decodeStreamFinalResponse(raw); err == nil {
+		t.Fatal("expected terminal error")
+	}
+}
+
+func TestDecodeModelJSONObjectIncludesResponseSampleOnFailure(t *testing.T) {
+	var got proposal.Proposal
+	err := decodeModelJSONObject("not json at all", &got)
+	if err == nil || !strings.Contains(err.Error(), "not json at all") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestRunAgentWithFormatUsesStreamJSON(t *testing.T) {
+	root := t.TempDir()
+	runner := &fakeRunner{stdout: `{"type":"result","subtype":"success","is_error":false,"result":"ok"}`}
+	_, err := runAgentWithFormat(context.Background(), RunnerConfig{Runner: runner}, root, "ask", "test", "stream-json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := strings.Join(runner.invocations[0].Args, " ")
+	if !strings.Contains(args, "--output-format stream-json") {
 		t.Fatalf("args=%q", args)
 	}
 }
