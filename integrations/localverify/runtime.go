@@ -203,7 +203,7 @@ func safeVerificationEnvironment() []string {
 	allowed := []string{
 		"PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "COMSPEC",
 		"TEMP", "TMP", "TMPDIR", "HOME", "USERPROFILE",
-		"JAVA_HOME", "GOROOT",
+		"JAVA_HOME", "GOROOT", "GOPATH", "GOMODCACHE",
 		"NPM_CONFIG_CACHE", "LANG", "LC_ALL", "TERM",
 	}
 	env := make([]string, 0, len(allowed)+1)
@@ -228,21 +228,17 @@ func prepareVerificationEnvironment(root string) ([]string, func(), error) {
 	}
 
 	goCache := filepath.Join(cacheRoot, "go-build")
-	goModCache := filepath.Join(cacheRoot, "go-mod")
-	goPath := filepath.Join(cacheRoot, "go-path")
-	for _, dir := range []string{goCache, goModCache, goPath} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			cleanup()
-			return nil, func() {}, fmt.Errorf("create verification cache directory: %w", err)
-		}
+	if err := os.MkdirAll(goCache, 0o755); err != nil {
+		cleanup()
+		return nil, func() {}, fmt.Errorf("create verification cache directory: %w", err)
 	}
 
+	// Keep the build cache isolated, but deliberately reuse the caller's
+	// module cache/GOPATH when available. Replacing GOMODCACHE/GOPATH with
+	// empty temporary directories forces Go to redownload every dependency
+	// on each verification run, which is both slow and network-dependent.
 	env := safeVerificationEnvironment()
-	env = append(env,
-		"GOCACHE="+goCache,
-		"GOMODCACHE="+goModCache,
-		"GOPATH="+goPath,
-	)
+	env = append(env, "GOCACHE="+goCache)
 	return env, cleanup, nil
 }
 
