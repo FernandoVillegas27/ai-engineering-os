@@ -94,3 +94,17 @@ func TestEnsureChangesMatchDeclaredRejectsUndeclared(t *testing.T) {
 		t.Fatal("expected undeclared change rejection")
 	}
 }
+
+
+func TestEnsureChangesMatchDeclaredAllowsApprovedSuperset(t *testing.T) {
+	declared := []WorkspaceChange{
+		{Path: "src/a.go", Action: "modify"},
+		{Path: "src/b.go", Action: "modify"},
+	}
+	actual := []WorkspaceChange{
+		{Path: "src/a.go", Action: "modify"},
+	}
+	if err := EnsureChangesMatchDeclared(actual, declared); err != nil {
+		t.Fatalf("approved superset should allow fewer actual changes: %v", err)
+	}
+}
