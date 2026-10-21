@@ -79,7 +79,7 @@ func TestProposalRuntimeUsesReadOnlyAskModeAndParsesJSON(t *testing.T) {
 		t.Fatalf("proposal=%#v", got)
 	}
 	args := strings.Join(runner.invocations[0].Args, " ")
-	if !strings.Contains(args, "--mode ask") || !strings.Contains(args, "--sandbox enabled") || !strings.Contains(args, "--output-format text") || !strings.Contains(args, "--trust") {
+	if !strings.Contains(args, "--mode ask") || !strings.Contains(args, "--sandbox enabled") || !strings.Contains(args, "--output-format json") || !strings.Contains(args, "--trust") {
 		t.Fatalf("args=%q", args)
 	}
 	if runner.invocations[0].Dir == root {
@@ -235,5 +235,64 @@ func TestCursorRuntimeConstructorsAcceptExplicitModel(t *testing.T) {
 	}
 	if got := NewCorrectionRuntimeWithModel(model).Config.Model; got != model {
 		t.Fatalf("correction model=%q", got)
+	}
+}
+
+
+func TestDecodeStructuredResponseSupportsCursorResultEnvelope(t *testing.T) {
+	raw := `{"type":"result","result":"{\"Summary\":\"Actualizar\",\"Files\":[],\"Patch\":\"\",\"Risks\":[],\"Verification\":[]}" }`
+	var got proposal.Proposal
+	if err := decodeStructuredResponse(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Summary != "Actualizar" {
+		t.Fatalf("proposal=%#v", got)
+	}
+}
+
+func TestDecodeStructuredResponseSupportsNestedContentEnvelope(t *testing.T) {
+	raw := `{"message":{"content":"{\"Summary\":\"Revisión\",\"Findings\":[]}"}}`
+	var got struct {
+		Summary string
+		Findings []review.Finding
+	}
+	if err := decodeStructuredResponse(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Summary != "Revisión" {
+		t.Fatalf("payload=%#v", got)
+	}
+}
+
+func TestRunAgentWithFormatUsesRequestedOutputFormat(t *testing.T) {
+	root := t.TempDir()
+	runner := &fakeRunner{stdout: `{"ok":true}`}
+	_, err := runAgentWithFormat(context.Background(), RunnerConfig{Runner: runner}, root, "ask", "test", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := strings.Join(runner.invocations[0].Args, " ")
+	if !strings.Contains(args, "--output-format json") {
+		t.Fatalf("args=%q", args)
+	}
+}
+
+func TestStageRuntimeStillUsesTextOutput(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "service.go"), []byte("package sample\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runner := &fakeRunner{writeFile: "service.go", stdout: "done"}
+	result, err := (StageRuntime{Config: RunnerConfig{Runner: runner}}).Stage(context.Background(), unitFixture(root), proposal.Proposal{
+		Summary: "Actualizar",
+		Files: []proposal.FileChange{{Path: "service.go", Action: "modify"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(result.Workspace) })
+	args := strings.Join(runner.invocations[0].Args, " ")
+	if !strings.Contains(args, "--output-format text") {
+		t.Fatalf("args=%q", args)
 	}
 }
