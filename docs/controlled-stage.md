@@ -4,7 +4,7 @@
 
 Controlled staging is the first write-capable layer in AI Engineering OS.
 
-It does **not** write to the original repository.
+It never writes to the original repository.
 
 The workflow is:
 
@@ -15,22 +15,32 @@ Classify + Plan
   ↓
 Codex proposal in sanitized read-only view
   ↓
-Validate proposal/patch paths
+Validate declared file paths/actions
   ↓
-Show exact patch
+Show proposal
   ↓
 Explicit APPLY confirmation
   ↓
-Create isolated sibling workspace
+Create isolated sanitized sibling workspace
   ↓
-git apply --check
+Codex runs with workspace-write ONLY inside that workspace
   ↓
-git apply
+Deterministically compare before/after files
   ↓
-Verify file postconditions
+Reject undeclared, sensitive or unsupported changes
   ↓
-Keep isolated workspace for inspection
+Keep isolated workspace for verification
 ~~~
+
+## Why stage does not apply AI-generated patches
+
+`ai propose` may still return a unified diff for human inspection.
+
+`ai stage` deliberately does **not** use that diff as its write mechanism. Model-generated patch syntax can be malformed even when the intended source change is correct.
+
+Instead, after explicit approval, the Codex stage runtime edits an isolated sanitized workspace directly. AI Engineering OS then computes the actual changed files from the filesystem.
+
+This removes model-generated hunk counts and patch formatting from the trusted write path.
 
 ## Command
 
@@ -38,7 +48,7 @@ Keep isolated workspace for inspection
 go run ./cmd/ai stage . --task "..." --runtime codex
 ~~~
 
-The command prints the exact generated proposal and waits for:
+The command shows the proposal and waits for:
 
 ~~~text
 APPLY
@@ -48,38 +58,29 @@ Anything else cancels the operation.
 
 ## Safety boundary
 
-Controlled staging v1:
+Controlled staging:
 
-- requires exactly one Work Unit;
-- keeps the original Work Unit permission envelope read-only;
-- generates the proposal from the sanitized safe view;
-- validates every patch path against the same positive file policy;
-- rejects absolute paths and traversal;
-- rejects sensitive paths;
-- rejects unsupported file types;
-- rejects undeclared patch files;
-- rejects proposal/patch action mismatches;
-- rejects renames in v1;
-- runs `git apply --check` before applying;
-- applies only inside a sibling isolated workspace;
+- requires exactly one Work Unit in this version;
+- keeps the original project Work Unit read-only;
+- generates the proposal from a sanitized safe view;
+- validates all declared file paths against the positive file policy;
+- creates a new sanitized isolated sibling workspace after approval;
+- runs Codex with `--sandbox workspace-write` in that isolated workspace only;
+- prohibits commit, push, dependency installation, secrets, production and network use in the runtime instruction;
+- snapshots the sanitized workspace before execution;
+- computes real file changes after execution;
+- rejects sensitive, unsupported, symlink or non-regular files;
+- rejects changes to files not declared in the approved proposal;
+- rejects action mismatches such as declaring modify but actually creating/deleting;
+- allows the runtime to touch fewer files than proposed, but never additional files;
 - does not commit;
 - does not push;
 - does not modify the original repository;
-- does not run tests yet.
-
-## Patch actions
-
-v1 supports:
-
-- create;
-- modify;
-- delete.
-
-Renames are deliberately rejected until rename semantics have an explicit safety contract.
+- does not run verification tests yet.
 
 ## Isolated workspace
 
-A successful staging operation preserves the generated workspace so the user can inspect it.
+A successful stage operation preserves the workspace for the next verification phase.
 
 Example:
 
@@ -91,26 +92,11 @@ C:\work\
 
 The original project remains unchanged.
 
-The retained stage workspace is intentionally temporary operational state. A later lifecycle command will manage cleanup and promotion.
+## Next stage
 
-## Git subprocess
+The retained workspace becomes the input for:
 
-The local `git apply` subprocess receives a minimal environment and disables:
-
-~~~text
-GIT_CONFIG_NOSYSTEM=1
-GIT_TERMINAL_PROMPT=0
-~~~
-
-No network operation is performed.
-
-## Next stages
-
-Controlled staging is not promotion.
-
-Future steps will add:
-
-1. verification/tests inside the isolated workspace;
-2. independent review of the resulting diff;
-3. explicit promotion to the original working tree;
-4. separate commit/push approval gates.
+1. automated tests and verification;
+2. independent review;
+3. controlled correction loops;
+4. eventual explicit promotion to the original working tree.

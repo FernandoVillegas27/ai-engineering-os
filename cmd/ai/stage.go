@@ -16,7 +16,6 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/staging"
 	codexintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/codex"
-	"github.com/FernandoVillegas27/ai-engineering-os/integrations/gitstage"
 )
 
 type stageOptions struct {
@@ -130,21 +129,21 @@ func runStage(args []string) error {
 		return fmt.Errorf("controlled staging v1 requires exactly one work unit, got %d", len(units))
 	}
 
-	var runtime proposal.Runtime
+	var proposalRuntime proposal.Runtime
 	switch options.runtime {
 	case "codex":
 		r := codexintegration.NewProposalRuntime()
-		runtime = r
+		proposalRuntime = r
 	default:
 		return fmt.Errorf("runtime no soportado: %s", options.runtime)
 	}
 
 	unit := units[0]
-	generated, err := (proposal.Generator{Runtime: runtime}).Generate(context.Background(), unit)
+	generated, err := (proposal.Generator{Runtime: proposalRuntime}).Generate(context.Background(), unit)
 	if err != nil {
 		return err
 	}
-	validatedFiles, err := staging.ValidateProposal(generated, execution.DefaultSafeViewPolicy())
+	declaredFiles, err := staging.ValidateDeclaredFiles(generated.Files, execution.DefaultSafeViewPolicy())
 	if err != nil {
 		return fmt.Errorf("la propuesta generada no es segura para staging: %w", err)
 	}
@@ -153,7 +152,7 @@ func runStage(args []string) error {
 	fmt.Println()
 	fmt.Printf("Proyecto original: %s\n", root)
 	fmt.Printf("Agent: %s\n", unit.AgentID)
-	fmt.Printf("Runtime: %s\n", runtime.ID())
+	fmt.Printf("Runtime: %s\n", proposalRuntime.ID())
 	fmt.Printf("Summary: %s\n", generated.Summary)
 
 	if len(generated.Files) > 0 {
@@ -174,23 +173,9 @@ func runStage(args []string) error {
 			fmt.Printf("  - %s\n", step)
 		}
 	}
-	fmt.Println("Patch:")
-	for _, line := range strings.Split(generated.Patch, "\n") {
-		fmt.Printf("  %s\n", line)
-	}
-
-	stager := gitstage.New()
-	preflightFiles, err := stager.Check(context.Background(), root, generated)
-	if err != nil {
-		return fmt.Errorf("el patch no supera git apply --check; no se solicitó aprobación: %w", err)
-	}
-	if len(preflightFiles) != len(validatedFiles) {
-		return fmt.Errorf("preflight inconsistente: validación=%d archivos, git-check=%d archivos", len(validatedFiles), len(preflightFiles))
-	}
-
 	fmt.Println()
-	fmt.Printf("Patch validado y aplicable en workspace aislado: %d archivo(s).\n", len(validatedFiles))
-	fmt.Println("El patch todavía NO fue aplicado.")
+	fmt.Printf("Propuesta validada para staging aislado: %d archivo(s).\n", len(declaredFiles))
+	fmt.Println("Todavía NO se modificó ningún archivo.")
 	fmt.Print("Escribí APPLY para aplicarlo únicamente en un workspace aislado: ")
 
 	reader := bufio.NewReader(os.Stdin)
@@ -203,7 +188,8 @@ func runStage(args []string) error {
 		return nil
 	}
 
-	result, err := stager.Stage(context.Background(), root, generated)
+	stageRuntime := codexintegration.NewStageRuntime()
+	result, err := stageRuntime.Stage(context.Background(), unit, generated)
 	if err != nil {
 		return err
 	}
@@ -211,8 +197,8 @@ func runStage(args []string) error {
 	fmt.Println()
 	fmt.Println("Controlled Stage Completed")
 	fmt.Printf("Workspace aislado: %s\n", result.Workspace)
-	fmt.Printf("Archivos cambiados: %d\n", len(result.ChangedFiles))
-	for _, file := range result.ChangedFiles {
+	fmt.Printf("Archivos cambiados: %d\n", len(result.Changes))
+	for _, file := range result.Changes {
 		fmt.Printf("  - [%s] %s\n", file.Action, file.Path)
 	}
 	fmt.Println()
