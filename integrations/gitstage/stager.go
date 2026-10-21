@@ -65,14 +65,19 @@ func (s Stager) Stage(ctx context.Context, projectRoot string, p proposal.Propos
 		return Result{}, fmt.Errorf("git command not found in PATH: %w", err)
 	}
 
+	patchText := p.Patch
+	if !strings.HasSuffix(patchText, "\n") {
+		patchText += "\n"
+	}
+
 	base := commandmodel.Invocation{
 		Command: gitPath,
-		Stdin:   p.Patch,
+		Stdin:   patchText,
 		Dir:     workspace,
 		Env:     safeGitEnvironment(workspace),
 	}
 	check := base
-	check.Args = []string{"apply", "--check", "--whitespace=nowarn", "-"}
+	check.Args = []string{"apply", "--check", "--ignore-space-change", "--whitespace=nowarn", "-"}
 	if _, stderr, err := runner.Run(ctx, check); err != nil {
 		if strings.TrimSpace(stderr) != "" {
 			return Result{}, fmt.Errorf("git apply --check failed: %w: %s", err, strings.TrimSpace(stderr))
@@ -81,7 +86,7 @@ func (s Stager) Stage(ctx context.Context, projectRoot string, p proposal.Propos
 	}
 
 	apply := base
-	apply.Args = []string{"apply", "--whitespace=nowarn", "-"}
+	apply.Args = []string{"apply", "--ignore-space-change", "--whitespace=nowarn", "-"}
 	if _, stderr, err := runner.Run(ctx, apply); err != nil {
 		if strings.TrimSpace(stderr) != "" {
 			return Result{}, fmt.Errorf("git apply failed: %w: %s", err, strings.TrimSpace(stderr))
