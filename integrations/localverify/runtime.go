@@ -225,8 +225,7 @@ func truncate(value string) string {
 
 
 func classifyFailure(stdout, stderr string) (verification.FailureKind, bool) {
-	text := strings.ToLower(stdout + "
-" + stderr)
+	text := strings.ToLower(stdout + "\n" + stderr)
 	infrastructureMarkers := []string{
 		"command not found",
 		"not recognized as an internal or external command",
