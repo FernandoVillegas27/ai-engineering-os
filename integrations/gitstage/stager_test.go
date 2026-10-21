@@ -226,7 +226,7 @@ func TestCheckRunsGitApplyCheckOnlyAndPreservesOriginal(t *testing.T) {
 }
 
 func TestCheckRejectsCorruptHunkCountWithRealGit(t *testing.T) {
-	if _, err := commandmodel.OSRunner{}.LookPath("git"); err != nil {
+	if _, err := (commandmodel.OSRunner{}).LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
 
