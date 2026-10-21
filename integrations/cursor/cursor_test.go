@@ -1,0 +1,174 @@
+package cursor
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/proposal"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/quality"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/review"
+	"github.com/FernandoVillegas27/ai-engineering-os/integrations/commandmodel"
+)
+
+type fakeRunner struct {
+	invocations []commandmodel.Invocation
+	stdout      string
+	stderr      string
+	err         error
+	writeFile   string
+	writeExtra  bool
+}
+
+func (f *fakeRunner) LookPath(file string) (string, error) { return file, nil }
+
+func (f *fakeRunner) Run(_ context.Context, invocation commandmodel.Invocation) (string, string, error) {
+	f.invocations = append(f.invocations, invocation)
+	if f.writeFile != "" {
+		target := filepath.Join(invocation.Dir, filepath.FromSlash(f.writeFile))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return "", "", err
+		}
+		if err := os.WriteFile(target, []byte("package sample\nfunc Value() int { return 2 }\n"), 0o644); err != nil {
+			return "", "", err
+		}
+	}
+	if f.writeExtra {
+		if err := os.WriteFile(filepath.Join(invocation.Dir, "extra.go"), []byte("package sample\n"), 0o644); err != nil {
+			return "", "", err
+		}
+	}
+	return f.stdout, f.stderr, f.err
+}
+
+func unitFixture(root string) execution.WorkUnit {
+	return execution.WorkUnit{
+		ID:          "work-01-backend-engineer",
+		Task:        "Actualizar valor",
+		ProjectRoot: root,
+		AgentID:     "backend-engineer",
+		Mode:        execution.ModeReadOnly,
+		Permissions: execution.PermissionEnvelope{
+			SourceCode: "read",
+			Tests:      "read",
+			GitCommit:  "deny",
+			GitPush:    "deny",
+			Secrets:    "deny",
+			Production: "deny",
+		},
+	}
+}
+
+func TestProposalRuntimeUsesReadOnlyAskModeAndParsesJSON(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "service.go"), []byte("package sample\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runner := &fakeRunner{stdout: `{"Summary":"Actualizar","Files":[{"Path":"service.go","Action":"modify","Rationale":"pedido"}],"Patch":"","Risks":[],"Verification":["go test ./..."]}`}
+	runtime := ProposalRuntime{Config: RunnerConfig{Binary: "agent", Runner: runner}}
+
+	got, err := runtime.Propose(context.Background(), unitFixture(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Summary != "Actualizar" || len(got.Files) != 1 {
+		t.Fatalf("proposal=%#v", got)
+	}
+	args := strings.Join(runner.invocations[0].Args, " ")
+	if !strings.Contains(args, "--mode ask") || !strings.Contains(args, "--sandbox enabled") || !strings.Contains(args, "--output-format text") {
+		t.Fatalf("args=%q", args)
+	}
+	if runner.invocations[0].Dir == root {
+		t.Fatal("proposal must use sanitized view")
+	}
+}
+
+func TestStageRuntimeWritesOnlyIsolatedWorkspace(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "service.go")
+	original := []byte("package sample\nfunc Value() int { return 1 }\n")
+	if err := os.WriteFile(source, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	runner := &fakeRunner{writeFile: "service.go", stdout: "done"}
+	runtime := StageRuntime{Config: RunnerConfig{Binary: "agent", Runner: runner}}
+	p := proposal.Proposal{
+		Summary: "Actualizar",
+		Files: []proposal.FileChange{{Path: "service.go", Action: "modify", Rationale: "pedido"}},
+	}
+
+	result, err := runtime.Stage(context.Background(), unitFixture(root), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(result.Workspace) })
+
+	after, _ := os.ReadFile(source)
+	if string(after) != string(original) {
+		t.Fatal("original project changed")
+	}
+	if len(result.Changes) != 1 || result.Changes[0].Path != "service.go" {
+		t.Fatalf("changes=%#v", result.Changes)
+	}
+	args := strings.Join(runner.invocations[0].Args, " ")
+	if !strings.Contains(args, "--sandbox enabled") || !strings.Contains(args, "--workspace "+result.Workspace) {
+		t.Fatalf("args=%q", args)
+	}
+}
+
+func TestStageRuntimeRejectsUndeclaredChange(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "service.go"), []byte("package sample\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runner := &fakeRunner{writeFile: "service.go", writeExtra: true}
+	_, err := (StageRuntime{Config: RunnerConfig{Runner: runner}}).Stage(context.Background(), unitFixture(root), proposal.Proposal{
+		Summary: "Actualizar",
+		Files: []proposal.FileChange{{Path: "service.go", Action: "modify"}},
+	})
+	if err == nil {
+		t.Fatal("expected undeclared change rejection")
+	}
+}
+
+func TestReviewRuntimeConvertsBlockingFinding(t *testing.T) {
+	root := t.TempDir()
+	runner := &fakeRunner{stdout: `{"Summary":"Revisión","Findings":[{"Severity":"high","Title":"Bug","Detail":"detalle"}]}`}
+	report, err := (ReviewRuntime{Config: RunnerConfig{Runner: runner}}).Review(context.Background(), root, "task", []string{"service.go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Verdict != review.VerdictRejected {
+		t.Fatalf("report=%#v", report)
+	}
+}
+
+func TestCorrectionRuntimeRejectsUndeclaredFile(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "service.go"), []byte("package sample\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runner := &fakeRunner{writeFile: "service.go", writeExtra: true}
+	err := (CorrectionRuntime{Config: RunnerConfig{Runner: runner}}).Correct(context.Background(), quality.CorrectionRequest{
+		Workspace:    root,
+		Task:         "fix",
+		AllowedFiles: []string{"service.go"},
+	})
+	if err == nil {
+		t.Fatal("expected undeclared correction rejection")
+	}
+}
+
+func TestRunAgentPropagatesProviderError(t *testing.T) {
+	root := t.TempDir()
+	runner := &fakeRunner{stderr: "usage limit reached", err: errors.New("exit 1")}
+	_, err := runAgent(context.Background(), RunnerConfig{Runner: runner}, root, "ask", "test")
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "usage limit") {
+		t.Fatalf("err=%v", err)
+	}
+}
