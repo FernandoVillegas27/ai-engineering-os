@@ -34,6 +34,10 @@ func defaultConfig() RunnerConfig {
 }
 
 func runAgent(ctx context.Context, config RunnerConfig, workspace, mode, prompt string) (string, error) {
+	return runAgentWithFormat(ctx, config, workspace, mode, prompt, "text")
+}
+
+func runAgentWithFormat(ctx context.Context, config RunnerConfig, workspace, mode, prompt, outputFormat string) (string, error) {
 	runner := config.Runner
 	if runner == nil {
 		runner = commandmodel.OSRunner{}
@@ -47,7 +51,11 @@ func runAgent(ctx context.Context, config RunnerConfig, workspace, mode, prompt 
 		return "", fmt.Errorf("cursor agent command not found in PATH: %w", err)
 	}
 
-	args := []string{"-p", "--trust", "--output-format", "text", "--sandbox", cursorSandboxMode(runtime.GOOS), "--workspace", workspace}
+	outputFormat = strings.TrimSpace(outputFormat)
+	if outputFormat == "" {
+		outputFormat = "text"
+	}
+	args := []string{"-p", "--trust", "--output-format", outputFormat, "--sandbox", cursorSandboxMode(runtime.GOOS), "--workspace", workspace}
 	if mode != "" {
 		args = append(args, "--mode", mode)
 	}
@@ -97,6 +105,55 @@ func decodeJSONObject(data string, target any) error {
 		return fmt.Errorf("parse Cursor JSON response: %w", err)
 	}
 	return nil
+}
+
+
+func decodeStructuredResponse(data string, target any) error {
+	if err := decodeJSONObject(data, target); err == nil {
+		return nil
+	}
+
+	var envelope any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(data)), &envelope); err != nil {
+		return fmt.Errorf("parse Cursor structured response envelope: %w", err)
+	}
+	if decodeFromEnvelope(envelope, target) {
+		return nil
+	}
+	return fmt.Errorf("Cursor structured response did not contain the requested JSON payload")
+}
+
+func decodeFromEnvelope(value any, target any) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		priority := []string{"result", "response", "output", "text", "content", "message"}
+		for _, key := range priority {
+			if child, ok := typed[key]; ok && decodeFromEnvelope(child, target) {
+				return true
+			}
+		}
+		for _, child := range typed {
+			if decodeFromEnvelope(child, target) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			if decodeFromEnvelope(child, target) {
+				return true
+			}
+		}
+	case string:
+		if err := decodeJSONObject(typed, target); err == nil {
+			return true
+		}
+	default:
+		raw, err := json.Marshal(typed)
+		if err == nil && json.Unmarshal(raw, target) == nil {
+			return true
+		}
+	}
+	return false
 }
 
 func safeRuntimeEnvironment() []string {
