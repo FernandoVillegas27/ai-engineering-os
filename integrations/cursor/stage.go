@@ -15,6 +15,12 @@ import (
 type StageRuntime struct{ Config RunnerConfig }
 
 func NewStageRuntime() StageRuntime { return StageRuntime{Config: defaultConfig()} }
+
+func NewStageRuntimeWithModel(model string) StageRuntime {
+	config := defaultConfig()
+	config.Model = strings.TrimSpace(model)
+	return StageRuntime{Config: config}
+}
 func (StageRuntime) ID() string     { return "cursor-stage" }
 
 func (r StageRuntime) Stage(ctx context.Context, unit execution.WorkUnit, p proposal.Proposal) (staging.StageResult, error) {
