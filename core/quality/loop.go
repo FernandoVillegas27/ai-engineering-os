@@ -124,6 +124,5 @@ func FailureSummary(v verification.Report, r review.Report) string {
 			parts = append(parts, fmt.Sprintf("review %s: %s - %s", finding.Severity, finding.Title, finding.Detail))
 		}
 	}
-	return strings.Join(parts, "
-")
+	return strings.Join(parts, "\\n")
 }
