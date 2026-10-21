@@ -13,14 +13,24 @@ const (
 	StatusSkipped Status = "skipped"
 )
 
+type FailureKind string
+
+const (
+	FailureNone           FailureKind = ""
+	FailureCode           FailureKind = "code"
+	FailureInfrastructure FailureKind = "infrastructure"
+)
+
 type Check struct {
-	Name      string
-	Command   []string
-	ExitCode  int
-	Stdout    string
-	Stderr    string
-	Duration  time.Duration
-	Passed    bool
+	Name        string
+	Command     []string
+	ExitCode    int
+	Stdout      string
+	Stderr      string
+	Duration    time.Duration
+	Passed      bool
+	FailureKind FailureKind
+	Correctable bool
 }
 
 type Report struct {
