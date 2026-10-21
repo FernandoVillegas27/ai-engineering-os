@@ -20,7 +20,7 @@ func NewReviewRuntimeWithModel(model string) ReviewRuntime {
 func (ReviewRuntime) ID() string      { return "cursor-review" }
 
 func (r ReviewRuntime) Review(ctx context.Context, workspace, task string, changedFiles []string) (review.Report, error) {
-	out, err := runAgent(ctx, r.Config, workspace, "ask", reviewPrompt(task, changedFiles))
+	out, err := runAgentWithFormat(ctx, r.Config, workspace, "ask", reviewPrompt(task, changedFiles), "json")
 	if err != nil {
 		return review.Report{}, err
 	}
@@ -29,7 +29,7 @@ func (r ReviewRuntime) Review(ctx context.Context, workspace, task string, chang
 		Summary  string
 		Findings []review.Finding
 	}
-	if err := decodeJSONObject(out, &payload); err != nil {
+	if err := decodeStructuredResponse(out, &payload); err != nil {
 		return review.Report{}, err
 	}
 
