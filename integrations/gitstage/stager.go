@@ -26,6 +26,62 @@ func New() Stager {
 	return Stager{Runner: commandmodel.OSRunner{}}
 }
 
+
+func (s Stager) Check(ctx context.Context, projectRoot string, p proposal.Proposal) ([]staging.PatchFile, error) {
+	files, err := staging.ValidateProposal(p, execution.DefaultSafeViewPolicy())
+	if err != nil {
+		return nil, err
+	}
+
+	root, err := filepath.Abs(projectRoot)
+	if err != nil {
+		return nil, fmt.Errorf("resolve project root: %w", err)
+	}
+	parent := filepath.Dir(root)
+	workspace, err := os.MkdirTemp(parent, ".ai-engineering-os-check-*")
+	if err != nil {
+		return nil, fmt.Errorf("create isolated check workspace: %w", err)
+	}
+	defer os.RemoveAll(workspace)
+
+	if _, err := execution.PrepareSafeReadOnlyView(root, workspace); err != nil {
+		return nil, err
+	}
+	if err := verifyPreconditions(workspace, files); err != nil {
+		return nil, err
+	}
+
+	runner := s.Runner
+	if runner == nil {
+		runner = commandmodel.OSRunner{}
+	}
+	gitPath, err := runner.LookPath("git")
+	if err != nil {
+		return nil, fmt.Errorf("git command not found in PATH: %w", err)
+	}
+
+	patchText := p.Patch
+	if !strings.HasSuffix(patchText, "\n") {
+		patchText += "\n"
+	}
+
+	check := commandmodel.Invocation{
+		Command: gitPath,
+		Args:    []string{"apply", "--check", "--ignore-space-change", "--whitespace=nowarn", "-"},
+		Stdin:   patchText,
+		Dir:     workspace,
+		Env:     safeGitEnvironment(workspace),
+	}
+	if _, stderr, err := runner.Run(ctx, check); err != nil {
+		if strings.TrimSpace(stderr) != "" {
+			return nil, fmt.Errorf("git apply --check failed: %w: %s", err, strings.TrimSpace(stderr))
+		}
+		return nil, fmt.Errorf("git apply --check failed: %w", err)
+	}
+
+	return files, nil
+}
+
 func (s Stager) Stage(ctx context.Context, projectRoot string, p proposal.Proposal) (Result, error) {
 	files, err := staging.ValidateProposal(p, execution.DefaultSafeViewPolicy())
 	if err != nil {
