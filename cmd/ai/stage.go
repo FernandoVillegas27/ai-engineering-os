@@ -7,15 +7,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/classifier"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/detector"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/proposal"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/quality"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/staging"
 	codexintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/codex"
+	"github.com/FernandoVillegas27/ai-engineering-os/integrations/localverify"
 )
 
 type stageOptions struct {
@@ -202,8 +205,66 @@ func runStage(args []string) error {
 		fmt.Printf("  - [%s] %s\n", file.Action, file.Path)
 	}
 	fmt.Println()
-	fmt.Println("El proyecto original no fue modificado. No se ejecutaron tests, commit ni push.")
-	fmt.Println("El workspace queda disponible para inspección manual y verificación posterior.")
+	fmt.Println("El proyecto original no fue modificado. Iniciando Quality Loop en el workspace aislado...")
+
+	allowedFiles := make([]string, 0, len(declaredFiles))
+	for _, file := range declaredFiles {
+		allowedFiles = append(allowedFiles, file.Path)
+	}
+
+	qualityResult, err := (quality.Loop{
+		Verifier:    localverify.New(),
+		Reviewer:    codexintegration.NewReviewRuntime(),
+		Corrector:   codexintegration.NewCorrectionRuntime(),
+		MaxAttempts: 3,
+	}).Run(context.Background(), result.Workspace, options.task, allowedFiles)
+	if err != nil {
+		return fmt.Errorf("quality loop: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println("Quality Loop")
+	for _, attempt := range qualityResult.Attempts {
+		fmt.Printf("Intento %d\n", attempt.Number)
+		fmt.Printf("  Verification: %s\n", attempt.Verification.Status)
+		for _, check := range attempt.Verification.Checks {
+			status := "PASS"
+			if !check.Passed {
+				status = "FAIL"
+			}
+			fmt.Printf("    - [%s] %s", status, check.Name)
+			if check.Duration > 0 {
+				fmt.Printf(" (%s)", check.Duration.Round(time.Millisecond))
+			}
+			fmt.Println()
+			if !check.Passed {
+				if detail := strings.TrimSpace(check.Stderr); detail != "" {
+					fmt.Printf("      %s\n", strings.ReplaceAll(detail, "\n", "\n      "))
+				}
+			}
+		}
+		fmt.Printf("  Review: %s\n", attempt.Review.Verdict)
+		if strings.TrimSpace(attempt.Review.Summary) != "" {
+			fmt.Printf("    %s\n", attempt.Review.Summary)
+		}
+		for _, finding := range attempt.Review.Findings {
+			fmt.Printf("    - [%s] %s: %s\n", finding.Severity, finding.Title, finding.Detail)
+		}
+		if attempt.Corrected {
+			fmt.Println("  Correction: aplicada en el workspace aislado")
+		}
+	}
+
+	fmt.Println()
+	if !qualityResult.Passed {
+		fmt.Println("Quality Gate FAILED")
+		fmt.Println("El workspace aislado se conserva para inspección. El proyecto original sigue intacto.")
+		return fmt.Errorf("quality gate failed after %d attempt(s)", len(qualityResult.Attempts))
+	}
+
+	fmt.Println("Quality Gate PASSED")
+	fmt.Println("El workspace aislado quedó verificado y aprobado por revisión independiente.")
+	fmt.Println("El proyecto original no fue modificado. No se hizo commit ni push.")
 	return nil
 }
 
