@@ -108,67 +108,77 @@ func decodeJSONObject(data string, target any) error {
 }
 
 
-func decodeStructuredResponse(data string, target any) error {
-	trimmed := strings.TrimSpace(data)
+func decodeStreamFinalResponse(data string) (string, error) {
+	lines := strings.Split(strings.ReplaceAll(data, "\r\n", "\n"), "\n")
+	var assistant strings.Builder
+	var terminalResult string
+	terminalSeen := false
+	terminalError := false
 
-	var envelope any
-	if err := json.Unmarshal([]byte(trimmed), &envelope); err == nil && hasEnvelopeShape(envelope) {
-		if decodeFromEnvelope(envelope, target) {
-			return nil
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
 		}
-		return fmt.Errorf("Cursor structured response envelope did not contain the requested JSON payload")
+
+		var event struct {
+			Type    string `json:"type"`
+			Subtype string `json:"subtype"`
+			IsError bool   `json:"is_error"`
+			Result  string `json:"result"`
+			Message struct {
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
+			} `json:"message"`
+		}
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			return "", fmt.Errorf("parse Cursor stream-json event: %w", err)
+		}
+
+		switch event.Type {
+		case "assistant":
+			for _, block := range event.Message.Content {
+				if block.Type == "text" {
+					assistant.WriteString(block.Text)
+				}
+			}
+		case "result":
+			terminalSeen = true
+			terminalError = event.IsError || (event.Subtype != "" && event.Subtype != "success")
+			terminalResult = event.Result
+		}
 	}
 
-	if err := decodeJSONObject(trimmed, target); err != nil {
-		return err
+	if !terminalSeen {
+		return "", fmt.Errorf("Cursor stream-json ended without terminal result event")
+	}
+	if terminalError {
+		return "", fmt.Errorf("Cursor stream-json reported an unsuccessful terminal result")
+	}
+	if strings.TrimSpace(terminalResult) != "" {
+		return strings.TrimSpace(terminalResult), nil
+	}
+	if strings.TrimSpace(assistant.String()) != "" {
+		return strings.TrimSpace(assistant.String()), nil
+	}
+	return "", fmt.Errorf("Cursor stream-json contained no final assistant text")
+}
+
+func decodeModelJSONObject(finalText string, target any) error {
+	if err := decodeJSONObject(finalText, target); err != nil {
+		return fmt.Errorf("%w; final response sample: %q", err, responseSample(finalText, 480))
 	}
 	return nil
 }
 
-func hasEnvelopeShape(value any) bool {
-	object, ok := value.(map[string]any)
-	if !ok {
-		return false
+func responseSample(value string, limit int) string {
+	value = strings.TrimSpace(value)
+	if limit <= 0 || len(value) <= limit {
+		return value
 	}
-	for _, key := range []string{"result", "response", "output", "text", "content", "message"} {
-		if _, exists := object[key]; exists {
-			return true
-		}
-	}
-	return false
-}
-
-func decodeFromEnvelope(value any, target any) bool {
-	switch typed := value.(type) {
-	case map[string]any:
-		priority := []string{"result", "response", "output", "text", "content", "message"}
-		for _, key := range priority {
-			if child, ok := typed[key]; ok && decodeFromEnvelope(child, target) {
-				return true
-			}
-		}
-		for _, child := range typed {
-			if decodeFromEnvelope(child, target) {
-				return true
-			}
-		}
-	case []any:
-		for _, child := range typed {
-			if decodeFromEnvelope(child, target) {
-				return true
-			}
-		}
-	case string:
-		if err := decodeJSONObject(typed, target); err == nil {
-			return true
-		}
-	default:
-		raw, err := json.Marshal(typed)
-		if err == nil && json.Unmarshal(raw, target) == nil {
-			return true
-		}
-	}
-	return false
+	return value[:limit] + "..."
 }
 
 func safeRuntimeEnvironment() []string {
