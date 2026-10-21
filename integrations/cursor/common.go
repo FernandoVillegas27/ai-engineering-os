@@ -46,7 +46,7 @@ func runAgent(ctx context.Context, config RunnerConfig, workspace, mode, prompt 
 		return "", fmt.Errorf("cursor agent command not found in PATH: %w", err)
 	}
 
-	args := []string{"-p", "--output-format", "text", "--sandbox", "enabled", "--workspace", workspace}
+	args := []string{"-p", "--trust", "--output-format", "text", "--sandbox", "enabled", "--workspace", workspace}
 	if mode != "" {
 		args = append(args, "--mode", mode)
 	}
