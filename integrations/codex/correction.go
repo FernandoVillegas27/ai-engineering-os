@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -142,4 +141,3 @@ func correctionPrompt(request quality.CorrectionRequest) string {
 	return b.String()
 }
 
-var _ = os.ErrInvalid
