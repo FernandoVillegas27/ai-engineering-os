@@ -101,7 +101,7 @@ func (r Runtime) Verify(ctx context.Context, workspace string) (verification.Rep
 		if runErr != nil {
 			check.ExitCode = 1
 			if runCtx.Err() == context.DeadlineExceeded {
-				check.Stderr = strings.TrimSpace(check.Stderr + "\\nverification timed out after " + timeout.String())
+				check.Stderr = strings.TrimSpace(check.Stderr + "\nverification timed out after " + timeout.String())
 			}
 			report.Status = verification.StatusFailed
 		}
@@ -214,5 +214,5 @@ func truncate(value string) string {
 	if len(value) <= max {
 		return value
 	}
-	return value[:max] + "\\n...[truncated]"
+	return value[:max] + "\n...[truncated]"
 }
