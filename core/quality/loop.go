@@ -23,10 +23,12 @@ type Corrector interface {
 }
 
 type Attempt struct {
-	Number       int
-	Verification verification.Report
-	Review       review.Report
-	Corrected    bool
+	Number          int
+	Verification    verification.Report
+	Review          review.Report
+	Corrected       bool
+	Blocked         bool
+	CorrectionError string
 }
 
 type Result struct {
@@ -88,7 +90,13 @@ func (l Loop) Run(ctx context.Context, workspace, task string, allowedFiles []st
 			result.Attempts = append(result.Attempts, entry)
 			return result, nil
 		}
+		if !verificationOK && !verificationCorrectable(verificationReport) {
+			entry.Blocked = true
+			result.Attempts = append(result.Attempts, entry)
+			return result, nil
+		}
 		if l.Corrector == nil {
+			result.Attempts = append(result.Attempts, entry)
 			return result, fmt.Errorf("quality gate failed and no corrector is configured")
 		}
 
@@ -99,7 +107,9 @@ func (l Loop) Run(ctx context.Context, workspace, task string, allowedFiles []st
 			Verification: verificationReport,
 			Review:       reviewReport,
 		}); err != nil {
-			return result, fmt.Errorf("correction attempt %d: %w", attempt, err)
+			entry.CorrectionError = err.Error()
+			result.Attempts = append(result.Attempts, entry)
+			return result, nil
 		}
 		entry.Corrected = true
 		result.Attempts = append(result.Attempts, entry)
@@ -125,4 +135,24 @@ func FailureSummary(v verification.Report, r review.Report) string {
 		}
 	}
 	return strings.Join(parts, "\n")
+}
+
+
+func verificationCorrectable(report verification.Report) bool {
+	if report.Status != verification.StatusFailed {
+		return true
+	}
+	foundFailure := false
+	for _, check := range report.Checks {
+		if check.Passed {
+			continue
+		}
+		foundFailure = true
+		if !check.Correctable {
+			return false
+		}
+	}
+	// Older/custom verifiers may not classify checks yet. Preserve the previous
+	// behavior and allow one correction attempt rather than silently blocking.
+	return !foundFailure || true
 }
