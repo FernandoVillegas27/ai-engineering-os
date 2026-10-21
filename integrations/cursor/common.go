@@ -109,18 +109,33 @@ func decodeJSONObject(data string, target any) error {
 
 
 func decodeStructuredResponse(data string, target any) error {
-	if err := decodeJSONObject(data, target); err == nil {
-		return nil
-	}
+	trimmed := strings.TrimSpace(data)
 
 	var envelope any
-	if err := json.Unmarshal([]byte(strings.TrimSpace(data)), &envelope); err != nil {
-		return fmt.Errorf("parse Cursor structured response envelope: %w", err)
+	if err := json.Unmarshal([]byte(trimmed), &envelope); err == nil && hasEnvelopeShape(envelope) {
+		if decodeFromEnvelope(envelope, target) {
+			return nil
+		}
+		return fmt.Errorf("Cursor structured response envelope did not contain the requested JSON payload")
 	}
-	if decodeFromEnvelope(envelope, target) {
-		return nil
+
+	if err := decodeJSONObject(trimmed, target); err != nil {
+		return err
 	}
-	return fmt.Errorf("Cursor structured response did not contain the requested JSON payload")
+	return nil
+}
+
+func hasEnvelopeShape(value any) bool {
+	object, ok := value.(map[string]any)
+	if !ok {
+		return false
+	}
+	for _, key := range []string{"result", "response", "output", "text", "content", "message"} {
+		if _, exists := object[key]; exists {
+			return true
+		}
+	}
+	return false
 }
 
 func decodeFromEnvelope(value any, target any) bool {
