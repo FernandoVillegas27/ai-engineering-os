@@ -16,8 +16,11 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/proposal"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/quality"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/review"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/runtimefallback"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/staging"
 	codexintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/codex"
+	cursorintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/cursor"
 	"github.com/FernandoVillegas27/ai-engineering-os/integrations/localverify"
 )
 
@@ -134,9 +137,15 @@ func runStage(args []string) error {
 
 	var proposalRuntime proposal.Runtime
 	switch options.runtime {
+	case "auto":
+		proposalRuntime = runtimefallback.ProposalRuntime{
+			Primary:  codexintegration.NewProposalRuntime(),
+			Fallback: cursorintegration.NewProposalRuntime(),
+		}
 	case "codex":
-		r := codexintegration.NewProposalRuntime()
-		proposalRuntime = r
+		proposalRuntime = codexintegration.NewProposalRuntime()
+	case "cursor":
+		proposalRuntime = cursorintegration.NewProposalRuntime()
 	default:
 		return fmt.Errorf("runtime no soportado: %s", options.runtime)
 	}
@@ -191,7 +200,20 @@ func runStage(args []string) error {
 		return nil
 	}
 
-	stageRuntime := codexintegration.NewStageRuntime()
+	var stageRuntime staging.Runtime
+	switch options.runtime {
+	case "auto":
+		stageRuntime = runtimefallback.StageRuntime{
+			Primary:  codexintegration.NewStageRuntime(),
+			Fallback: cursorintegration.NewStageRuntime(),
+		}
+	case "codex":
+		stageRuntime = codexintegration.NewStageRuntime()
+	case "cursor":
+		stageRuntime = cursorintegration.NewStageRuntime()
+	default:
+		return fmt.Errorf("runtime no soportado: %s", options.runtime)
+	}
 	result, err := stageRuntime.Stage(context.Background(), unit, generated)
 	if err != nil {
 		return err
@@ -212,10 +234,30 @@ func runStage(args []string) error {
 		allowedFiles = append(allowedFiles, file.Path)
 	}
 
+	var reviewer review.Runtime
+	var corrector quality.Corrector
+	switch options.runtime {
+	case "auto":
+		reviewer = runtimefallback.ReviewRuntime{
+			Primary:  codexintegration.NewReviewRuntime(),
+			Fallback: cursorintegration.NewReviewRuntime(),
+		}
+		corrector = runtimefallback.Corrector{
+			Primary:  codexintegration.NewCorrectionRuntime(),
+			Fallback: cursorintegration.NewCorrectionRuntime(),
+		}
+	case "codex":
+		reviewer = codexintegration.NewReviewRuntime()
+		corrector = codexintegration.NewCorrectionRuntime()
+	case "cursor":
+		reviewer = cursorintegration.NewReviewRuntime()
+		corrector = cursorintegration.NewCorrectionRuntime()
+	}
+
 	qualityResult, qualityErr := (quality.Loop{
 		Verifier:    localverify.New(),
-		Reviewer:    codexintegration.NewReviewRuntime(),
-		Corrector:   codexintegration.NewCorrectionRuntime(),
+		Reviewer:    reviewer,
+		Corrector:   corrector,
 		MaxAttempts: 3,
 	}).Run(context.Background(), result.Workspace, options.task, allowedFiles)
 
@@ -292,7 +334,7 @@ func runStage(args []string) error {
 }
 
 func parseStageArgs(args []string) (stageOptions, error) {
-	options := stageOptions{root: ".", runtime: "codex"}
+	options := stageOptions{root: ".", runtime: "auto"}
 	var positional []string
 
 	for i := 0; i < len(args); i++ {
@@ -312,7 +354,7 @@ func parseStageArgs(args []string) (stageOptions, error) {
 			i++
 			options.runtime = args[i]
 		case "-h", "--help":
-			return stageOptions{}, fmt.Errorf("uso: ai stage [ruta-del-proyecto] --task <tarea> [--runtime codex] [--ai]")
+			return stageOptions{}, fmt.Errorf("uso: ai stage [ruta-del-proyecto] --task <tarea> [--runtime auto|codex|cursor] [--ai]")
 		default:
 			if strings.HasPrefix(args[i], "-") {
 				return stageOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
@@ -330,7 +372,7 @@ func parseStageArgs(args []string) (stageOptions, error) {
 	if strings.TrimSpace(options.task) == "" {
 		return stageOptions{}, fmt.Errorf("--task es obligatorio")
 	}
-	if options.runtime != "codex" {
+	if options.runtime != "auto" && options.runtime != "codex" && options.runtime != "cursor" {
 		return stageOptions{}, fmt.Errorf("runtime no soportado: %s", options.runtime)
 	}
 	return options, nil
