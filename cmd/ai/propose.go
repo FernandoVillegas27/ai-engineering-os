@@ -9,17 +9,19 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/classifier"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/detector"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/modelpolicy"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
-	"github.com/FernandoVillegas27/ai-engineering-os/core/proposal"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
 	codexintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/codex"
 )
 
 type proposeOptions struct {
-	root    string
-	task    string
-	useAI   bool
-	runtime string
+	root        string
+	task        string
+	useAI       bool
+	runtime     string
+	modelPolicy modelpolicy.Policy
+	model       string
 }
 
 func runPropose(args []string) error {
@@ -123,15 +125,7 @@ func runPropose(args []string) error {
 		return err
 	}
 
-	var runtime proposal.Runtime
-	switch options.runtime {
-	case "codex":
-		r := codexintegration.NewProposalRuntime()
-		runtime = r
-	default:
-		return fmt.Errorf("runtime no soportado: %s", options.runtime)
-	}
-	generator := proposal.Generator{Runtime: runtime}
+	routing := modelRoutingOptions{Policy: options.modelPolicy, Override: options.model}
 
 	fmt.Println("Proposed Changes")
 	fmt.Println()
@@ -140,15 +134,21 @@ func runPropose(args []string) error {
 	fmt.Printf("Work units: %d\n", len(units))
 
 	for _, unit := range units {
-		result, err := generator.Generate(context.Background(), unit)
+		generated, err := generateProposalWithRouting(context.Background(), unit, options.runtime, routing)
 		if err != nil {
 			return err
 		}
+		result := generated.Proposal
 
 		fmt.Printf("  - %s\n", unit.ID)
 		fmt.Printf("    agent: %s\n", unit.AgentID)
 		fmt.Printf("    capabilities: %s\n", strings.Join(unit.Capabilities, ", "))
-		fmt.Printf("    runtime: %s\n", runtime.ID())
+		fmt.Printf("    runtime: %s\n", generated.RuntimeID)
+		fmt.Printf("    model policy: %s\n", options.modelPolicy)
+		fmt.Printf("    model: %s\n", displayModel(generated.Model))
+		if generated.Escalated {
+			fmt.Println("    model escalation: sí (proposal drift detectado)")
+		}
 		fmt.Printf("    summary: %s\n", result.Summary)
 
 		if len(result.Files) > 0 {
@@ -185,7 +185,7 @@ func runPropose(args []string) error {
 }
 
 func parseProposeArgs(args []string) (proposeOptions, error) {
-	options := proposeOptions{root: ".", runtime: "codex"}
+	options := proposeOptions{root: ".", runtime: "auto", modelPolicy: modelpolicy.PolicyAuto}
 	var positional []string
 
 	for i := 0; i < len(args); i++ {
@@ -204,8 +204,24 @@ func parseProposeArgs(args []string) (proposeOptions, error) {
 			}
 			i++
 			options.runtime = args[i]
+		case "--model-policy":
+			if i+1 >= len(args) {
+				return proposeOptions{}, fmt.Errorf("--model-policy requiere un valor")
+			}
+			i++
+			policy, err := modelpolicy.Parse(args[i])
+			if err != nil {
+				return proposeOptions{}, err
+			}
+			options.modelPolicy = policy
+		case "--model":
+			if i+1 >= len(args) {
+				return proposeOptions{}, fmt.Errorf("--model requiere un id")
+			}
+			i++
+			options.model = strings.TrimSpace(args[i])
 		case "-h", "--help":
-			return proposeOptions{}, fmt.Errorf("uso: ai propose [ruta-del-proyecto] --task <tarea> [--runtime codex] [--ai]")
+			return proposeOptions{}, fmt.Errorf("uso: ai propose [ruta-del-proyecto] --task <tarea> [--runtime auto|codex|cursor] [--model-policy auto|economy|balanced|deep] [--model id] [--ai]")
 		default:
 			if strings.HasPrefix(args[i], "-") {
 				return proposeOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
@@ -223,7 +239,7 @@ func parseProposeArgs(args []string) (proposeOptions, error) {
 	if strings.TrimSpace(options.task) == "" {
 		return proposeOptions{}, fmt.Errorf("--task es obligatorio")
 	}
-	if options.runtime != "codex" {
+	if options.runtime != "auto" && options.runtime != "codex" && options.runtime != "cursor" {
 		return proposeOptions{}, fmt.Errorf("runtime no soportado: %s", options.runtime)
 	}
 	return options, nil

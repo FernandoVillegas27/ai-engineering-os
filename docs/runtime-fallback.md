@@ -67,3 +67,10 @@ Cursor's native sandbox is available on macOS and Linux. On those platforms AI E
 On native Windows, Cursor does not provide that sandbox. AI Engineering OS therefore invokes Cursor with `--sandbox disabled`, which uses Cursor's non-sandbox execution controls, while retaining AI Engineering OS's own isolated sanitized workspace, declared-file approval boundary, and deterministic post-run filesystem validation.
 
 This means Windows does not have the same OS-level command sandbox as macOS/Linux. The original repository is still not used as the write workspace, and undeclared filesystem changes inside the staged workspace are rejected.
+
+
+## Model policy
+
+Cursor model choice is controlled separately from provider fallback. The default `--model-policy auto` keeps Cursor automatic model selection for economy and escalates only after deterministic evidence such as proposal task drift.
+
+See `docs/model-policy.md` for `auto`, `economy`, `balanced`, `deep`, and explicit `--model` overrides.

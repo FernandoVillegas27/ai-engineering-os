@@ -11,6 +11,12 @@ import (
 type ReviewRuntime struct{ Config RunnerConfig }
 
 func NewReviewRuntime() ReviewRuntime { return ReviewRuntime{Config: defaultConfig()} }
+
+func NewReviewRuntimeWithModel(model string) ReviewRuntime {
+	config := defaultConfig()
+	config.Model = strings.TrimSpace(model)
+	return ReviewRuntime{Config: config}
+}
 func (ReviewRuntime) ID() string      { return "cursor-review" }
 
 func (r ReviewRuntime) Review(ctx context.Context, workspace, task string, changedFiles []string) (review.Report, error) {

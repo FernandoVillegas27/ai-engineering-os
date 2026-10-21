@@ -38,3 +38,35 @@ func TestParseStageArgsAcceptsCursor(t *testing.T) {
 		t.Fatalf("runtime = %q", got.runtime)
 	}
 }
+
+
+func TestParseStageArgsDefaultsToAutoModelPolicy(t *testing.T) {
+	got, err := parseStageArgs([]string{"--task", "Aplicar cambio"})
+	if err != nil {
+		t.Fatalf("parseStageArgs() error = %v", err)
+	}
+	if got.modelPolicy != "auto" {
+		t.Fatalf("modelPolicy = %q", got.modelPolicy)
+	}
+}
+
+func TestParseStageArgsAcceptsDeepPolicyAndModelOverride(t *testing.T) {
+	got, err := parseStageArgs([]string{
+		"--task", "Aplicar cambio",
+		"--runtime", "cursor",
+		"--model-policy", "deep",
+		"--model", "custom-model",
+	})
+	if err != nil {
+		t.Fatalf("parseStageArgs() error = %v", err)
+	}
+	if got.modelPolicy != "deep" || got.model != "custom-model" {
+		t.Fatalf("options = %#v", got)
+	}
+}
+
+func TestParseStageArgsRejectsUnsupportedModelPolicy(t *testing.T) {
+	if _, err := parseStageArgs([]string{"--task", "x", "--model-policy", "turbo"}); err == nil {
+		t.Fatal("expected unsupported model policy error")
+	}
+}

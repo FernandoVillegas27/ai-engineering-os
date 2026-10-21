@@ -12,23 +12,22 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/classifier"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/detector"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/modelpolicy"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
-	"github.com/FernandoVillegas27/ai-engineering-os/core/proposal"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/quality"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
-	"github.com/FernandoVillegas27/ai-engineering-os/core/review"
-	"github.com/FernandoVillegas27/ai-engineering-os/core/runtimefallback"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/staging"
 	codexintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/codex"
-	cursorintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/cursor"
 	"github.com/FernandoVillegas27/ai-engineering-os/integrations/localverify"
 )
 
 type stageOptions struct {
-	root    string
-	task    string
-	useAI   bool
-	runtime string
+	root        string
+	task        string
+	useAI       bool
+	runtime     string
+	modelPolicy modelpolicy.Policy
+	model       string
 }
 
 func runStage(args []string) error {
@@ -135,26 +134,13 @@ func runStage(args []string) error {
 		return fmt.Errorf("controlled staging v1 requires exactly one work unit, got %d", len(units))
 	}
 
-	var proposalRuntime proposal.Runtime
-	switch options.runtime {
-	case "auto":
-		proposalRuntime = runtimefallback.ProposalRuntime{
-			Primary:  codexintegration.NewProposalRuntime(),
-			Fallback: cursorintegration.NewProposalRuntime(),
-		}
-	case "codex":
-		proposalRuntime = codexintegration.NewProposalRuntime()
-	case "cursor":
-		proposalRuntime = cursorintegration.NewProposalRuntime()
-	default:
-		return fmt.Errorf("runtime no soportado: %s", options.runtime)
-	}
-
 	unit := units[0]
-	generated, err := (proposal.Generator{Runtime: proposalRuntime}).Generate(context.Background(), unit)
+	routing := modelRoutingOptions{Policy: options.modelPolicy, Override: options.model}
+	generatedResult, err := generateProposalWithRouting(context.Background(), unit, options.runtime, routing)
 	if err != nil {
 		return err
 	}
+	generated := generatedResult.Proposal
 	declaredFiles, err := staging.ValidateDeclaredFiles(generated.Files, execution.DefaultSafeViewPolicy())
 	if err != nil {
 		return fmt.Errorf("la propuesta generada no es segura para staging: %w", err)
@@ -164,7 +150,12 @@ func runStage(args []string) error {
 	fmt.Println()
 	fmt.Printf("Proyecto original: %s\n", root)
 	fmt.Printf("Agent: %s\n", unit.AgentID)
-	fmt.Printf("Runtime: %s\n", proposalRuntime.ID())
+	fmt.Printf("Runtime: %s\n", generatedResult.RuntimeID)
+	fmt.Printf("Model policy: %s\n", options.modelPolicy)
+	fmt.Printf("Model: %s\n", displayModel(generatedResult.Model))
+	if generatedResult.Escalated {
+		fmt.Println("Model escalation: sí (proposal drift detectado)")
+	}
 	fmt.Printf("Summary: %s\n", generated.Summary)
 
 	if len(generated.Files) > 0 {
@@ -200,20 +191,11 @@ func runStage(args []string) error {
 		return nil
 	}
 
-	var stageRuntime staging.Runtime
-	switch options.runtime {
-	case "auto":
-		stageRuntime = runtimefallback.StageRuntime{
-			Primary:  codexintegration.NewStageRuntime(),
-			Fallback: cursorintegration.NewStageRuntime(),
-		}
-	case "codex":
-		stageRuntime = codexintegration.NewStageRuntime()
-	case "cursor":
-		stageRuntime = cursorintegration.NewStageRuntime()
-	default:
-		return fmt.Errorf("runtime no soportado: %s", options.runtime)
+	stageRuntime, stageModel, err := stageRuntimeFor(options.runtime, routing, generatedResult.Escalated)
+	if err != nil {
+		return err
 	}
+	fmt.Printf("Stage model: %s\n", displayModel(stageModel))
 	result, err := stageRuntime.Stage(context.Background(), unit, generated)
 	if err != nil {
 		return err
@@ -234,25 +216,16 @@ func runStage(args []string) error {
 		allowedFiles = append(allowedFiles, file.Path)
 	}
 
-	var reviewer review.Runtime
-	var corrector quality.Corrector
-	switch options.runtime {
-	case "auto":
-		reviewer = runtimefallback.ReviewRuntime{
-			Primary:  codexintegration.NewReviewRuntime(),
-			Fallback: cursorintegration.NewReviewRuntime(),
-		}
-		corrector = runtimefallback.Corrector{
-			Primary:  codexintegration.NewCorrectionRuntime(),
-			Fallback: cursorintegration.NewCorrectionRuntime(),
-		}
-	case "codex":
-		reviewer = codexintegration.NewReviewRuntime()
-		corrector = codexintegration.NewCorrectionRuntime()
-	case "cursor":
-		reviewer = cursorintegration.NewReviewRuntime()
-		corrector = cursorintegration.NewCorrectionRuntime()
+	reviewer, reviewModel, err := reviewRuntimeFor(options.runtime, routing, generatedResult.Escalated)
+	if err != nil {
+		return err
 	}
+	corrector, correctionModel, err := correctorFor(options.runtime, routing, generatedResult.Escalated)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Review model: %s\n", displayModel(reviewModel))
+	fmt.Printf("Correction model: %s\n", displayModel(correctionModel))
 
 	qualityResult, qualityErr := (quality.Loop{
 		Verifier:    localverify.New(),
@@ -334,7 +307,7 @@ func runStage(args []string) error {
 }
 
 func parseStageArgs(args []string) (stageOptions, error) {
-	options := stageOptions{root: ".", runtime: "auto"}
+	options := stageOptions{root: ".", runtime: "auto", modelPolicy: modelpolicy.PolicyAuto}
 	var positional []string
 
 	for i := 0; i < len(args); i++ {
@@ -353,8 +326,24 @@ func parseStageArgs(args []string) (stageOptions, error) {
 			}
 			i++
 			options.runtime = args[i]
+		case "--model-policy":
+			if i+1 >= len(args) {
+				return stageOptions{}, fmt.Errorf("--model-policy requiere un valor")
+			}
+			i++
+			policy, err := modelpolicy.Parse(args[i])
+			if err != nil {
+				return stageOptions{}, err
+			}
+			options.modelPolicy = policy
+		case "--model":
+			if i+1 >= len(args) {
+				return stageOptions{}, fmt.Errorf("--model requiere un id")
+			}
+			i++
+			options.model = strings.TrimSpace(args[i])
 		case "-h", "--help":
-			return stageOptions{}, fmt.Errorf("uso: ai stage [ruta-del-proyecto] --task <tarea> [--runtime auto|codex|cursor] [--ai]")
+			return stageOptions{}, fmt.Errorf("uso: ai stage [ruta-del-proyecto] --task <tarea> [--runtime auto|codex|cursor] [--model-policy auto|economy|balanced|deep] [--model id] [--ai]")
 		default:
 			if strings.HasPrefix(args[i], "-") {
 				return stageOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
