@@ -37,6 +37,27 @@ type Generator struct {
 	Runtime Runtime
 }
 
+type TaskAlignmentError struct {
+	Detail string
+}
+
+func (e TaskAlignmentError) Error() string { return e.Detail }
+
+func IsTaskAlignmentError(err error) bool {
+	for err != nil {
+		if _, ok := err.(TaskAlignmentError); ok {
+			return true
+		}
+		type unwrapper interface{ Unwrap() error }
+		u, ok := err.(unwrapper)
+		if !ok {
+			break
+		}
+		err = u.Unwrap()
+	}
+	return false
+}
+
 func (g Generator) Generate(ctx context.Context, unit execution.WorkUnit) (Proposal, error) {
 	if g.Runtime == nil {
 		return Proposal{}, fmt.Errorf("proposal runtime is required")
@@ -101,7 +122,7 @@ func ValidateTaskAlignment(task string, p Proposal) error {
 	}
 
 	if len(missingRequired) > 0 {
-		return fmt.Errorf("required task anchors are missing: %s", strings.Join(missingRequired, ", "))
+		return TaskAlignmentError{Detail: fmt.Sprintf("required task anchors are missing: %s", strings.Join(missingRequired, ", "))}
 	}
 
 	required := 1
@@ -111,7 +132,7 @@ func ValidateTaskAlignment(task string, p Proposal) error {
 		required = (len(anchors)*3 + 3) / 4
 	}
 	if hits < required {
-		return fmt.Errorf("task anchors matched %d/%d, need at least %d; missing: %s", hits, len(anchors), required, strings.Join(missing, ", "))
+		return TaskAlignmentError{Detail: fmt.Sprintf("task anchors matched %d/%d, need at least %d; missing: %s", hits, len(anchors), required, strings.Join(missing, ", "))}
 	}
 	return nil
 }
