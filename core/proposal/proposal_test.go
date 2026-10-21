@@ -2,6 +2,7 @@ package proposal
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
@@ -142,5 +143,19 @@ func TestValidateTaskAlignmentRequiresExplicitNumericConstraint(t *testing.T) {
 	}
 	if err := ValidateTaskAlignment(task, p); err == nil {
 		t.Fatal("expected missing numeric constraint to be rejected")
+	}
+}
+
+
+func TestIsTaskAlignmentErrorRecognizesWrappedAlignmentFailure(t *testing.T) {
+	err := fmt.Errorf("proposal failed: %w", TaskAlignmentError{Detail: "missing timeout"})
+	if !IsTaskAlignmentError(err) {
+		t.Fatal("expected wrapped task alignment error")
+	}
+}
+
+func TestIsTaskAlignmentErrorRejectsOtherErrors(t *testing.T) {
+	if IsTaskAlignmentError(fmt.Errorf("other failure")) {
+		t.Fatal("unexpected task alignment classification")
 	}
 }
