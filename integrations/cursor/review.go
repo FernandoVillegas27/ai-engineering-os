@@ -20,16 +20,20 @@ func NewReviewRuntimeWithModel(model string) ReviewRuntime {
 func (ReviewRuntime) ID() string      { return "cursor-review" }
 
 func (r ReviewRuntime) Review(ctx context.Context, workspace, task string, changedFiles []string) (review.Report, error) {
-	out, err := runAgentWithFormat(ctx, r.Config, workspace, "ask", reviewPrompt(task, changedFiles), "json")
+	out, err := runAgentWithFormat(ctx, r.Config, workspace, "ask", reviewPrompt(task, changedFiles), "stream-json")
 	if err != nil {
 		return review.Report{}, err
 	}
 
+	finalText, err := decodeStreamFinalResponse(out)
+	if err != nil {
+		return review.Report{}, err
+	}
 	var payload struct {
 		Summary  string
 		Findings []review.Finding
 	}
-	if err := decodeStructuredResponse(out, &payload); err != nil {
+	if err := decodeModelJSONObject(finalText, &payload); err != nil {
 		return review.Report{}, err
 	}
 
