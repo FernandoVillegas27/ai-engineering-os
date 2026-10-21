@@ -72,9 +72,11 @@ func (r Runtime) Verify(ctx context.Context, workspace string) (verification.Rep
 			report.Checks = append(report.Checks, verification.Check{
 				Name:    planned.name,
 				Command: append([]string{planned.command}, planned.args...),
-				ExitCode: 127,
-				Stderr:  fmt.Sprintf("%s command not found in PATH: %v", planned.command, err),
-				Passed:  false,
+				ExitCode:    127,
+				Stderr:      fmt.Sprintf("%s command not found in PATH: %v", planned.command, err),
+				Passed:      false,
+				FailureKind: verification.FailureInfrastructure,
+				Correctable: false,
 			})
 			continue
 		}
@@ -102,6 +104,10 @@ func (r Runtime) Verify(ctx context.Context, workspace string) (verification.Rep
 			check.ExitCode = 1
 			if runCtx.Err() == context.DeadlineExceeded {
 				check.Stderr = strings.TrimSpace(check.Stderr + "\nverification timed out after " + timeout.String())
+				check.FailureKind = verification.FailureInfrastructure
+				check.Correctable = false
+			} else {
+				check.FailureKind, check.Correctable = classifyFailure(check.Stdout, check.Stderr)
 			}
 			report.Status = verification.StatusFailed
 		}
@@ -215,4 +221,31 @@ func truncate(value string) string {
 		return value
 	}
 	return value[:max] + "\n...[truncated]"
+}
+
+
+func classifyFailure(stdout, stderr string) (verification.FailureKind, bool) {
+	text := strings.ToLower(stdout + "
+" + stderr)
+	infrastructureMarkers := []string{
+		"command not found",
+		"not recognized as an internal or external command",
+		"could not resolve host",
+		"no such host",
+		"network is unreachable",
+		"temporary failure in name resolution",
+		"proxyconnect tcp",
+		"proxy authentication required",
+		"407 proxy authentication",
+		"connection timed out",
+		"connection reset by peer",
+		"failed to download",
+		"unable to access",
+	}
+	for _, marker := range infrastructureMarkers {
+		if strings.Contains(text, marker) {
+			return verification.FailureInfrastructure, false
+		}
+	}
+	return verification.FailureCode, true
 }
