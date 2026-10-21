@@ -89,7 +89,7 @@ func TestStageUsesIsolatedWorkspaceAndPreservesOriginal(t *testing.T) {
 
 
 func TestStageHandlesWindowsCRLFContextWithLFPatch(t *testing.T) {
-	gitPath, err := commandmodel.OSRunner{}.LookPath("git")
+	gitPath, err := (commandmodel.OSRunner{}).LookPath("git")
 	if err != nil {
 		t.Skip("git not available")
 	}
@@ -176,5 +176,81 @@ func TestStageNormalizesMissingPatchTrailingNewline(t *testing.T) {
 		if !strings.HasSuffix(invocation.Stdin, "\n") {
 			t.Fatal("git apply input must end with a newline")
 		}
+	}
+}
+
+
+func TestCheckRunsGitApplyCheckOnlyAndPreservesOriginal(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "src"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	original := []byte("package src\nfunc Value() int { return 1 }\n")
+	source := filepath.Join(root, "src", "service.go")
+	if err := os.WriteFile(source, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	p := proposal.Proposal{
+		Files: []proposal.FileChange{{Path: "src/service.go", Action: "modify"}},
+		Patch: strings.Join([]string{
+			"diff --git a/src/service.go b/src/service.go",
+			"--- a/src/service.go",
+			"+++ b/src/service.go",
+			"@@ -1,2 +1,2 @@",
+			" package src",
+			"-func Value() int { return 1 }",
+			"+func Value() int { return 2 }",
+		}, "\n"),
+	}
+
+	runner := &fakeRunner{}
+	files, err := (Stager{Runner: runner}).Check(context.Background(), root, p)
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	if len(files) != 1 || len(runner.invocations) != 1 {
+		t.Fatalf("files=%d invocations=%d", len(files), len(runner.invocations))
+	}
+	if got := strings.Join(runner.invocations[0].Args, " "); !strings.Contains(got, "apply --check") {
+		t.Fatalf("unexpected invocation: %s", got)
+	}
+
+	after, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(original) {
+		t.Fatal("preflight modified original project")
+	}
+}
+
+func TestCheckRejectsCorruptHunkCountWithRealGit(t *testing.T) {
+	if _, err := (commandmodel.OSRunner{}).LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "src"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "src", "service.go"), []byte("package src\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	p := proposal.Proposal{
+		Files: []proposal.FileChange{{Path: "src/new.go", Action: "create"}},
+		Patch: strings.Join([]string{
+			"diff --git a/src/new.go b/src/new.go",
+			"new file mode 100644",
+			"--- /dev/null",
+			"+++ b/src/new.go",
+			"@@ -0,0 +1,2 @@",
+			"+package src",
+		}, "\n"),
+	}
+
+	if _, err := (Stager{Runner: commandmodel.OSRunner{}}).Check(context.Background(), root, p); err == nil {
+		t.Fatal("expected corrupt hunk count to fail git apply --check")
 	}
 }
