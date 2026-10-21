@@ -64,6 +64,12 @@ func (r Runtime) Verify(ctx context.Context, workspace string) (verification.Rep
 		timeout = 3 * time.Minute
 	}
 
+	env, cleanupEnv, err := prepareVerificationEnvironment(root)
+	if err != nil {
+		return verification.Report{}, err
+	}
+	defer cleanupEnv()
+
 	report := verification.Report{Status: verification.StatusPassed}
 	for _, planned := range checks {
 		resolved, err := runner.LookPath(planned.command)
@@ -87,7 +93,7 @@ func (r Runtime) Verify(ctx context.Context, workspace string) (verification.Rep
 			Command: resolved,
 			Args:    planned.args,
 			Dir:     root,
-			Env:     safeVerificationEnvironment(),
+			Env:     env,
 		})
 		duration := time.Since(started)
 		cancel()
@@ -197,7 +203,7 @@ func safeVerificationEnvironment() []string {
 	allowed := []string{
 		"PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "COMSPEC",
 		"TEMP", "TMP", "TMPDIR", "HOME", "USERPROFILE",
-		"JAVA_HOME", "GOROOT", "GOPATH", "GOCACHE", "GOMODCACHE",
+		"JAVA_HOME", "GOROOT",
 		"NPM_CONFIG_CACHE", "LANG", "LC_ALL", "TERM",
 	}
 	env := make([]string, 0, len(allowed)+1)
@@ -208,6 +214,36 @@ func safeVerificationEnvironment() []string {
 	}
 	env = append(env, "CI=true")
 	return env
+}
+
+func prepareVerificationEnvironment(root string) ([]string, func(), error) {
+	parent := filepath.Dir(root)
+	cacheRoot, err := os.MkdirTemp(parent, ".ai-engineering-os-verify-cache-*")
+	if err != nil {
+		return nil, func() {}, fmt.Errorf("create verification cache: %w", err)
+	}
+
+	cleanup := func() {
+		_ = os.RemoveAll(cacheRoot)
+	}
+
+	goCache := filepath.Join(cacheRoot, "go-build")
+	goModCache := filepath.Join(cacheRoot, "go-mod")
+	goPath := filepath.Join(cacheRoot, "go-path")
+	for _, dir := range []string{goCache, goModCache, goPath} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			cleanup()
+			return nil, func() {}, fmt.Errorf("create verification cache directory: %w", err)
+		}
+	}
+
+	env := safeVerificationEnvironment()
+	env = append(env,
+		"GOCACHE="+goCache,
+		"GOMODCACHE="+goModCache,
+		"GOPATH="+goPath,
+	)
+	return env, cleanup, nil
 }
 
 func fileExists(filename string) bool {
@@ -240,6 +276,8 @@ func classifyFailure(stdout, stderr string) (verification.FailureKind, bool) {
 		"connection reset by peer",
 		"failed to download",
 		"unable to access",
+		"build cache is required",
+		"gocache is not defined",
 	}
 	for _, marker := range infrastructureMarkers {
 		if strings.Contains(text, marker) {
