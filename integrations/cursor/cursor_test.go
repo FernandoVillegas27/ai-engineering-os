@@ -187,3 +187,36 @@ func TestCursorSandboxModeKeepsSandboxOnUnixPlatforms(t *testing.T) {
 		}
 	}
 }
+
+
+func TestProposalPromptStronglyGroundsPrimaryTask(t *testing.T) {
+	unit := unitFixture("C:/project")
+	unit.Task = "Agregá una validación para que el timeout del runtime Codex no pueda configurarse en menos de 5 segundos"
+	prompt := proposalPrompt(unit, execution.SafeViewReport{CopiedFiles: 42})
+
+	required := []string{
+		"PRIMARY TASK",
+		unit.Task,
+		"the only requested objective",
+		"preserve every explicit numeric constraint",
+		"named technical subject",
+		"Every file Rationale MUST explain exactly how that file contributes to the PRIMARY TASK",
+		"Verification steps MUST verify the requested behavior itself",
+		"Ignore TODOs, recent-feature themes, docs, or nearby code that suggest a different task",
+		"Never substitute a different task",
+	}
+	for _, expected := range required {
+		if !strings.Contains(prompt, expected) {
+			t.Fatalf("proposal prompt missing %q\n%s", expected, prompt)
+		}
+	}
+}
+
+func TestProposalPromptRepeatsTaskForGrounding(t *testing.T) {
+	unit := unitFixture("C:/project")
+	unit.Task = "Keep Codex timeout above 5 seconds"
+	prompt := proposalPrompt(unit, execution.SafeViewReport{})
+	if count := strings.Count(prompt, unit.Task); count < 2 {
+		t.Fatalf("task occurrence count=%d, want at least 2", count)
+	}
+}
