@@ -41,12 +41,12 @@ func (r ProposalRuntime) Propose(ctx context.Context, unit execution.WorkUnit) (
 		return proposal.Proposal{}, err
 	}
 
-	out, err := runAgent(ctx, r.Config, view.Root, "ask", proposalPrompt(unit, view))
+	out, err := runAgentWithFormat(ctx, r.Config, view.Root, "ask", proposalPrompt(unit, view), "json")
 	if err != nil {
 		return proposal.Proposal{}, err
 	}
 	var result proposal.Proposal
-	if err := decodeJSONObject(out, &result); err != nil {
+	if err := decodeStructuredResponse(out, &result); err != nil {
 		return proposal.Proposal{}, err
 	}
 	return result, nil
