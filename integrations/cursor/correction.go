@@ -12,7 +12,11 @@ import (
 
 type CorrectionRuntime struct{ Config RunnerConfig }
 
-func NewCorrectionRuntime() CorrectionRuntime { return CorrectionRuntime{Config: defaultConfig()} }
+func NewCorrectionRuntime() CorrectionRuntime {
+	config := defaultConfig()
+	config.Model = defaultEngineeringModel
+	return CorrectionRuntime{Config: config}
+}
 func (CorrectionRuntime) ID() string           { return "cursor-corrector" }
 
 func (r CorrectionRuntime) Correct(ctx context.Context, request quality.CorrectionRequest) error {
