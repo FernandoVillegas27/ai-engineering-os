@@ -12,12 +12,12 @@ func TestParseStageArgs(t *testing.T) {
 	}
 }
 
-func TestParseStageArgsDefaultsToCodex(t *testing.T) {
+func TestParseStageArgsDefaultsToAuto(t *testing.T) {
 	got, err := parseStageArgs([]string{"--task", "Aplicar cambio"})
 	if err != nil {
 		t.Fatalf("parseStageArgs() error = %v", err)
 	}
-	if got.runtime != "codex" {
+	if got.runtime != "auto" {
 		t.Fatalf("runtime = %q", got.runtime)
 	}
 }
@@ -25,5 +25,16 @@ func TestParseStageArgsDefaultsToCodex(t *testing.T) {
 func TestParseStageArgsRejectsMissingTask(t *testing.T) {
 	if _, err := parseStageArgs([]string{"."}); err == nil {
 		t.Fatal("expected missing task error")
+	}
+}
+
+
+func TestParseStageArgsAcceptsCursor(t *testing.T) {
+	got, err := parseStageArgs([]string{"--task", "Aplicar cambio", "--runtime", "cursor"})
+	if err != nil {
+		t.Fatalf("parseStageArgs() error = %v", err)
+	}
+	if got.runtime != "cursor" {
+		t.Fatalf("runtime = %q", got.runtime)
 	}
 }
