@@ -65,9 +65,14 @@ func (s Stager) Stage(ctx context.Context, projectRoot string, p proposal.Propos
 		return Result{}, fmt.Errorf("git command not found in PATH: %w", err)
 	}
 
+	patchText := p.Patch
+	if !strings.HasSuffix(patchText, "\n") {
+		patchText += "\n"
+	}
+
 	base := commandmodel.Invocation{
 		Command: gitPath,
-		Stdin:   p.Patch,
+		Stdin:   patchText,
 		Dir:     workspace,
 		Env:     safeGitEnvironment(workspace),
 	}
