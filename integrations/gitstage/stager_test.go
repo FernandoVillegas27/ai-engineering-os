@@ -142,3 +142,39 @@ func TestStageHandlesWindowsCRLFContextWithLFPatch(t *testing.T) {
 		t.Fatalf("staged file was not patched: %q", staged)
 	}
 }
+
+
+func TestStageNormalizesMissingPatchTrailingNewline(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "src"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "src", "service.go"), []byte("package src\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	p := proposal.Proposal{
+		Files: []proposal.FileChange{{Path: "src/service.go", Action: "modify"}},
+		Patch: strings.Join([]string{
+			"diff --git a/src/service.go b/src/service.go",
+			"--- a/src/service.go",
+			"+++ b/src/service.go",
+			"@@ -1 +1 @@",
+			"-package src",
+			"+package changed",
+		}, "\n"),
+	}
+
+	runner := &fakeRunner{}
+	result, err := (Stager{Runner: runner}).Stage(context.Background(), root, p)
+	if err != nil {
+		t.Fatalf("Stage() error = %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(result.Workspace) })
+
+	for _, invocation := range runner.invocations {
+		if !strings.HasSuffix(invocation.Stdin, "\n") {
+			t.Fatal("git apply input must end with a newline")
+		}
+	}
+}
