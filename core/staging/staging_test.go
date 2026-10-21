@@ -94,3 +94,49 @@ func TestValidateProposalRejectsWindowsAndBackslashPaths(t *testing.T) {
 		})
 	}
 }
+
+
+func TestValidateProposalAcceptsBareUnifiedDiff(t *testing.T) {
+	p := proposal.Proposal{
+		Files: []proposal.FileChange{
+			{Path: "integrations/codex/execution.go", Action: "modify"},
+			{Path: "integrations/codex/timeout_test.go", Action: "create"},
+		},
+		Patch: strings.Join([]string{
+			"--- a/integrations/codex/execution.go",
+			"+++ b/integrations/codex/execution.go",
+			"@@ -1 +1 @@",
+			"-old",
+			"+new",
+			"--- /dev/null",
+			"+++ b/integrations/codex/timeout_test.go",
+			"@@ -0,0 +1 @@",
+			"+package codex",
+		}, "\n"),
+	}
+
+	files, err := ValidateProposal(p, execution.DefaultSafeViewPolicy())
+	if err != nil {
+		t.Fatalf("ValidateProposal() error = %v", err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("files = %#v, want 2", files)
+	}
+}
+
+func TestValidateProposalRejectsGitAndUnifiedHeaderMismatch(t *testing.T) {
+	p := proposal.Proposal{
+		Files: []proposal.FileChange{{Path: "src/a.go", Action: "modify"}},
+		Patch: strings.Join([]string{
+			"diff --git a/src/a.go b/src/a.go",
+			"--- a/src/b.go",
+			"+++ b/src/b.go",
+			"@@ -1 +1 @@",
+			"-a",
+			"+b",
+		}, "\n"),
+	}
+	if _, err := ValidateProposal(p, execution.DefaultSafeViewPolicy()); err == nil {
+		t.Fatal("expected git/unified header mismatch rejection")
+	}
+}
