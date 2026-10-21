@@ -68,3 +68,42 @@ func TestGeneratorRejectsInvalidPermissionsBeforeRuntime(t *testing.T) {
 		t.Fatal("runtime must not be called")
 	}
 }
+
+
+func TestGeneratorRejectsTaskMisalignedProposal(t *testing.T) {
+	unit := validUnit()
+	unit.Task = "Agregá una validación para que el timeout del runtime Codex no pueda configurarse en menos de 5 segundos"
+	runtime := &fakeRuntime{proposal: Proposal{
+		Summary: "Alinear ai propose con el selector de runtime auto, codex y cursor",
+		Files: []FileChange{
+			{Path: "cmd/ai/propose.go", Action: "modify", Rationale: "Agregar selector de runtime"},
+			{Path: "docs/runtime-fallback.md", Action: "modify", Rationale: "Documentar fallback"},
+		},
+		Verification: []string{"go test ./cmd/ai/..."},
+	}}
+
+	_, err := (Generator{Runtime: runtime}).Generate(context.Background(), unit)
+	if err == nil {
+		t.Fatal("expected task alignment rejection")
+	}
+}
+
+func TestGeneratorAcceptsTaskAlignedProposal(t *testing.T) {
+	unit := validUnit()
+	unit.Task = "Agregá una validación para que el timeout del runtime Codex no pueda configurarse en menos de 5 segundos"
+	runtime := &fakeRuntime{proposal: Proposal{
+		Summary: "Validar que el timeout del runtime Codex sea cero o al menos 5 segundos.",
+		Files: []FileChange{
+			{Path: "integrations/codex/timeout.go", Action: "modify", Rationale: "Centralizar el mínimo de timeout de Codex"},
+		},
+		Verification: []string{"go test ./integrations/codex/..."},
+	}}
+
+	got, err := (Generator{Runtime: runtime}).Generate(context.Background(), unit)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if got.Summary == "" {
+		t.Fatal("expected proposal")
+	}
+}

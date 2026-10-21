@@ -115,7 +115,7 @@ func TestVerifyClassifiesTestFailureAsCorrectableCode(t *testing.T) {
 }
 
 
-func TestVerifyProvidesIsolatedGoCachesAndCleansThem(t *testing.T) {
+func TestVerifyProvidesIsolatedGoBuildCacheAndCleansIt(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/test\n\ngo 1.23\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -130,28 +130,31 @@ func TestVerifyProvidesIsolatedGoCachesAndCleansThem(t *testing.T) {
 		t.Fatalf("report=%#v invocations=%d", report, len(runner.invocations))
 	}
 
-	invocation := runner.invocations[0]
-	goCache := envValue(invocation.Env, "GOCACHE")
-	goModCache := envValue(invocation.Env, "GOMODCACHE")
-	goPath := envValue(invocation.Env, "GOPATH")
-	for name, value := range map[string]string{
-		"GOCACHE": goCache,
-		"GOMODCACHE": goModCache,
-		"GOPATH": goPath,
-	} {
-		if value == "" {
-			t.Fatalf("%s not provided", name)
-		}
-		rel, err := filepath.Rel(root, value)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if rel == "." || !strings.HasPrefix(filepath.ToSlash(rel), "../") {
-			t.Fatalf("%s=%q should be outside workspace %q", name, value, root)
-		}
-		if _, err := os.Stat(value); !os.IsNotExist(err) {
-			t.Fatalf("%s cache should be removed after verification, stat err=%v", name, err)
-		}
+	goCache := envValue(runner.invocations[0].Env, "GOCACHE")
+	if goCache == "" {
+		t.Fatal("GOCACHE not provided")
+	}
+	rel, err := filepath.Rel(root, goCache)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rel == "." || !strings.HasPrefix(filepath.ToSlash(rel), "../") {
+		t.Fatalf("GOCACHE=%q should be outside workspace %q", goCache, root)
+	}
+	if _, err := os.Stat(goCache); !os.IsNotExist(err) {
+		t.Fatalf("GOCACHE should be removed after verification, stat err=%v", err)
+	}
+}
+
+func TestSafeVerificationEnvironmentPreservesConfiguredGoModuleCache(t *testing.T) {
+	t.Setenv("GOMODCACHE", filepath.Join(t.TempDir(), "mod-cache"))
+	t.Setenv("GOPATH", filepath.Join(t.TempDir(), "gopath"))
+	env := safeVerificationEnvironment()
+	if got := envValue(env, "GOMODCACHE"); got == "" {
+		t.Fatal("GOMODCACHE should be preserved when configured")
+	}
+	if got := envValue(env, "GOPATH"); got == "" {
+		t.Fatal("GOPATH should be preserved when configured")
 	}
 }
 
