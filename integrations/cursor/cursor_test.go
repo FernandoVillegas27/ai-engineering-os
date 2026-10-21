@@ -172,3 +172,18 @@ func TestRunAgentPropagatesProviderError(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 }
+
+
+func TestCursorSandboxModeUsesAllowlistOnWindows(t *testing.T) {
+	if got := cursorSandboxMode("windows"); got != "disabled" {
+		t.Fatalf("cursorSandboxMode(windows) = %q, want disabled", got)
+	}
+}
+
+func TestCursorSandboxModeKeepsSandboxOnUnixPlatforms(t *testing.T) {
+	for _, goos := range []string{"linux", "darwin"} {
+		if got := cursorSandboxMode(goos); got != "enabled" {
+			t.Fatalf("cursorSandboxMode(%s) = %q, want enabled", goos, got)
+		}
+	}
+}
