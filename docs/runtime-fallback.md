@@ -58,3 +58,12 @@ The fallback does not expand permissions. It changes only which provider perform
 AI Engineering OS does not forward provider API-key environment variables to Cursor. Cursor CLI is expected to use its normal local authenticated session.
 
 If Cursor CLI is not installed or authenticated, `--runtime cursor` fails explicitly. In `auto` mode, if both providers are unavailable, the operation stops without touching the original repository.
+
+
+## Platform behavior
+
+Cursor's native sandbox is available on macOS and Linux. On those platforms AI Engineering OS invokes Cursor with `--sandbox enabled`.
+
+On native Windows, Cursor does not provide that sandbox. AI Engineering OS therefore invokes Cursor with `--sandbox disabled`, which uses Cursor's non-sandbox execution controls, while retaining AI Engineering OS's own isolated sanitized workspace, declared-file approval boundary, and deterministic post-run filesystem validation.
+
+This means Windows does not have the same OS-level command sandbox as macOS/Linux. The original repository is still not used as the write workspace, and undeclared filesystem changes inside the staged workspace are rejected.
