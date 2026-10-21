@@ -154,5 +154,6 @@ func verificationCorrectable(report verification.Report) bool {
 	}
 	// Older/custom verifiers may not classify checks yet. Preserve the previous
 	// behavior and allow one correction attempt rather than silently blocking.
-	return !foundFailure || true
+	_ = foundFailure
+	return true
 }
