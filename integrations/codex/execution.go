@@ -31,7 +31,7 @@ func NewExecutionRuntime() ExecutionRuntime {
 	return ExecutionRuntime{
 		Binary:  "codex",
 		Runner:  commandmodel.OSRunner{},
-		Timeout: 2 * time.Minute,
+		Timeout: defaultRuntimeTimeout,
 	}
 }
 
@@ -113,7 +113,7 @@ func (r ExecutionRuntime) Analyze(ctx context.Context, unit execution.WorkUnit) 
 
 	timeout := r.Timeout
 	if timeout <= 0 {
-		timeout = 2 * time.Minute
+		timeout = defaultRuntimeTimeout
 	}
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
