@@ -220,3 +220,20 @@ func TestProposalPromptRepeatsTaskForGrounding(t *testing.T) {
 		t.Fatalf("task occurrence count=%d, want at least 2", count)
 	}
 }
+
+
+func TestCursorRuntimeConstructorsAcceptExplicitModel(t *testing.T) {
+	const model = "gpt-5.6-sol-high"
+	if got := NewProposalRuntimeWithModel(model).Config.Model; got != model {
+		t.Fatalf("proposal model=%q", got)
+	}
+	if got := NewStageRuntimeWithModel(model).Config.Model; got != model {
+		t.Fatalf("stage model=%q", got)
+	}
+	if got := NewReviewRuntimeWithModel(model).Config.Model; got != model {
+		t.Fatalf("review model=%q", got)
+	}
+	if got := NewCorrectionRuntimeWithModel(model).Config.Model; got != model {
+		t.Fatalf("correction model=%q", got)
+	}
+}
