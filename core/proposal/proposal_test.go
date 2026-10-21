@@ -107,3 +107,40 @@ func TestGeneratorAcceptsTaskAlignedProposal(t *testing.T) {
 		t.Fatal("expected proposal")
 	}
 }
+
+
+func TestGeneratorRejectsRealCursorRuntimeSelectorDrift(t *testing.T) {
+	unit := validUnit()
+	unit.Task = "Agregá una validación para que el timeout del runtime Codex no pueda configurarse en menos de 5 segundos"
+	runtime := &fakeRuntime{proposal: Proposal{
+		Summary: "Alinear ai propose con el selector de runtime auto, codex y cursor, igual que ai stage.",
+		Files: []FileChange{
+			{Path: "cmd/ai/propose.go", Action: "modify", Rationale: "Permitir --runtime auto|codex|cursor; en auto usar runtimefallback.ProposalRuntime con Codex primario y Cursor como fallback"},
+			{Path: "cmd/ai/propose_test.go", Action: "modify", Rationale: "Cubrir parseo de auto/cursor y rechazo de runtimes inválidos; ajustar el default si pasa a auto"},
+			{Path: "docs/propose-changes.md", Action: "modify", Rationale: "Documentar los runtimes soportados y que Patch puede quedar vacío con Cursor"},
+			{Path: "docs/runtime-fallback.md", Action: "modify", Rationale: "Confirmar que el flujo de proposal Codex→Cursor también aplica a ai propose"},
+		},
+		Verification: []string{
+			"go test ./cmd/ai/...",
+			"go test ./core/runtimefallback/...",
+			"go run ./cmd/ai propose . --task \"Agregar validación de precios negativos\" --runtime auto",
+			"go run ./cmd/ai propose . --task \"Agregar validación de precios negativos\" --runtime cursor",
+		},
+	}}
+
+	_, err := (Generator{Runtime: runtime}).Generate(context.Background(), unit)
+	if err == nil {
+		t.Fatal("expected real Cursor drift proposal to be rejected")
+	}
+}
+
+func TestValidateTaskAlignmentRequiresExplicitNumericConstraint(t *testing.T) {
+	task := "Set the timeout to at least 5 seconds"
+	p := Proposal{
+		Summary: "Set the timeout to a safer minimum.",
+		Files: []FileChange{{Path: "timeout.go", Action: "modify", Rationale: "Validate timeout configuration"}},
+	}
+	if err := ValidateTaskAlignment(task, p); err == nil {
+		t.Fatal("expected missing numeric constraint to be rejected")
+	}
+}
