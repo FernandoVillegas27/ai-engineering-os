@@ -24,7 +24,7 @@ func NewCorrectionRuntime() CorrectionRuntime {
 	return CorrectionRuntime{
 		Binary:  "codex",
 		Runner:  commandmodel.OSRunner{},
-		Timeout: 2 * time.Minute,
+		Timeout: defaultRuntimeTimeout,
 	}
 }
 
@@ -88,7 +88,7 @@ func (r CorrectionRuntime) Correct(ctx context.Context, request quality.Correcti
 
 	timeout := r.Timeout
 	if timeout <= 0 {
-		timeout = 2 * time.Minute
+		timeout = defaultRuntimeTimeout
 	}
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
