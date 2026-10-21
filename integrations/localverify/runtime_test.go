@@ -113,3 +113,72 @@ func TestVerifyClassifiesTestFailureAsCorrectableCode(t *testing.T) {
 		t.Fatalf("check=%#v", check)
 	}
 }
+
+
+func TestVerifyProvidesIsolatedGoCachesAndCleansThem(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/test\n\ngo 1.23\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	runner := &fakeRunner{}
+	report, err := (Runtime{Runner: runner}).Verify(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "passed" || len(runner.invocations) != 1 {
+		t.Fatalf("report=%#v invocations=%d", report, len(runner.invocations))
+	}
+
+	invocation := runner.invocations[0]
+	goCache := envValue(invocation.Env, "GOCACHE")
+	goModCache := envValue(invocation.Env, "GOMODCACHE")
+	goPath := envValue(invocation.Env, "GOPATH")
+	for name, value := range map[string]string{
+		"GOCACHE": goCache,
+		"GOMODCACHE": goModCache,
+		"GOPATH": goPath,
+	} {
+		if value == "" {
+			t.Fatalf("%s not provided", name)
+		}
+		rel, err := filepath.Rel(root, value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rel == "." || !strings.HasPrefix(filepath.ToSlash(rel), "../") {
+			t.Fatalf("%s=%q should be outside workspace %q", name, value, root)
+		}
+		if _, err := os.Stat(value); !os.IsNotExist(err) {
+			t.Fatalf("%s cache should be removed after verification, stat err=%v", name, err)
+		}
+	}
+}
+
+func TestVerifyClassifiesMissingGoCacheAsInfrastructure(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/test\n\ngo 1.23\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	report, err := (Runtime{Runner: &fakeRunner{
+		fail:   true,
+		stderr: "build cache is required, but could not be located: GOCACHE is not defined and %LocalAppData% is not defined",
+	}}).Verify(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := report.Checks[0]
+	if check.FailureKind != "infrastructure" || check.Correctable {
+		t.Fatalf("check=%#v", check)
+	}
+}
+
+func envValue(env []string, key string) string {
+	prefix := key + "="
+	for _, entry := range env {
+		if strings.HasPrefix(entry, prefix) {
+			return strings.TrimPrefix(entry, prefix)
+		}
+	}
+	return ""
+}
