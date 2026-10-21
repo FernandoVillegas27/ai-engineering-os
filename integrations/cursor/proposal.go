@@ -14,6 +14,12 @@ import (
 type ProposalRuntime struct{ Config RunnerConfig }
 
 func NewProposalRuntime() ProposalRuntime { return ProposalRuntime{Config: defaultConfig()} }
+
+func NewProposalRuntimeWithModel(model string) ProposalRuntime {
+	config := defaultConfig()
+	config.Model = strings.TrimSpace(model)
+	return ProposalRuntime{Config: config}
+}
 func (ProposalRuntime) ID() string        { return RuntimeID }
 
 func (r ProposalRuntime) Propose(ctx context.Context, unit execution.WorkUnit) (proposal.Proposal, error) {
