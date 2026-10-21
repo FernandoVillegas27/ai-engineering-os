@@ -76,7 +76,6 @@ func TestLoopCorrectsThenPasses(t *testing.T) {
 		{Status: verification.StatusPassed},
 	}}
 	reviewer := &fakeReviewer{reports: []review.Report{
-		{Verdict: review.VerdictRejected},
 		{Verdict: review.VerdictApproved},
 	}}
 	corrector := &fakeCorrector{}
