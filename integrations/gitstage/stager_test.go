@@ -89,7 +89,7 @@ func TestStageUsesIsolatedWorkspaceAndPreservesOriginal(t *testing.T) {
 
 
 func TestStageHandlesWindowsCRLFContextWithLFPatch(t *testing.T) {
-	gitPath, err := commandmodel.OSRunner{}.LookPath("git")
+	gitPath, err := (commandmodel.OSRunner{}).LookPath("git")
 	if err != nil {
 		t.Skip("git not available")
 	}
