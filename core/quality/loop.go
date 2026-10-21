@@ -142,18 +142,15 @@ func verificationCorrectable(report verification.Report) bool {
 	if report.Status != verification.StatusFailed {
 		return true
 	}
-	foundFailure := false
 	for _, check := range report.Checks {
 		if check.Passed {
 			continue
 		}
-		foundFailure = true
 		if !check.Correctable {
 			return false
 		}
 	}
 	// Older/custom verifiers may not classify checks yet. Preserve the previous
 	// behavior and allow one correction attempt rather than silently blocking.
-	_ = foundFailure
 	return true
 }
