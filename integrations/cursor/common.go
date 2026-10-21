@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -46,7 +47,7 @@ func runAgent(ctx context.Context, config RunnerConfig, workspace, mode, prompt 
 		return "", fmt.Errorf("cursor agent command not found in PATH: %w", err)
 	}
 
-	args := []string{"-p", "--trust", "--output-format", "text", "--sandbox", "enabled", "--workspace", workspace}
+	args := []string{"-p", "--trust", "--output-format", "text", "--sandbox", cursorSandboxMode(runtime.GOOS), "--workspace", workspace}
 	if mode != "" {
 		args = append(args, "--mode", mode)
 	}
@@ -113,4 +114,12 @@ func safeRuntimeEnvironment() []string {
 		}
 	}
 	return env
+}
+
+
+func cursorSandboxMode(goos string) string {
+	if strings.EqualFold(strings.TrimSpace(goos), "windows") {
+		return "disabled"
+	}
+	return "enabled"
 }
