@@ -16,6 +16,9 @@ import (
 const (
 	RuntimeID             = "cursor-cli"
 	defaultRuntimeTimeout = 5 * time.Minute
+
+	defaultEngineeringModel = "gpt-5.6-sol-high"
+	defaultReviewModel      = "claude-sonnet-5-thinking-high"
 )
 
 type RunnerConfig struct {
