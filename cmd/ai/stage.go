@@ -179,8 +179,17 @@ func runStage(args []string) error {
 		fmt.Printf("  %s\n", line)
 	}
 
+	stager := gitstage.New()
+	preflightFiles, err := stager.Check(context.Background(), root, generated)
+	if err != nil {
+		return fmt.Errorf("el patch no supera git apply --check; no se solicitó aprobación: %w", err)
+	}
+	if len(preflightFiles) != len(validatedFiles) {
+		return fmt.Errorf("preflight inconsistente: validación=%d archivos, git-check=%d archivos", len(validatedFiles), len(preflightFiles))
+	}
+
 	fmt.Println()
-	fmt.Printf("Patch validado para staging: %d archivo(s).\n", len(validatedFiles))
+	fmt.Printf("Patch validado y aplicable en workspace aislado: %d archivo(s).\n", len(validatedFiles))
 	fmt.Println("El patch todavía NO fue aplicado.")
 	fmt.Print("Escribí APPLY para aplicarlo únicamente en un workspace aislado: ")
 
@@ -194,7 +203,6 @@ func runStage(args []string) error {
 		return nil
 	}
 
-	stager := gitstage.New()
 	result, err := stager.Stage(context.Background(), root, generated)
 	if err != nil {
 		return err
