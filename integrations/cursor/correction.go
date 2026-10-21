@@ -13,6 +13,12 @@ import (
 type CorrectionRuntime struct{ Config RunnerConfig }
 
 func NewCorrectionRuntime() CorrectionRuntime { return CorrectionRuntime{Config: defaultConfig()} }
+
+func NewCorrectionRuntimeWithModel(model string) CorrectionRuntime {
+	config := defaultConfig()
+	config.Model = strings.TrimSpace(model)
+	return CorrectionRuntime{Config: config}
+}
 func (CorrectionRuntime) ID() string           { return "cursor-corrector" }
 
 func (r CorrectionRuntime) Correct(ctx context.Context, request quality.CorrectionRequest) error {
