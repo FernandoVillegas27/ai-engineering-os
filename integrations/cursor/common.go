@@ -64,6 +64,12 @@ func runAgentWithFormat(ctx context.Context, config RunnerConfig, workspace, mod
 	}
 	args = append(args, prompt)
 
+	plan := planAgentLaunch(runtime.GOOS, resolved)
+	if plan.Kind == launchBatchUnresolved && promptNeedsSafeTransport(prompt) {
+		return "", fmt.Errorf("cursor launcher %s is a Windows batch file and its node runtime could not be located; refusing to pass a multi-line prompt through cmd.exe because it would be truncated", resolved)
+	}
+	args = append(append([]string{}, plan.Args...), args...)
+
 	timeout := config.Timeout
 	if timeout <= 0 {
 		timeout = defaultRuntimeTimeout
@@ -72,10 +78,10 @@ func runAgentWithFormat(ctx context.Context, config RunnerConfig, workspace, mod
 	defer cancel()
 
 	stdout, stderr, runErr := runner.Run(runCtx, commandmodel.Invocation{
-		Command: resolved,
+		Command: plan.Command,
 		Args:    args,
 		Dir:     workspace,
-		Env:     safeRuntimeEnvironment(),
+		Env:     append(safeRuntimeEnvironment(), plan.Env...),
 	})
 	if runErr != nil {
 		if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
