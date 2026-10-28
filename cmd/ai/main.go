@@ -100,6 +100,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+	case "diagnose":
+		if err := runDiagnose(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	case "help", "-h", "--help":
 		printUsage()
 	default:
@@ -971,6 +976,7 @@ func printUsage() {
 	fmt.Println("  ai execute [ruta-del-proyecto] --task <tarea> (--dry-run | --runtime codex) [--ai]")
 	fmt.Println("  ai propose [ruta-del-proyecto] --task <tarea> [--runtime auto|codex|cursor] [--model-policy auto|economy|balanced|deep] [--model id] [--ai]")
 	fmt.Println("  ai stage [ruta-del-proyecto] --task <tarea> [--runtime auto|codex|cursor] [--model-policy auto|economy|balanced|deep] [--model id] [--ai]")
+	fmt.Println("  ai diagnose cursor-proposal [project-path] --task <task> [--binary agent] [--response-file <file>|-] [--json]")
 	fmt.Println("  ai plan [ruta-del-proyecto] [--intent implement|design|research|review|verify] --capability <id> [--capability <id>...]")
 	fmt.Println("  ai gentle status")
 	fmt.Println("  ai gentle plan <runtime>")
