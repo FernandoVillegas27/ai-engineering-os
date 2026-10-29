@@ -1,12 +1,44 @@
 package execution
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
+	"syscall"
 	"testing"
 )
+
+// errPrivilegeNotHeld is ERROR_PRIVILEGE_NOT_HELD, returned by Windows when symlinks are not allowed.
+const errPrivilegeNotHeld = syscall.Errno(1314)
+
+// requireSymlink skips only when Windows denies symlink privileges; any other failure is fatal.
+func requireSymlink(t *testing.T, target, link string) {
+	t.Helper()
+	err := os.Symlink(target, link)
+	if err == nil {
+		return
+	}
+	if runtime.GOOS == "windows" && errors.Is(err, errPrivilegeNotHeld) {
+		t.Skipf("symlink creation requires a privilege this user does not hold: %v", err)
+	}
+	t.Fatal(err)
+}
+
+func mustPin(t *testing.T, path string) pinnedFileInfo {
+	t.Helper()
+	info, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pinned, err := pinFileIdentity(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pinned
+}
 
 func TestIsSensitivePath(t *testing.T) {
 	sensitive := []string{
@@ -65,10 +97,6 @@ func TestPrepareSafeReadOnlyViewExcludesSecretsAndSymlinks(t *testing.T) {
 	write("config/service-account.json", "{}")
 	write("assets/logo.png", "binary-ish")
 
-	if err := os.Symlink(filepath.Join(root, ".env"), filepath.Join(root, "linked-secret")); err != nil && !os.IsPermission(err) {
-		t.Fatal(err)
-	}
-
 	report, err := PrepareSafeReadOnlyView(root, view)
 	if err != nil {
 		t.Fatalf("PrepareSafeReadOnlyView() error = %v", err)
@@ -77,7 +105,7 @@ func TestPrepareSafeReadOnlyViewExcludesSecretsAndSymlinks(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(view, "src", "app.go")); err != nil {
 		t.Fatalf("expected safe file: %v", err)
 	}
-	for _, relative := range []string{".env", "config/credentials.json", "certs/server.pem", "config/id_ecdsa", "config/service-account.json", "assets/logo.png", "linked-secret"} {
+	for _, relative := range []string{".env", "config/credentials.json", "certs/server.pem", "config/id_ecdsa", "config/service-account.json", "assets/logo.png"} {
 		if _, err := os.Stat(filepath.Join(view, filepath.FromSlash(relative))); !os.IsNotExist(err) {
 			t.Fatalf("sensitive path copied into safe view: %s", relative)
 		}
@@ -88,6 +116,29 @@ func TestPrepareSafeReadOnlyViewExcludesSecretsAndSymlinks(t *testing.T) {
 	if len(excluded) < 3 {
 		t.Fatalf("excluded paths = %#v", excluded)
 	}
+
+	t.Run("symlink", func(t *testing.T) {
+		linkRoot := t.TempDir()
+		linkView := t.TempDir()
+		if err := os.WriteFile(filepath.Join(linkRoot, ".env"), []byte("TOKEN=secret"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(linkRoot, "app.go"), []byte("package main"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		requireSymlink(t, filepath.Join(linkRoot, ".env"), filepath.Join(linkRoot, "linked-secret"))
+
+		linkReport, err := PrepareSafeReadOnlyView(linkRoot, linkView)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Lstat(filepath.Join(linkView, "linked-secret")); !os.IsNotExist(err) {
+			t.Fatal("symlink copied into safe view")
+		}
+		if !reflect.DeepEqual(linkReport.ExcludedPaths, []string{".env", "linked-secret"}) {
+			t.Fatalf("excluded paths = %#v", linkReport.ExcludedPaths)
+		}
+	})
 }
 
 func TestReadOnlyEnvelopeValidationFailsClosed(t *testing.T) {
@@ -173,10 +224,7 @@ func TestCopyVerifiedRegularFileRejectsIdentityChange(t *testing.T) {
 	if err := os.WriteFile(source, []byte("original"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	expected, err := os.Lstat(source)
-	if err != nil {
-		t.Fatal(err)
-	}
+	expected := mustPin(t, source)
 
 	replacement := filepath.Join(root, "replacement.go")
 	if err := os.WriteFile(replacement, []byte("replacement"), 0o600); err != nil {
@@ -197,6 +245,126 @@ func TestCopyVerifiedRegularFileRejectsIdentityChange(t *testing.T) {
 	}
 }
 
+func TestCopyVerifiedRegularFileRejectsReplacementWithIdenticalContent(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source.go")
+	target := filepath.Join(root, "copy.go")
+	if err := os.WriteFile(source, []byte("same bytes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	expected := mustPin(t, source)
+
+	// Keep the original alive: deleting it would let the OS reuse its inode or file index for the replacement.
+	if err := os.Rename(source, filepath.Join(root, "original.go")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, []byte("same bytes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	original := mustPin(t, filepath.Join(root, "original.go"))
+	if os.SameFile(original.FileInfo, mustPin(t, source).FileInfo) {
+		t.Fatal("test precondition: the replacement must have a distinct identity")
+	}
+
+	if err := copyVerifiedRegularFile(source, target, expected); err == nil {
+		t.Fatal("identity must be checked independently of content")
+	}
+}
+
+func TestCopyVerifiedRegularFileRejectsHardLinkReplacement(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source.go")
+	other := filepath.Join(root, "other.go")
+	target := filepath.Join(root, "copy.go")
+	if err := os.WriteFile(source, []byte("safe"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(other, []byte("other"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	expected := mustPin(t, source)
+
+	if err := os.Remove(source); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(other, source); err != nil {
+		t.Skipf("hard links unavailable: %v", err)
+	}
+
+	if err := copyVerifiedRegularFile(source, target, expected); err == nil {
+		t.Fatal("expected hard-link replacement rejection")
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatal("target must not be created for a replaced file")
+	}
+}
+
+func TestCopyVerifiedRegularFileCopiesUnchangedFile(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source.go")
+	target := filepath.Join(root, "copy.go")
+	if err := os.WriteFile(source, []byte("payload"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := copyVerifiedRegularFile(source, target, mustPin(t, source)); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil || string(got) != "payload" {
+		t.Fatalf("copy = %q, %v", got, err)
+	}
+}
+
+// Documents why pinning is required: on Windows an unpinned Lstat result follows a later replacement.
+func TestUnpinnedLstatDoesNotDetectReplacementOnWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("lazy file identity is Windows-specific")
+	}
+	root := t.TempDir()
+	source := filepath.Join(root, "source.go")
+	if err := os.WriteFile(source, []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	unpinned, err := os.Lstat(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(source); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, []byte("replacement"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	current, err := os.Lstat(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(unpinned, current) {
+		t.Fatal("premise changed: Go now resolves Lstat identity eagerly on Windows; pinning may be redundant")
+	}
+}
+
+func TestPinFileIdentityFailsClosedWhenFileDisappearsOnWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("lazy file identity is Windows-specific")
+	}
+	source := filepath.Join(t.TempDir(), "source.go")
+	if err := os.WriteFile(source, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(source); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pinFileIdentity(info); err == nil {
+		t.Fatal("expected pinning to fail when identity cannot be resolved")
+	}
+}
+
 func TestCopyVerifiedRegularFileRejectsSymlinkReplacement(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "source.go")
@@ -209,16 +377,11 @@ func TestCopyVerifiedRegularFileRejectsSymlinkReplacement(t *testing.T) {
 	if err := os.WriteFile(secret, []byte("secret"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	expected, err := os.Lstat(source)
-	if err != nil {
-		t.Fatal(err)
-	}
+	expected := mustPin(t, source)
 	if err := os.Remove(source); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(secret, source); err != nil {
-		t.Skipf("symlink creation unavailable: %v", err)
-	}
+	requireSymlink(t, secret, source)
 
 	if err := copyVerifiedRegularFile(source, target, expected); err == nil {
 		t.Fatal("expected symlink replacement rejection")

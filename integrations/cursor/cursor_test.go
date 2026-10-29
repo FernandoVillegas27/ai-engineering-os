@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 
@@ -81,7 +82,7 @@ func TestProposalRuntimeUsesReadOnlyAskModeAndParsesJSON(t *testing.T) {
 		t.Fatalf("proposal=%#v", got)
 	}
 	args := strings.Join(runner.invocations[0].Args, " ")
-	if !strings.Contains(args, "--mode ask") || !strings.Contains(args, "--sandbox enabled") || !strings.Contains(args, "--output-format stream-json") || !strings.Contains(args, "--trust") {
+	if !strings.Contains(args, "--mode ask") || !strings.Contains(args, "--sandbox "+cursorSandboxMode(goruntime.GOOS)) || !strings.Contains(args, "--output-format stream-json") || !strings.Contains(args, "--trust") {
 		t.Fatalf("args=%q", args)
 	}
 	if runner.invocations[0].Dir == root {
@@ -118,7 +119,7 @@ func TestStageRuntimeWritesOnlyIsolatedWorkspace(t *testing.T) {
 		t.Fatalf("changes=%#v", result.Changes)
 	}
 	args := strings.Join(runner.invocations[0].Args, " ")
-	if !strings.Contains(args, "--sandbox enabled") || !strings.Contains(args, "--workspace "+result.Workspace) || !strings.Contains(args, "--trust") {
+	if !strings.Contains(args, "--sandbox "+cursorSandboxMode(goruntime.GOOS)) || !strings.Contains(args, "--workspace "+result.Workspace) || !strings.Contains(args, "--trust") {
 		t.Fatalf("args=%q", args)
 	}
 }

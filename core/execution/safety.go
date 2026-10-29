@@ -102,7 +102,7 @@ func PrepareSafeReadOnlyViewWithPolicy(projectRoot string, destination string, p
 			return nil
 		}
 
-		info, err := entry.Info()
+		info, err := os.Lstat(path)
 		if err != nil {
 			return err
 		}
@@ -119,8 +119,12 @@ func PrepareSafeReadOnlyViewWithPolicy(projectRoot string, destination string, p
 			return nil
 		}
 
+		pinned, err := pinFileIdentity(info)
+		if err != nil {
+			return fmt.Errorf("%s: %w", relative, err)
+		}
 		target := filepath.Join(destination, relative)
-		if err := copyVerifiedRegularFile(path, target, info); err != nil {
+		if err := copyVerifiedRegularFile(path, target, pinned); err != nil {
 			return err
 		}
 		report.CopiedFiles++
@@ -178,8 +182,24 @@ func IsSensitivePathWithPolicy(relativePath string, policy SafeViewPolicy) bool 
 	return false
 }
 
-func copyVerifiedRegularFile(source, target string, expected fs.FileInfo) error {
-	if expected == nil || !expected.Mode().IsRegular() {
+// pinnedFileInfo is a FileInfo whose identity was captured eagerly.
+// On Windows os.Lstat and DirEntry.Info resolve the file index lazily on the first
+// os.SameFile call, so an unpinned value silently follows a later replacement.
+type pinnedFileInfo struct{ fs.FileInfo }
+
+func pinFileIdentity(info fs.FileInfo) (pinnedFileInfo, error) {
+	if info == nil || !info.Mode().IsRegular() {
+		return pinnedFileInfo{}, fmt.Errorf("cannot pin identity of a non-regular file")
+	}
+	// SameFile with itself forces the lazy identity lookup; false means it could not be resolved.
+	if !os.SameFile(info, info) {
+		return pinnedFileInfo{}, fmt.Errorf("cannot resolve file identity")
+	}
+	return pinnedFileInfo{info}, nil
+}
+
+func copyVerifiedRegularFile(source, target string, expected pinnedFileInfo) error {
+	if expected.FileInfo == nil || !expected.Mode().IsRegular() {
 		return fmt.Errorf("source is not an expected regular file: %s", source)
 	}
 
@@ -190,7 +210,7 @@ func copyVerifiedRegularFile(source, target string, expected fs.FileInfo) error 
 	if beforeOpen.Mode()&os.ModeSymlink != 0 || !beforeOpen.Mode().IsRegular() {
 		return fmt.Errorf("source changed to a non-regular file before copy: %s", source)
 	}
-	if !os.SameFile(expected, beforeOpen) {
+	if !os.SameFile(expected.FileInfo, beforeOpen) {
 		return fmt.Errorf("source identity changed before copy: %s", source)
 	}
 
@@ -206,6 +226,10 @@ func copyVerifiedRegularFile(source, target string, expected fs.FileInfo) error 
 	}
 	if !opened.Mode().IsRegular() || !os.SameFile(beforeOpen, opened) {
 		return fmt.Errorf("source identity changed while opening: %s", source)
+	}
+	// The handle identity is resolved eagerly, so this ties the bytes we read to the inspected file.
+	if !os.SameFile(expected.FileInfo, opened) {
+		return fmt.Errorf("source is not the file that was inspected: %s", source)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
