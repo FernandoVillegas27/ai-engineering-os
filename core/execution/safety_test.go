@@ -254,11 +254,16 @@ func TestCopyVerifiedRegularFileRejectsReplacementWithIdenticalContent(t *testin
 	}
 	expected := mustPin(t, source)
 
-	if err := os.Remove(source); err != nil {
+	// Keep the original alive: deleting it would let the OS reuse its inode or file index for the replacement.
+	if err := os.Rename(source, filepath.Join(root, "original.go")); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(source, []byte("same bytes"), 0o600); err != nil {
 		t.Fatal(err)
+	}
+	original := mustPin(t, filepath.Join(root, "original.go"))
+	if os.SameFile(original.FileInfo, mustPin(t, source).FileInfo) {
+		t.Fatal("test precondition: the replacement must have a distinct identity")
 	}
 
 	if err := copyVerifiedRegularFile(source, target, expected); err == nil {
