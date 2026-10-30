@@ -31,6 +31,9 @@ type Check struct {
 	Passed      bool
 	FailureKind FailureKind
 	Correctable bool
+	// Failures and FailureParse are filled only by verifiers with a structured parser.
+	Failures     []Failure
+	FailureParse ParseConfidence
 }
 
 type Report struct {
