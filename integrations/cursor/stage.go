@@ -59,6 +59,7 @@ func (r StageRuntime) Stage(ctx context.Context, unit execution.WorkUnit, p prop
 	if err != nil {
 		return staging.StageResult{}, err
 	}
+	preImage := staging.NewPreImage(before)
 
 	summary, err := runAgent(ctx, r.Config, workspace, "", stagePrompt(unit, p, view, declared))
 	if err != nil {
@@ -73,7 +74,7 @@ func (r StageRuntime) Stage(ctx context.Context, unit execution.WorkUnit, p prop
 	}
 
 	cleanup = false
-	return staging.StageResult{Workspace: workspace, Changes: actual, Summary: summary}, nil
+	return staging.StageResult{Workspace: workspace, Changes: actual, Summary: summary, PreImage: preImage}, nil
 }
 
 func validateDeclaredPreconditions(workspace string, declared []staging.WorkspaceChange) error {
