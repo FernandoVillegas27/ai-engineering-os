@@ -349,8 +349,7 @@ func TestVerifyParsesRealGoTestJSONOutput(t *testing.T) {
 	}
 	failureByID(t, check.Failures, "example.com/real/bad#TestFail")
 	failureByID(t, check.Failures, "example.com/real/bad#TestFail/sub")
-	// Go before 1.24 prints compile errors outside the JSON stream, so the class depends on the toolchain.
-	if oops := failureByID(t, check.Failures, "example.com/real/oops"); oops.Class != verification.FailureClassBuild && oops.Class != verification.FailureClassPackage {
+	if oops := failureByID(t, check.Failures, "example.com/real/oops"); oops.Class != verification.FailureClassBuild {
 		t.Fatalf("compile failure=%#v", oops)
 	}
 	for _, failure := range check.Failures {

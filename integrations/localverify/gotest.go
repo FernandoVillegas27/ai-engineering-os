@@ -29,6 +29,12 @@ type unitKey struct{ pkg, test string }
 // parseGoTestJSON understands a go test -json stream. roots are workspace paths
 // removed from signatures so identical failures match across different workspaces.
 func parseGoTestJSON(raw string, exitFailed bool, roots ...string) goTestParse {
+	return parseGoTestJSONWithStderr(raw, "", exitFailed, roots...)
+}
+
+// parseGoTestJSONWithStderr also accepts stderr. Go before 1.24 prints compile
+// errors there instead of in the JSON stream, so build-failure signatures need it.
+func parseGoTestJSONWithStderr(raw, stderr string, exitFailed bool, roots ...string) goTestParse {
 	var (
 		rendered     strings.Builder
 		outputs      = map[unitKey][]string{}
@@ -131,6 +137,8 @@ func parseGoTestJSON(raw string, exitFailed bool, roots ...string) goTestParse {
 	}
 
 	representedBuilds := map[string]bool{}
+	stderrSections := legacyBuildSections(stderr)
+	coarseBuild := false
 	for _, pkg := range failedPkgs {
 		if failedBuild := pkgBuild[pkg]; failedBuild != "" {
 			base := baseImportPath(failedBuild)
@@ -140,6 +148,22 @@ func parseGoTestJSON(raw string, exitFailed bool, roots ...string) goTestParse {
 				text = strings.Join(outputs[unitKey{pkg, ""}], "")
 			}
 			add(verification.Failure{ID: pkg, Class: verification.FailureClassBuild, Signature: verification.Signature(text, roots...)})
+			continue
+		}
+		if packageOutput := outputs[unitKey{pkg, ""}]; isLegacyBuildFailure(packageOutput) {
+			detail := stderr
+			if section, found := stderrSections[pkg]; found {
+				detail = section
+			}
+			if strings.TrimSpace(stderr) == "" {
+				// Without the compiler text the signature cannot tell two build errors apart.
+				coarseBuild = true
+			}
+			add(verification.Failure{
+				ID:        pkg,
+				Class:     verification.FailureClassBuild,
+				Signature: verification.Signature(strings.Join(packageOutput, "")+"\n"+detail, roots...),
+			})
 			continue
 		}
 		// A package line that only repeats failing tests adds no information.
@@ -170,7 +194,7 @@ func parseGoTestJSON(raw string, exitFailed bool, roots ...string) goTestParse {
 		ordered = append(ordered, failures[id])
 	}
 
-	incomplete := len(running) > 0
+	incomplete := len(running) > 0 || coarseBuild
 	for pkg := range started {
 		if !done[pkg] {
 			incomplete = true
@@ -193,6 +217,43 @@ func baseImportPath(value string) string {
 		return value[:index]
 	}
 	return value
+}
+
+// isLegacyBuildFailure recognizes the package summary go test prints when it could
+// not build or set up a package, without including the compiler errors.
+func isLegacyBuildFailure(outputs []string) bool {
+	for _, line := range strings.Split(strings.Join(outputs, ""), "\n") {
+		if strings.Contains(line, "[build failed]") || strings.Contains(line, "[setup failed]") {
+			return true
+		}
+	}
+	return false
+}
+
+// legacyBuildSections groups stderr by the "# import/path" headers the go command prints.
+func legacyBuildSections(stderr string) map[string]string {
+	sections := map[string]string{}
+	var current string
+	var text strings.Builder
+	flush := func() {
+		if current != "" {
+			sections[current] += text.String()
+		}
+		text.Reset()
+	}
+	for _, line := range strings.Split(strings.ReplaceAll(stderr, "\r\n", "\n"), "\n") {
+		if header, isHeader := strings.CutPrefix(line, "# "); isHeader {
+			flush()
+			current = baseImportPath(strings.TrimSpace(header))
+			text.WriteString(line + "\n")
+			continue
+		}
+		if current != "" {
+			text.WriteString(line + "\n")
+		}
+	}
+	flush()
+	return sections
 }
 
 func hasPanicLine(text string) bool {

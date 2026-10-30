@@ -103,7 +103,7 @@ func (r Runtime) Verify(ctx context.Context, workspace string) (verification.Rep
 		// Parse the complete stream before truncating anything for presentation.
 		var parsed goTestParse
 		if planned.goJSON {
-			parsed = parseGoTestJSON(stdout, runErr != nil, root, cacheRootFromEnv(env))
+			parsed = parseGoTestJSONWithStderr(stdout, stderr, runErr != nil, root, cacheRootFromEnv(env))
 			stdout = parsed.Rendered
 		}
 
