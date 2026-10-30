@@ -41,6 +41,10 @@ func (r StageRuntime) Stage(ctx context.Context, unit execution.WorkUnit, p prop
 	if strings.TrimSpace(unit.ProjectRoot) == "" {
 		return StageResult{}, fmt.Errorf("project root is required")
 	}
+	timeout, err := resolveRuntimeTimeout(r.Timeout)
+	if err != nil {
+		return StageResult{}, err
+	}
 
 	policy := execution.DefaultSafeViewPolicy()
 	declared, err := staging.ValidateDeclaredFiles(p.Files, policy)
@@ -110,10 +114,6 @@ func (r StageRuntime) Stage(ctx context.Context, unit execution.WorkUnit, p prop
 		Env:     safeRuntimeEnvironment(),
 	}
 
-	timeout := r.Timeout
-	if timeout <= 0 {
-		timeout = defaultRuntimeTimeout
-	}
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 

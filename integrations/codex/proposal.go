@@ -46,6 +46,10 @@ func (r ProposalRuntime) Propose(ctx context.Context, unit execution.WorkUnit) (
 	if strings.TrimSpace(unit.ProjectRoot) == "" {
 		return proposal.Proposal{}, fmt.Errorf("project root is required")
 	}
+	timeout, err := resolveRuntimeTimeout(r.Timeout)
+	if err != nil {
+		return proposal.Proposal{}, err
+	}
 
 	runner := r.Runner
 	if runner == nil {
@@ -110,10 +114,6 @@ func (r ProposalRuntime) Propose(ctx context.Context, unit execution.WorkUnit) (
 		Env:     safeRuntimeEnvironment(),
 	}
 
-	timeout := r.Timeout
-	if timeout <= 0 {
-		timeout = defaultRuntimeTimeout
-	}
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
