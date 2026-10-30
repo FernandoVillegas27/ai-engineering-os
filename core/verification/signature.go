@@ -3,7 +3,6 @@ package verification
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -31,7 +30,7 @@ func NormalizeOutput(output string, roots ...string) string {
 		if root == "" {
 			continue
 		}
-		variants = append(variants, root, filepath.ToSlash(root), strings.ReplaceAll(root, "/", `\`))
+		variants = append(variants, root, strings.ReplaceAll(root, `\`, "/"), strings.ReplaceAll(root, "/", `\`))
 	}
 	sort.Slice(variants, func(i, j int) bool { return len(variants[i]) > len(variants[j]) })
 	for _, variant := range variants {
