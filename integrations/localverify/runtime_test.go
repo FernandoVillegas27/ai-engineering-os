@@ -43,7 +43,7 @@ func TestVerifyRunsGoTests(t *testing.T) {
 	if string(report.Status) != "passed" || len(runner.invocations) != 1 {
 		t.Fatalf("report=%#v invocations=%d", report, len(runner.invocations))
 	}
-	if got := strings.Join(runner.invocations[0].Args, " "); got != "test ./..." {
+	if got := strings.Join(runner.invocations[0].Args, " "); got != "test -json ./..." {
 		t.Fatalf("args=%q", got)
 	}
 }

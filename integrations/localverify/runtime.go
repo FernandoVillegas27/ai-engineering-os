@@ -24,6 +24,8 @@ type plannedCheck struct {
 	name    string
 	command string
 	args    []string
+	// goJSON marks checks whose stdout is a go test -json event stream.
+	goJSON bool
 }
 
 func New() Runtime {
@@ -98,6 +100,13 @@ func (r Runtime) Verify(ctx context.Context, workspace string) (verification.Rep
 		duration := time.Since(started)
 		cancel()
 
+		// Parse the complete stream before truncating anything for presentation.
+		var parsed goTestParse
+		if planned.goJSON {
+			parsed = parseGoTestJSON(stdout, runErr != nil, root, cacheRootFromEnv(env))
+			stdout = parsed.Rendered
+		}
+
 		check := verification.Check{
 			Name:     planned.name,
 			Command:  append([]string{planned.command}, planned.args...),
@@ -105,6 +114,10 @@ func (r Runtime) Verify(ctx context.Context, workspace string) (verification.Rep
 			Stderr:   truncate(stderr),
 			Duration: duration,
 			Passed:   runErr == nil,
+		}
+		if planned.goJSON {
+			check.Failures = parsed.Failures
+			check.FailureParse = parsed.Confidence
 		}
 		if runErr != nil {
 			check.ExitCode = 1
@@ -130,7 +143,8 @@ func planChecks(root string) ([]plannedCheck, error) {
 		checks = append(checks, plannedCheck{
 			name:    "go-test",
 			command: "go",
-			args:    []string{"test", "./..."},
+			args:    []string{"test", "-json", "./..."},
+			goJSON:  true,
 		})
 	}
 
@@ -240,6 +254,15 @@ func prepareVerificationEnvironment(root string) ([]string, func(), error) {
 	env := safeVerificationEnvironment()
 	env = append(env, "GOCACHE="+goCache)
 	return env, cleanup, nil
+}
+
+func cacheRootFromEnv(env []string) string {
+	for _, entry := range env {
+		if value, ok := strings.CutPrefix(entry, "GOCACHE="); ok {
+			return filepath.Dir(value)
+		}
+	}
+	return ""
 }
 
 func fileExists(filename string) bool {
