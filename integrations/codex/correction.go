@@ -37,6 +37,10 @@ func (r CorrectionRuntime) Correct(ctx context.Context, request quality.Correcti
 	if len(request.AllowedFiles) == 0 {
 		return fmt.Errorf("correction allowed files are required")
 	}
+	timeout, err := resolveRuntimeTimeout(r.Timeout)
+	if err != nil {
+		return err
+	}
 
 	policy := execution.DefaultSafeViewPolicy()
 	allowed := map[string]bool{}
@@ -86,10 +90,6 @@ func (r CorrectionRuntime) Correct(ctx context.Context, request quality.Correcti
 		Env:     safeRuntimeEnvironment(),
 	}
 
-	timeout := r.Timeout
-	if timeout <= 0 {
-		timeout = defaultRuntimeTimeout
-	}
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 

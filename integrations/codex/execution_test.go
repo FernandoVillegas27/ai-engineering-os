@@ -196,12 +196,36 @@ func TestExecutionRuntimeTimesOut(t *testing.T) {
 	runtime := ExecutionRuntime{
 		Binary:  "codex",
 		Runner:  blockingExecutionRunner{},
-		Timeout: 20 * time.Millisecond,
+		Timeout: minimumRuntimeTimeout,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	_, err := runtime.Analyze(ctx, executionUnitFixture(root))
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("expected timeout error, got %v", err)
+	}
+}
+
+func TestExecutionRuntimeRejectsTimeoutBelowMinimum(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	runner := &executionFakeRunner{}
+	runtime := ExecutionRuntime{
+		Binary:  "codex",
+		Runner:  runner,
+		Timeout: minimumRuntimeTimeout - time.Nanosecond,
 	}
 
 	_, err := runtime.Analyze(context.Background(), executionUnitFixture(root))
-	if err == nil || !strings.Contains(err.Error(), "timed out") {
-		t.Fatalf("expected timeout error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "at least 5s") {
+		t.Fatalf("expected minimum timeout error, got %v", err)
+	}
+	if runner.invocation.Command != "" {
+		t.Fatal("runner must not be invoked for an invalid timeout")
 	}
 }
 
