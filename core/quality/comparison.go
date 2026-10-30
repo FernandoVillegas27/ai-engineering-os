@@ -35,6 +35,10 @@ type Comparison struct {
 	Resolved     []FailureRef
 	ChangedCause []ChangedFailure
 	Unclassified []Unclassified
+	// Blocking lists every compile failure present after the change. These are
+	// independent of the categories above: no tolerance policy may accept them,
+	// even when the same error already existed in the baseline.
+	Blocking []FailureRef
 }
 
 // Compare matches checks by name and failures by ID. Anything it cannot prove,
@@ -88,6 +92,18 @@ func Compare(baseline, after verification.Report) Comparison {
 			unclassify(fmt.Sprintf("baseline failure output is not fully understood (confidence %q)", before.FailureParse))
 		default:
 			compareFailures(name, before.Failures, now.Failures, &result)
+		}
+	}
+
+	for _, name := range ordered {
+		now, hasNow := next[name]
+		if !hasNow || now.Passed {
+			continue
+		}
+		for _, failure := range sortedFailures(now.Failures) {
+			if failure.Class == verification.FailureClassBuild {
+				result.Blocking = append(result.Blocking, FailureRef{Check: name, Failure: failure})
+			}
 		}
 	}
 	return result
