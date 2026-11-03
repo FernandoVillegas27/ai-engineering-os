@@ -80,6 +80,7 @@ func (r StageRuntime) Stage(ctx context.Context, unit execution.WorkUnit, p prop
 	if err != nil {
 		return StageResult{}, err
 	}
+	preImage := staging.NewPreImage(before)
 
 	runner := r.Runner
 	if runner == nil {
@@ -141,6 +142,7 @@ func (r StageRuntime) Stage(ctx context.Context, unit execution.WorkUnit, p prop
 		Workspace: workspace,
 		Changes:   actual,
 		Summary:   strings.TrimSpace(stdout),
+		PreImage:  preImage,
 	}, nil
 }
 
