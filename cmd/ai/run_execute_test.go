@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/FernandoVillegas27/ai-engineering-os/core/modelpolicy"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/scheduler"
 )
@@ -79,5 +80,39 @@ func TestSyncRunWorkUnitsUsesSchedulerTerminalState(t *testing.T) {
 		run.WorkUnits[1].Status != runstate.WorkUnitFailed ||
 		run.WorkUnits[2].Status != runstate.WorkUnitBlocked {
 		t.Fatalf("work units = %#v", run.WorkUnits)
+	}
+}
+
+
+func TestParseRunExecuteArgsMultiAgentWriteOptIn(t *testing.T) {
+	options, err := parseRunExecuteArgs([]string{
+		"./project",
+		"--task", "implement backend and frontend",
+		"--runtime", "cursor",
+		"--multi-agent-write",
+		"--model-policy", "auto",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !options.multiAgentWrite || options.runtime != "cursor" {
+		t.Fatalf("options = %#v", options)
+	}
+	if options.modelPolicy != modelpolicy.PolicyAuto {
+		t.Fatalf("model policy = %s", options.modelPolicy)
+	}
+}
+
+func TestParseRunExecuteArgsMultiAgentWriteRequiresExplicitCompatibleMode(t *testing.T) {
+	cases := [][]string{
+		{"--task", "x", "--dry-run", "--multi-agent-write"},
+		{"--task", "x", "--runtime", "unknown", "--multi-agent-write"},
+		{"--task", "x", "--runtime", "cursor"},
+		{"--task", "x", "--runtime", "auto"},
+	}
+	for _, args := range cases {
+		if _, err := parseRunExecuteArgs(args); err == nil {
+			t.Fatalf("expected error for %#v", args)
+		}
 	}
 }
