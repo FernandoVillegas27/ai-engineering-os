@@ -47,10 +47,25 @@ Temporary validation views are created outside the original project and removed 
 
 Errors expose relative paths only where useful and scrub workspace locations from wrapped inspection errors.
 
-## P3b
+## P3b — approval-gated apply
 
-The next promotion phase may apply a validated plan.
+P3b adds a conservative apply path.
 
-P3b must re-check all invariants immediately before mutation and must define rollback/atomicity semantics before writing to the original tree.
+It:
 
-No automatic commit or push is part of the promotion boundary.
+- requires explicit `Approved=true`;
+- re-runs the complete dry-run validation immediately before mutation;
+- verifies each original target still matches its pre-image hash before touching it;
+- prepares rollback copies before the first write;
+- verifies staged source file identity while copying;
+- applies only the already-validated create/modify/delete scope;
+- rolls back already-applied changes when a later operation fails;
+- verifies the final sanitized original view matches the staged workspace;
+- removes rollback storage after success or successful rollback;
+- retains rollback storage if rollback itself fails.
+
+The initial apply implementation deliberately does **not** create new directory trees. A newly created file may only be promoted into an already-existing, symlink-free directory. This keeps the first mutation boundary conservative and makes rollback semantics explicit.
+
+The apply boundary still does not commit or push.
+
+Future work may add directory creation only with its own rollback manifest and stronger platform-specific path/open primitives.
