@@ -187,6 +187,11 @@ func runRunExecute(args []string) error {
 		inner := coordinator.ExecutionWorker{
 			Executor: executor,
 			Units:    unitByID,
+			ContextProvider: collaboration.InboxContextProvider{
+				RunID:         run.ID,
+				MessageBus:    messageBus,
+				ArtifactStore: artifactStore,
+			},
 		}
 		workers[unit.AgentID] = collaboration.HandoffWorker{
 			Inner:         inner,
