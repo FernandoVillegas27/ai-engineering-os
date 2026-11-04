@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/artifact"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/collaboration"
@@ -47,7 +48,7 @@ func (s mutationTaskEventSink) Record(ctx context.Context, input coordinator.Eve
 		Data: map[string]any{
 			"phase": "pre-stage-collaboration",
 		},
-	}, timeNowUTC())
+	}, time.Now().UTC())
 	if err != nil {
 		return err
 	}
@@ -64,7 +65,7 @@ func (s mutationTaskEventSink) Record(ctx context.Context, input coordinator.Eve
 				Summary:      ref,
 				ArtifactRefs: []string{ref},
 				Data: map[string]any{"phase": "pre-stage-collaboration"},
-			}, timeNowUTC())
+			}, time.Now().UTC())
 			if err != nil {
 				return err
 			}
@@ -81,7 +82,7 @@ func (s mutationTaskEventSink) Record(ctx context.Context, input coordinator.Eve
 				Summary:     ref,
 				MessageRefs: []string{ref},
 				Data: map[string]any{"phase": "pre-stage-collaboration"},
-			}, timeNowUTC())
+			}, time.Now().UTC())
 			if err != nil {
 				return err
 			}
