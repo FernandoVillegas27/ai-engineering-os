@@ -66,3 +66,46 @@ func TestRunCoordinatorSinkSeedsTaskGraphBeforeLifecycleEvents(t *testing.T) {
 		t.Fatalf("frontend = %#v", state.Agents["frontend-engineer"])
 	}
 }
+
+
+func TestRunCoordinatorSinkProjectsArtifactAndMessageReferences(t *testing.T) {
+	store, err := NewEventStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sink := &RunCoordinatorSink{
+		RunID: "run-refs",
+		Store: store,
+		Tasks: []scheduler.Task{
+			{ID: "architect", AgentID: "architect"},
+		},
+	}
+	if err := sink.Record(context.Background(), coordinator.Event{Type: coordinator.EventRunStarted}); err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.Record(context.Background(), coordinator.Event{
+		Type:         coordinator.EventTaskCompleted,
+		TaskID:       "architect",
+		AgentID:      "architect",
+		Summary:      "done",
+		ArtifactRefs: []string{"artifact-11111111111111111111111111111111"},
+		MessageRefs:  []string{"message-22222222222222222222222222222222"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.Record(context.Background(), coordinator.Event{Type: coordinator.EventRunCompleted}); err != nil {
+		t.Fatal(err)
+	}
+
+	events, err := store.List("run-refs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := Project(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.ArtifactCount != 1 || state.MessageCount != 1 {
+		t.Fatalf("state = %#v", state)
+	}
+}
