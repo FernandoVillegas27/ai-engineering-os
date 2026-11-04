@@ -264,3 +264,10 @@ The projected state also exposes deterministic graph edges:
 This lets visual clients render the real task/agent DAG and highlight mutation-scope conflicts without reconstructing scheduling rules from prose or model output.
 
 The graph is sourced from the scheduler tasks recorded at run initialization.
+
+
+## Event-store append-lock crash recovery
+
+Control Plane event append uses the same ownership-aware filesystem lock as the message bus.
+
+A process crash can therefore leave an old lock file without permanently freezing event ingestion. Stale recovery is age-bounded, symlink-safe, cancellation-aware, and release checks the ownership token before removing the lock.
