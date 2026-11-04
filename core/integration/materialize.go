@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -83,7 +84,22 @@ func Materialize(
 		if sourceWorkspace.PreImage.Digest() != plan.PreImageDigest {
 			return IntegratedWorkspace{}, fmt.Errorf("task workspace %s pre-image changed", change.TaskID)
 		}
-		if err := applyPlannedChange(sourceWorkspace.Root, dir, change, policy); err != nil {
+		var expectedSource [32]byte
+		hasExpectedSource := false
+		if change.Action == "create" || change.Action == "modify" {
+			expectedSource, hasExpectedSource = plan.expectedSourceHash(change.TaskID, change.Path)
+			if !hasExpectedSource {
+				return IntegratedWorkspace{}, fmt.Errorf("integration plan has no frozen source hash for %s from task %s", change.Path, change.TaskID)
+			}
+		}
+		if err := applyPlannedChange(
+			sourceWorkspace.Root,
+			dir,
+			change,
+			policy,
+			expectedSource,
+			hasExpectedSource,
+		); err != nil {
 			return IntegratedWorkspace{}, fmt.Errorf("apply %s from task %s: %w", change.Path, change.TaskID, err)
 		}
 	}
@@ -195,7 +211,13 @@ func declares(values []staging.WorkspaceChange, path, action string) bool {
 	return false
 }
 
-func applyPlannedChange(sourceRoot, targetRoot string, change PlannedChange, policy execution.SafeViewPolicy) error {
+func applyPlannedChange(
+	sourceRoot, targetRoot string,
+	change PlannedChange,
+	policy execution.SafeViewPolicy,
+	expectedSource [32]byte,
+	hasExpectedSource bool,
+) error {
 	clean, err := staging.ValidateWorkspacePath(change.Path, policy)
 	if err != nil {
 		return err
@@ -216,12 +238,18 @@ func applyPlannedChange(sourceRoot, targetRoot string, change PlannedChange, pol
 		if err := ensureParent(targetRoot, clean); err != nil {
 			return err
 		}
-		return copyRegular(source, target, true)
+		if !hasExpectedSource {
+			return errors.New("create source hash is required")
+		}
+		return copyRegular(source, target, true, expectedSource)
 	case "modify":
 		if err := validateRegularTarget(target); err != nil {
 			return err
 		}
-		return replaceRegular(source, target)
+		if !hasExpectedSource {
+			return errors.New("modify source hash is required")
+		}
+		return replaceRegular(source, target, expectedSource)
 	case "delete":
 		if err := validateRegularTarget(target); err != nil {
 			return err
@@ -265,7 +293,7 @@ func ensureParent(root, relative string) error {
 	return nil
 }
 
-func copyRegular(source, target string, exclusive bool) error {
+func copyRegular(source, target string, exclusive bool, expected [32]byte) error {
 	input, opened, err := openPinnedRegular(source)
 	if err != nil {
 		return err
@@ -281,7 +309,8 @@ func copyRegular(source, target string, exclusive bool) error {
 		return err
 	}
 
-	_, copyErr := io.Copy(output, input)
+	hash := sha256.New()
+	_, copyErr := io.Copy(io.MultiWriter(output, hash), input)
 	closeErr := output.Close()
 	if copyErr != nil {
 		_ = os.Remove(target)
@@ -290,6 +319,12 @@ func copyRegular(source, target string, exclusive bool) error {
 	if closeErr != nil {
 		_ = os.Remove(target)
 		return closeErr
+	}
+	var actual [32]byte
+	copy(actual[:], hash.Sum(nil))
+	if actual != expected {
+		_ = os.Remove(target)
+		return errors.New("task workspace source changed after inspection")
 	}
 	after, err := input.Stat()
 	if err != nil {
@@ -303,7 +338,7 @@ func copyRegular(source, target string, exclusive bool) error {
 	return nil
 }
 
-func replaceRegular(source, target string) error {
+func replaceRegular(source, target string, expected [32]byte) error {
 	temp, err := os.CreateTemp(filepath.Dir(target), ".ai-engineering-os-integrate-*")
 	if err != nil {
 		return err
@@ -313,7 +348,7 @@ func replaceRegular(source, target string) error {
 	_ = os.Remove(tempPath)
 	defer os.Remove(tempPath)
 
-	if err := copyRegular(source, tempPath, true); err != nil {
+	if err := copyRegular(source, tempPath, true, expected); err != nil {
 		return err
 	}
 	if err := os.Remove(target); err != nil {
