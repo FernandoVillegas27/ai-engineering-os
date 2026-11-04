@@ -205,3 +205,20 @@ Agent A executes
 ~~~
 
 The context remains provider-independent at the core layer. Provider adapters decide how to render the bounded field while preserving its untrusted status.
+
+
+## Append-lock crash recovery
+
+Message persistence now uses a shared ownership-aware filesystem lock.
+
+The lock:
+
+- uses an exclusive create operation;
+- records a random ownership token;
+- honors context cancellation while waiting;
+- treats a lock as stale only after a conservative age threshold;
+- rechecks the stale file immediately before removal;
+- rejects symlink/non-regular lock paths;
+- releases a lock only when the ownership token still matches.
+
+This prevents a crashed process from blocking a run's message bus indefinitely while avoiding deletion of a lock that has already been replaced by another owner.
