@@ -96,6 +96,7 @@ type State struct {
 	MessageCount     int                   `json:"message_count"`
 	ArtifactCount    int                   `json:"artifact_count"`
 	PendingApprovals int                   `json:"pending_approvals"`
+	CancelRequested  bool                  `json:"cancel_requested"`
 	Runtime          string                `json:"runtime,omitempty"`
 	Model            string                `json:"model,omitempty"`
 }
@@ -137,8 +138,11 @@ func Project(events []Event) (State, error) {
 			state.Status = RunPaused
 		case EventRunCompleted:
 			state.Status = RunCompleted
+		case EventRunCancelRequested:
+			state.CancelRequested = true
 		case EventRunCancelled:
 			state.Status = RunCancelled
+			state.CancelRequested = false
 		case EventTaskCreated:
 			if _, exists := state.Tasks[event.TaskID]; exists {
 				return State{}, fmt.Errorf("task %s already exists", event.TaskID)
