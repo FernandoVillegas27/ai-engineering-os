@@ -72,3 +72,42 @@ Promotion candidate storage resolves in this order:
 Persisting or inspecting a candidate never calls `promotion.Apply`.
 
 A later explicit approval command can load this record and call the existing approval-gated apply boundary.
+
+
+## Explicit apply
+
+A persisted candidate can be applied only through an explicit approval command:
+
+~~~text
+ai run promote <run-id> --approve
+~~~
+
+Optional storage overrides:
+
+~~~text
+--promotion-dir <path>
+--state-dir <path>
+--events-dir <path>
+--json
+~~~
+
+The command performs a fresh `promotion.DryRun` before calling `promotion.Apply`.
+
+Therefore a candidate that became stale because the original project or integrated workspace changed is rejected before application.
+
+The existing promotion layer still provides:
+
+- explicit approval enforcement;
+- per-file state revalidation;
+- rollback storage;
+- rollback on apply failure;
+- final original-vs-staged verification.
+
+After successful application:
+
+- the durable run records a granted `promotion` approval;
+- the Control Plane records `approval.granted`;
+- the persisted candidate remains as immutable audit evidence;
+- no Git commit or push occurs automatically.
+
+A successful coordinated mutating run now emits `run.completed` once the promotion candidate is ready. Promotion approval may be audited after that terminal event, but task/verification execution cannot resume implicitly.
