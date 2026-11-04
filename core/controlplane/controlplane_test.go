@@ -287,3 +287,50 @@ func TestEventStoreReclaimsStaleAppendLock(t *testing.T) {
 		t.Fatalf("events = %#v", events)
 	}
 }
+
+
+func TestProjectorAllowsPromotionApprovalAfterRunCompleted(t *testing.T) {
+	now := time.Now().UTC()
+	types := []EventType{
+		EventRunStarted,
+		EventApprovalRequested,
+		EventRunCompleted,
+		EventApprovalGranted,
+	}
+	events := make([]Event, 0, len(types))
+	for i, typ := range types {
+		value, err := NewEvent(NewEventRequest{
+			RunID: "run-post-approval",
+			Type:  typ,
+			Data:  map[string]bool{"ok": true},
+		}, now.Add(time.Duration(i)*time.Second))
+		if err != nil {
+			t.Fatal(err)
+		}
+		value.Sequence = uint64(i + 1)
+		events = append(events, value)
+	}
+	state, err := Project(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Status != RunCompleted || state.PendingApprovals != 0 {
+		t.Fatalf("state = %#v", state)
+	}
+}
+
+func TestProjectorStillRejectsTaskMutationAfterRunCompleted(t *testing.T) {
+	now := time.Now().UTC()
+	started, _ := NewEvent(NewEventRequest{RunID: "run-terminal", Type: EventRunStarted, Data: map[string]bool{}}, now)
+	completed, _ := NewEvent(NewEventRequest{RunID: "run-terminal", Type: EventRunCompleted, Data: map[string]bool{}}, now.Add(time.Second))
+	task, _ := NewEvent(NewEventRequest{
+		RunID: "run-terminal", Type: EventTaskStarted, TaskID: "late", AgentID: "backend-engineer",
+		Data: map[string]bool{},
+	}, now.Add(2*time.Second))
+	started.Sequence = 1
+	completed.Sequence = 2
+	task.Sequence = 3
+	if _, err := Project([]Event{started, completed, task}); err == nil {
+		t.Fatal("expected post-terminal task rejection")
+	}
+}
