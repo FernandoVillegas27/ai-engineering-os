@@ -21,10 +21,13 @@ type Kind string
 const (
 	KindPreImageMissing    Kind = "pre-image-missing"
 	KindQualityNotPassed   Kind = "quality-not-passed"
+	KindApprovalRequired   Kind = "approval-required"
 	KindUnsafeConfig       Kind = "unsafe-configuration"
 	KindOriginalChanged    Kind = "original-changed"
 	KindStagedInvalid      Kind = "staged-invalid-workspace"
 	KindUnauthorizedChange Kind = "unauthorized-change"
+	KindApplyFailed        Kind = "apply-failed"
+	KindRollbackFailed     Kind = "rollback-failed"
 )
 
 var ErrPromotion = errors.New("promotion validation failed")
