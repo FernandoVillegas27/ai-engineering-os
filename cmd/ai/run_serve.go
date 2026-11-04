@@ -9,12 +9,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FernandoVillegas27/ai-engineering-os/core/artifact"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/controlplane"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/message"
 )
 
 type runServeOptions struct {
-	addr      string
-	eventsDir string
+	addr         string
+	eventsDir    string
+	artifactsDir string
+	messagesDir  string
 }
 
 func runRunServe(args []string) error {
@@ -29,10 +33,30 @@ func runRunServe(args []string) error {
 	if err != nil {
 		return err
 	}
+	artifactsRoot, err := resolveRunAuxDir(options.artifactsDir, "AI_ENGINEERING_OS_ARTIFACTS_DIR", "artifacts")
+	if err != nil {
+		return err
+	}
+	artifactStore, err := artifact.NewStore(artifactsRoot)
+	if err != nil {
+		return err
+	}
+	messagesRoot, err := resolveRunAuxDir(options.messagesDir, "AI_ENGINEERING_OS_MESSAGES_DIR", "messages")
+	if err != nil {
+		return err
+	}
+	messageBus, err := message.NewBus(messagesRoot)
+	if err != nil {
+		return err
+	}
 
 	server := &http.Server{
-		Addr:              options.addr,
-		Handler:           (controlplane.HTTPServer{Store: store}).Handler(),
+		Addr: options.addr,
+		Handler: (controlplane.HTTPServer{
+			Store:     store,
+			Artifacts: artifactStore,
+			Messages:  messageBus,
+		}).Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -42,6 +66,8 @@ func runRunServe(args []string) error {
 	fmt.Println("  GET /runs/<run-id>/state")
 	fmt.Println("  GET /runs/<run-id>/events")
 	fmt.Println("  GET /runs/<run-id>/stream?after=<sequence>")
+	fmt.Println("  GET /runs/<run-id>/messages")
+	fmt.Println("  GET /runs/<run-id>/artifacts")
 	fmt.Println("Binding is restricted to loopback in this version.")
 
 	err = server.ListenAndServe()
@@ -67,8 +93,20 @@ func parseRunServeArgs(args []string) (runServeOptions, error) {
 			}
 			i++
 			options.eventsDir = args[i]
+		case "--artifacts-dir":
+			if i+1 >= len(args) {
+				return runServeOptions{}, fmt.Errorf("--artifacts-dir requiere una ruta")
+			}
+			i++
+			options.artifactsDir = args[i]
+		case "--messages-dir":
+			if i+1 >= len(args) {
+				return runServeOptions{}, fmt.Errorf("--messages-dir requiere una ruta")
+			}
+			i++
+			options.messagesDir = args[i]
 		case "-h", "--help":
-			return runServeOptions{}, fmt.Errorf("uso: ai run serve [--addr 127.0.0.1:8765] [--events-dir ruta]")
+			return runServeOptions{}, fmt.Errorf("uso: ai run serve [--addr 127.0.0.1:8765] [--events-dir ruta] [--artifacts-dir ruta] [--messages-dir ruta]")
 		default:
 			return runServeOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
 		}
