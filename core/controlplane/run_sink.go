@@ -56,7 +56,22 @@ func (s *RunCoordinatorSink) Record(ctx context.Context, input coordinator.Event
 	if err != nil {
 		return err
 	}
-	return s.append(ctx, eventType, input.TaskID, input.AgentID, input.Summary, input.ArtifactRefs, input.MessageRefs, now)
+	if err := s.append(ctx, eventType, input.TaskID, input.AgentID, input.Summary, input.ArtifactRefs, input.MessageRefs, now); err != nil {
+		return err
+	}
+	if input.Type == coordinator.EventTaskCompleted || input.Type == coordinator.EventTaskFailed {
+		for _, ref := range input.ArtifactRefs {
+			if err := s.append(ctx, EventArtifactCreated, input.TaskID, input.AgentID, ref, []string{ref}, nil, now); err != nil {
+				return err
+			}
+		}
+		for _, ref := range input.MessageRefs {
+			if err := s.append(ctx, EventAgentMessageSent, input.TaskID, input.AgentID, ref, nil, []string{ref}, now); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (s *RunCoordinatorSink) append(
