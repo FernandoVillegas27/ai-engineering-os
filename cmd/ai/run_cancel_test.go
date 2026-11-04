@@ -180,7 +180,18 @@ func TestRunCancelRejectsMismatchedEventsDirectory(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected mismatched events directory rejection")
 	}
-	// The durable request may exist, but no invalid event stream may be created.
+	controlStore, openErr := runcontrol.NewStore(base + "/control")
+	if openErr != nil {
+		t.Fatal(openErr)
+	}
+	requested, requestErr := controlStore.CancelRequested(run.ID)
+	if requestErr != nil {
+		t.Fatal(requestErr)
+	}
+	if requested {
+		t.Fatal("cancel request was persisted before event-stream validation")
+	}
+
 	eventStore, openErr := controlplane.NewEventStore(base + "/wrong-events")
 	if openErr != nil {
 		t.Fatal(openErr)
