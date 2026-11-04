@@ -17,6 +17,7 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/promotion"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/promotioncandidate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/proposal"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/runcontrol"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/staging"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/taskgraph"
@@ -116,6 +117,19 @@ func runCoordinatedMutation(
 		return err
 	}
 
+	controlStore, err := openRunControlStore(options.controlDir)
+	if err != nil {
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
+		return err
+	}
+	runCtx, stopWatcher, err := runcontrol.WithCancellationWatcher(ctx, controlStore, run.ID, 250*time.Millisecond)
+	if err != nil {
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
+		return err
+	}
+	defer stopWatcher()
+	ctx = runCtx
+
 	emit := func(kind controlplane.EventType, taskID, agentID, summary string) error {
 		event, eventErr := controlplane.NewEvent(controlplane.NewEventRequest{
 			RunID:   run.ID,
@@ -163,7 +177,7 @@ func runCoordinatedMutation(
 		routing,
 	)
 	if err != nil {
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return err
 	}
 
@@ -174,12 +188,12 @@ func runCoordinatedMutation(
 		MaxConcurrency: options.maxConcurrency,
 	})
 	if err != nil {
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return fmt.Errorf("freeze mutating proposals: %w", err)
 	}
 	for _, item := range frozen {
 		if err := emit(controlplane.EventArtifactCreated, item.TaskID, item.AgentID, "proposal ownership frozen"); err != nil {
-			_ = failMutationRun(runStore, &run)
+			_ = abortMutationRun(ctx, runStore, eventStore, &run)
 			return err
 		}
 	}
@@ -192,25 +206,25 @@ func runCoordinatedMutation(
 	})
 	defer cleanupMutationStages(staged)
 	if err != nil {
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return fmt.Errorf("stage frozen proposals: %w", err)
 	}
 	for _, workspace := range staged.Workspaces {
 		if err := emit(controlplane.EventTaskCompleted, workspace.TaskID, workspace.AgentID, "isolated task staging completed"); err != nil {
-			_ = failMutationRun(runStore, &run)
+			_ = abortMutationRun(ctx, runStore, eventStore, &run)
 			return err
 		}
 	}
 
 	integrationPlan, err := integration.Build(staged.Workspaces, staged.Inspections)
 	if err != nil {
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return fmt.Errorf("build integration plan: %w", err)
 	}
 
 	integrationParent, err := resolveMutationIntegrationParent(root)
 	if err != nil {
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return err
 	}
 	integrated, err := integration.Materialize(ctx, integration.MaterializeConfig{
@@ -218,7 +232,7 @@ func runCoordinatedMutation(
 		Parent:       integrationParent,
 	}, integrationPlan, staged.Workspaces)
 	if err != nil {
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return fmt.Errorf("materialize integrated workspace: %w", err)
 	}
 	keepIntegrated := false
@@ -229,18 +243,18 @@ func runCoordinatedMutation(
 	}()
 
 	if err := emit(controlplane.EventVerificationStarted, "", "", "run-wide integration quality started"); err != nil {
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return err
 	}
 
 	reviewer, _, err := reviewRuntimeFor(options.runtime, routing, false)
 	if err != nil {
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return err
 	}
 	corrector, _, err := correctorFor(options.runtime, routing, false)
 	if err != nil {
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return err
 	}
 
@@ -257,35 +271,35 @@ func runCoordinatedMutation(
 	})
 	if qualityErr != nil {
 		_ = emit(controlplane.EventVerificationFailed, "", "", qualityErr.Error())
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return fmt.Errorf("run-wide integration quality: %w", qualityErr)
 	}
 	if !gate.Promotable {
 		_ = emit(controlplane.EventVerificationFailed, "", "", string(gate.Quality.Reason))
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return fmt.Errorf("integrated result is not promotable: %s", gate.Quality.Reason)
 	}
 	if err := emit(controlplane.EventVerificationPassed, "", "", "run-wide integration quality passed"); err != nil {
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return err
 	}
 	if err := emit(controlplane.EventReviewApproved, "", "", "integrated result approved by independent review"); err != nil {
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return err
 	}
 
 	candidate, err := integration.BuildPromotionCandidate(root, integrated, gate, integrationParent)
 	if err != nil {
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return err
 	}
 	promotionPlan, err := promotion.DryRun(ctx, candidate.Request)
 	if err != nil {
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return fmt.Errorf("promotion dry-run: %w", err)
 	}
 	if !promotionPlan.Ready {
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return fmt.Errorf("promotion dry-run did not produce a ready plan")
 	}
 
@@ -295,26 +309,26 @@ func runCoordinatedMutation(
 		"promotion-candidates",
 	)
 	if err != nil {
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return err
 	}
 	candidateStore, err := promotioncandidate.NewStore(candidateRoot)
 	if err != nil {
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return err
 	}
 	record, err := promotioncandidate.New(run.ID, candidate.Request, time.Now().UTC())
 	if err != nil {
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return err
 	}
 	if err := candidateStore.Save(record); err != nil {
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return fmt.Errorf("persist promotion candidate: %w", err)
 	}
 
 	if err := emit(controlplane.EventApprovalRequested, "", "", "explicit promotion approval required"); err != nil {
-		_ = failMutationRun(runStore, &run)
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return err
 	}
 
@@ -386,6 +400,40 @@ func resolveMutationIntegrationParent(root string) (string, error) {
 		return "", fmt.Errorf("integration parent is unavailable")
 	}
 	return parent, nil
+}
+
+func abortMutationRun(ctx context.Context, store *runstate.Store, eventStore *controlplane.EventStore, run *runstate.Run) error {
+	if ctx != nil && ctx.Err() != nil {
+		for index := range run.WorkUnits {
+			if run.WorkUnits[index].Status != runstate.WorkUnitCompleted {
+				run.WorkUnits[index].Status = runstate.WorkUnitCancelled
+			}
+		}
+		if run.Status != runstate.StatusCancelled {
+			if err := runstate.Transition(run, runstate.StatusCancelled, time.Now().UTC()); err != nil {
+				return err
+			}
+		}
+		if err := store.Save(*run); err != nil {
+			return err
+		}
+		if eventStore != nil {
+			event, err := controlplane.NewEvent(controlplane.NewEventRequest{
+				RunID:   run.ID,
+				Type:    controlplane.EventRunCancelled,
+				Summary: "run cancelled by durable control request",
+				Data:    map[string]any{"source": "run-control"},
+			}, time.Now().UTC())
+			if err != nil {
+				return err
+			}
+			if _, err := eventStore.Append(context.Background(), event); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return failMutationRun(store, run)
 }
 
 func failMutationRun(store *runstate.Store, run *runstate.Run) error {
