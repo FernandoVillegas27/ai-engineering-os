@@ -247,3 +247,43 @@ func TestAppendLockHonorsContextCancellation(t *testing.T) {
 		t.Fatalf("err = %#v", err)
 	}
 }
+
+
+func TestEventStoreReclaimsStaleAppendLock(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewEventStore(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runDir, err := store.ensureRunDir("run-stale")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(runDir, ".append.lock")
+	if err := os.WriteFile(lockPath, []byte("stale\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-10 * time.Minute)
+	if err := os.Chtimes(lockPath, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	value, err := NewEvent(NewEventRequest{
+		RunID: "run-stale",
+		Type:  EventRunStarted,
+		Data:  map[string]bool{"ok": true},
+	}, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Append(context.Background(), value); err != nil {
+		t.Fatal(err)
+	}
+	events, err := store.List("run-stale")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("events = %#v", events)
+	}
+}
