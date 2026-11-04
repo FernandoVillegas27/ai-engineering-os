@@ -2091,7 +2091,13 @@ At this checkpoint, `master` still has P2a as the latest functional merged miles
 | #88 | deterministic multi-workspace integration plan | CI passed |
 | #89 | isolated integration workspace materialization + frozen-result TOCTOU protection | CI passed |
 | #90 | run-wide baseline-aware integration Quality Gate | CI passed |
-| #91 | bridge promotable integration to explicit promotion boundary | CI pending |
+| #91 | bridge promotable integration to explicit promotion boundary | CI passed |
+| #92 | Proposal Freeze before mutating stage | CI passed |
+| #93 | frozen-proposal StageRuntime adapter + filesystem reinspection | CI passed |
+| #94 | explicit `ai run execute --multi-agent-write` safe mutation pipeline | CI passed |
+| #95 | persisted promotion candidates + `ai run promotion` inspection | CI passed |
+| #96 | explicit `ai run promote --approve` apply + audit | CI passed |
+| #97 | registry-derived source-writer role selection | CI pending |
 
 Review/merge order must remain:
 
@@ -2099,13 +2105,14 @@ Review/merge order must remain:
 #66 -> #67 -> #68 -> #69 -> #70 -> #71 -> #72 -> #73 -> #74
 -> #75 -> #76 -> #77 -> #78 -> #79 -> #80 -> #81 -> #82
 -> #83 -> #84 -> #85 -> #86 -> #87 -> #88 -> #89 -> #90 -> #91
+-> #92 -> #93 -> #94 -> #95 -> #96 -> #97
 ~~~
 
 Do not merge later PRs before their stacked bases unless the branch is deliberately rebased and the resulting diff is revalidated.
 
 ## Functional capability reached by the open stack
 
-If the stack through #90 is validated and merged, AI Engineering OS has both the first complete read-only multi-agent collaboration path and the safety pipeline required before write-capable coordination is enabled:
+If the stack through #96 is validated and merged, AI Engineering OS has the first complete read-only multi-agent collaboration path plus an explicit, approval-gated coordinated mutation path:
 
 ~~~text
 user task
@@ -2159,21 +2166,43 @@ per-task isolated writable workspace
 
 ## Current safety boundary
 
-The main coordinated command remains **read-only**.
+The default coordinated command remains read-only.
 
-The components needed for safe multi-agent writes now exist through #91, but write-capable stage runtimes are not yet wired into `ai run execute`.
+Write-capable coordination exists only behind the explicit flag:
 
-That wiring must remain opt-in and must route every mutating task through the isolated task/integration/Quality pipeline above.
+~~~text
+ai run execute <project> --task "..." --runtime auto|codex|cursor --multi-agent-write
+~~~
 
-Promotion remains a separate explicit approval boundary.
+That path:
+
+- freezes proposals before staging;
+- rejects exact ownership conflicts;
+- stages each source-writer agent in an isolated workspace;
+- reinspects the filesystem instead of trusting provider-reported changes;
+- freezes post-stage ResultImages;
+- integrates only disjoint validated changes;
+- runs run-wide baseline-aware Quality;
+- persists a promotion candidate;
+- requires a separate `ai run promote <run-id> --approve` command before touching the original project.
+
+#97 additionally restricts Stage to registry-derived `source_code: write` agents. QA's tests-only write permission is not broadened into source writes.
+
+### Known collaboration limitation in the mutation path
+
+The read-only collaboration path already supports Architect/Researcher handoffs and bounded receiver inbox context.
+
+The current write opt-in selects only source-writer units for Proposal Freeze/Stage. It does not yet execute an upstream read-only Architect/Researcher phase and feed those artifacts into mutating agents before proposals are frozen.
+
+This is intentional and must be added as a deterministic pre-stage collaboration phase rather than by allowing read-only roles to mutate.
 
 ## Recommended next implementation after this stack
 
-After #91 is green and the stack is reviewed, the next high-value milestones are:
+After #97 is green and the stack is reviewed, the next high-value milestones are:
 
-1. adapt existing Cursor/Codex stage runtimes to the coordinated mutating-task pipeline behind an explicit opt-in policy;
-2. generate/freeze proposals before mutating task execution so exact file ownership is known before integration;
-3. persist integration/quality/promotion lifecycle events in the Control Plane;
+1. add a read-only pre-stage collaboration phase (Researcher/Architect -> typed artifacts/handoffs -> mutating agents);
+2. add typed file-kind ownership so QA `tests: write` can be enforced without source-write escalation;
+3. persist richer integration/proposal/stage lifecycle details in the Control Plane;
 4. add Control Plane snapshots/compaction for long runs;
 5. wire real pause/resume/cancel/retry human controls into active coordinator executions;
 6. add dedicated typed schemas for remaining high-value artifacts/handoffs;
