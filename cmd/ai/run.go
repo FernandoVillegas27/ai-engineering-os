@@ -7,18 +7,21 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"sort"
 
+	"github.com/FernandoVillegas27/ai-engineering-os/core/controlplane"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
 )
 
 type runCommandOptions struct {
-	stateDir string
-	json     bool
+	stateDir  string
+	eventsDir string
+	json      bool
 }
 
 func runRun(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("uso: ai run <init|status|list|transition> ...")
+		return fmt.Errorf("uso: ai run <init|status|list|transition|control|events> ...")
 	}
 	switch args[0] {
 	case "init":
@@ -29,6 +32,10 @@ func runRun(args []string) error {
 		return runRunList(args[1:])
 	case "transition":
 		return runRunTransition(args[1:])
+	case "control":
+		return runRunControl(args[1:])
+	case "events":
+		return runRunEvents(args[1:])
 	default:
 		return fmt.Errorf("subcomando run desconocido: %s", args[0])
 	}
@@ -235,6 +242,201 @@ func runRunTransition(args []string) error {
 	return printRunRecord(run, options.json)
 }
 
+func runRunControl(args []string) error {
+	options := runCommandOptions{}
+	id, err := parseControlPlaneArgs(args, &options)
+	if err != nil {
+		return err
+	}
+	store, err := openControlPlaneStore(options.eventsDir)
+	if err != nil {
+		return err
+	}
+	events, err := store.List(id)
+	if err != nil {
+		return err
+	}
+	if len(events) == 0 {
+		return fmt.Errorf("no control-plane events found for run %s", id)
+	}
+	state, err := controlplane.Project(events)
+	if err != nil {
+		return err
+	}
+	if options.json {
+		return printJSON(state)
+	}
+	printControlPlaneState(state)
+	return nil
+}
+
+func runRunEvents(args []string) error {
+	options := runCommandOptions{}
+	id, err := parseControlPlaneArgs(args, &options)
+	if err != nil {
+		return err
+	}
+	store, err := openControlPlaneStore(options.eventsDir)
+	if err != nil {
+		return err
+	}
+	events, err := store.List(id)
+	if err != nil {
+		return err
+	}
+	if options.json {
+		return printJSON(events)
+	}
+	if len(events) == 0 {
+		fmt.Printf("No control-plane events found for run %s.\n", id)
+		return nil
+	}
+	for _, event := range events {
+		parts := []string{fmt.Sprintf("#%d", event.Sequence), string(event.Type)}
+		if event.AgentID != "" {
+			parts = append(parts, "agent="+event.AgentID)
+		}
+		if event.TaskID != "" {
+			parts = append(parts, "task="+event.TaskID)
+		}
+		if event.Summary != "" {
+			parts = append(parts, event.Summary)
+		}
+		fmt.Println(strings.Join(parts, "  "))
+	}
+	return nil
+}
+
+func parseControlPlaneArgs(args []string, options *runCommandOptions) (string, error) {
+	var id string
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--events-dir":
+			if i+1 >= len(args) {
+				return "", fmt.Errorf("--events-dir requiere una ruta")
+			}
+			i++
+			options.eventsDir = args[i]
+		case "--json":
+			options.json = true
+		case "-h", "--help":
+			printRunUsage()
+			return "", nil
+		default:
+			if strings.HasPrefix(args[i], "-") {
+				return "", fmt.Errorf("opción desconocida: %s", args[i])
+			}
+			if id != "" {
+				return "", fmt.Errorf("se esperaba un solo run id")
+			}
+			id = args[i]
+		}
+	}
+	if id == "" {
+		return "", fmt.Errorf("run id es obligatorio")
+	}
+	return id, nil
+}
+
+func openControlPlaneStore(explicit string) (*controlplane.EventStore, error) {
+	root, err := resolveControlPlaneDir(explicit)
+	if err != nil {
+		return nil, err
+	}
+	return controlplane.NewEventStore(root)
+}
+
+func resolveControlPlaneDir(explicit string) (string, error) {
+	if strings.TrimSpace(explicit) != "" {
+		return explicit, nil
+	}
+	if value := strings.TrimSpace(os.Getenv("AI_ENGINEERING_OS_EVENTS_DIR")); value != "" {
+		return value, nil
+	}
+	configRoot, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("resolver directorio de configuración: %w", err)
+	}
+	return filepath.Join(configRoot, "ai-engineering-os", "events"), nil
+}
+
+func printControlPlaneState(state controlplane.State) {
+	fmt.Println("Multi-Agent Control Plane")
+	fmt.Printf("Run: %s\n", state.RunID)
+	fmt.Printf("Status: %s\n", state.Status)
+	fmt.Printf("Last event: #%d\n", state.LastSequence)
+	fmt.Printf(
+		"Progress: total=%d queued=%d assigned=%d running=%d waiting=%d blocked=%d completed=%d failed=%d cancelled=%d\n",
+		state.Progress.Total,
+		state.Progress.Queued,
+		state.Progress.Assigned,
+		state.Progress.Running,
+		state.Progress.Waiting,
+		state.Progress.Blocked,
+		state.Progress.Completed,
+		state.Progress.Failed,
+		state.Progress.Cancelled,
+	)
+
+	if len(state.Agents) > 0 {
+		fmt.Println("Agents:")
+		ids := make([]string, 0, len(state.Agents))
+		for id := range state.Agents {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for _, id := range ids {
+			agent := state.Agents[id]
+			active := "-"
+			if len(agent.ActiveTasks) > 0 {
+				active = strings.Join(agent.ActiveTasks, ",")
+			}
+			fmt.Printf("  - %s [%s] active=%s tasks=%d\n", agent.ID, agent.Status, active, agent.TaskCount)
+		}
+	}
+
+	if len(state.Tasks) > 0 {
+		fmt.Println("Tasks:")
+		ids := make([]string, 0, len(state.Tasks))
+		for id := range state.Tasks {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for _, id := range ids {
+			task := state.Tasks[id]
+			agent := task.AgentID
+			if agent == "" {
+				agent = "-"
+			}
+			fmt.Printf("  - %s [%s] agent=%s\n", task.ID, task.Status, agent)
+		}
+	}
+
+	fmt.Printf(
+		"Quality: verification=%s review=%s baseline=%d corrections=%d\n",
+		emptyDash(state.Quality.Verification),
+		emptyDash(state.Quality.Review),
+		state.Quality.BaselineComparisons,
+		state.Quality.Corrections,
+	)
+	fmt.Printf(
+		"Coordination: messages=%d artifacts=%d pending-approvals=%d\n",
+		state.MessageCount,
+		state.ArtifactCount,
+		state.PendingApprovals,
+	)
+	if state.Runtime != "" || state.Model != "" {
+		fmt.Printf("Runtime: %s  Model: %s\n", emptyDash(state.Runtime), emptyDash(state.Model))
+	}
+}
+
+func emptyDash(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "-"
+	}
+	return value
+}
+
 func openRunStore(explicit string) (*runstate.Store, error) {
 	root, err := resolveRunStateDir(explicit)
 	if err != nil {
@@ -295,6 +497,9 @@ func printRunUsage() {
 	fmt.Println("  ai run status <run-id> [--state-dir ruta] [--json]")
 	fmt.Println("  ai run list [--state-dir ruta] [--json]")
 	fmt.Println("  ai run transition <run-id> --status planned|running|paused|completed|failed|cancelled [--state-dir ruta] [--json]")
+	fmt.Println("  ai run control <run-id> [--events-dir ruta] [--json]")
+	fmt.Println("  ai run events <run-id> [--events-dir ruta] [--json]")
 	fmt.Println()
 	fmt.Println("Sin --state-dir usa AI_ENGINEERING_OS_STATE_DIR o el directorio de configuración del usuario.")
+	fmt.Println("Sin --events-dir usa AI_ENGINEERING_OS_EVENTS_DIR o el directorio de configuración del usuario.")
 }
