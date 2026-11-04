@@ -3,6 +3,7 @@ package quality
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -10,6 +11,21 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/baseline"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/review"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/verification"
+)
+
+type OutcomeReason string
+
+const (
+	OutcomePassed                 OutcomeReason = "passed"
+	OutcomePreexistingOnly        OutcomeReason = "preexisting-only"
+	OutcomeVerificationRegression OutcomeReason = "verification-regression"
+	OutcomeReviewRejected         OutcomeReason = "review-rejected"
+	OutcomeIntegrityFailure       OutcomeReason = "integrity-failure"
+	OutcomeInfrastructureFailure  OutcomeReason = "infrastructure-failure"
+	OutcomePartialVerification    OutcomeReason = "partial-verification"
+	OutcomeNoProgress             OutcomeReason = "no-progress"
+	OutcomeMaxAttempts            OutcomeReason = "max-attempts"
+	OutcomeCancelled              OutcomeReason = "cancelled"
 )
 
 type CorrectionRequest struct {
@@ -30,20 +46,32 @@ type BaselineProvider interface {
 }
 
 type Attempt struct {
-	Number           int
-	Verification     verification.Report
-	Review           review.Report
-	Corrected        bool
-	Blocked          bool
-	NoProgress       bool
-	BaselineCompared bool
-	Comparison       *Comparison
-	CorrectionError  string
+	Number                int
+	Verification          verification.Report
+	Review                review.Report
+	Reviewed              bool
+	Corrected             bool
+	CorrectionAttempted   bool
+	Blocked               bool
+	NoProgress            bool
+	BaselineCompared      bool
+	Comparison            *Comparison
+	ActionableFingerprint string
+	CorrectionError       string
+}
+
+type ResultSummary struct {
+	VerificationAttempts int
+	ReviewAttempts       int
+	CorrectionAttempts   int
+	BaselineComparisons  int
 }
 
 type Result struct {
 	Passed   bool
+	Reason   OutcomeReason
 	Attempts []Attempt
+	Summary  ResultSummary
 }
 
 type Loop struct {
@@ -70,8 +98,18 @@ func (l Loop) Run(ctx context.Context, workspace, task string, allowedFiles []st
 	var previousCorrectionFingerprint string
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			result.Reason = OutcomeCancelled
+			return result, fmt.Errorf("quality loop canceled: %w", err)
+		}
+
 		verificationReport, err := l.Verifier.Verify(ctx, workspace)
 		if err != nil {
+			if ctx.Err() != nil {
+				result.Reason = OutcomeCancelled
+			} else {
+				result.Reason = OutcomeInfrastructureFailure
+			}
 			return result, fmt.Errorf("verification attempt %d: %w", attempt, err)
 		}
 
@@ -80,28 +118,42 @@ func (l Loop) Run(ctx context.Context, workspace, task string, allowedFiles []st
 			Verdict: review.VerdictRejected,
 			Summary: "Independent review deferred until deterministic verification passes.",
 		}
+		reviewed := false
 		if verificationOK {
 			reviewReport, err = l.Reviewer.Review(ctx, workspace, task, allowedFiles)
 			if err != nil {
+				if ctx.Err() != nil {
+					result.Reason = OutcomeCancelled
+				} else {
+					result.Reason = OutcomeInfrastructureFailure
+				}
 				return result, fmt.Errorf("review attempt %d: %w", attempt, err)
 			}
+			reviewed = true
 		}
 
 		entry := Attempt{
 			Number:       attempt,
 			Verification: verificationReport,
 			Review:       reviewReport,
+			Reviewed:     reviewed,
 		}
 
 		if verificationOK && reviewReport.Verdict == review.VerdictApproved {
-			result.Attempts = append(result.Attempts, entry)
 			result.Passed = true
+			result.Reason = OutcomePassed
+			appendAttempt(&result, entry)
 			return result, nil
 		}
 
 		if !verificationOK && !verificationCorrectable(verificationReport) {
 			entry.Blocked = true
-			result.Attempts = append(result.Attempts, entry)
+			if hasInfrastructureFailure(verificationReport) {
+				result.Reason = OutcomeInfrastructureFailure
+			} else {
+				result.Reason = OutcomeVerificationRegression
+			}
+			appendAttempt(&result, entry)
 			return result, nil
 		}
 
@@ -111,18 +163,35 @@ func (l Loop) Run(ctx context.Context, workspace, task string, allowedFiles []st
 		if !verificationOK && l.BaselineProvider != nil {
 			if unsafeStructuredReport(verificationReport) {
 				entry.Blocked = true
-				result.Attempts = append(result.Attempts, entry)
+				result.Reason = OutcomePartialVerification
+				appendAttempt(&result, entry)
 				return result, nil
 			}
 
 			if hasStructuredFailures(verificationReport) {
 				baselineResult, baselineErr := l.BaselineProvider.Baseline(ctx, workspace)
 				if baselineErr != nil {
+					entry.Blocked = true
+					if errors.Is(baselineErr, baseline.ErrIntegrity) {
+						result.Reason = OutcomeIntegrityFailure
+					} else if ctx.Err() != nil {
+						result.Reason = OutcomeCancelled
+					} else {
+						result.Reason = OutcomeInfrastructureFailure
+					}
+					appendAttempt(&result, entry)
 					return result, fmt.Errorf("baseline attempt %d: %w", attempt, baselineErr)
 				}
-				if hasInfrastructureFailure(baselineResult.Report) || unsafeStructuredReport(baselineResult.Report) {
+				if hasInfrastructureFailure(baselineResult.Report) {
 					entry.Blocked = true
-					result.Attempts = append(result.Attempts, entry)
+					result.Reason = OutcomeInfrastructureFailure
+					appendAttempt(&result, entry)
+					return result, nil
+				}
+				if unsafeStructuredReport(baselineResult.Report) {
+					entry.Blocked = true
+					result.Reason = OutcomePartialVerification
+					appendAttempt(&result, entry)
 					return result, nil
 				}
 
@@ -132,7 +201,8 @@ func (l Loop) Run(ctx context.Context, workspace, task string, allowedFiles []st
 
 				if len(comparison.Blocking) > 0 {
 					entry.Blocked = true
-					result.Attempts = append(result.Attempts, entry)
+					result.Reason = OutcomeVerificationRegression
+					appendAttempt(&result, entry)
 					return result, nil
 				}
 
@@ -145,11 +215,18 @@ func (l Loop) Run(ctx context.Context, workspace, task string, allowedFiles []st
 				if preexistingOnly {
 					reviewReport, err = l.Reviewer.Review(ctx, workspace, task, allowedFiles)
 					if err != nil {
+						if ctx.Err() != nil {
+							result.Reason = OutcomeCancelled
+						} else {
+							result.Reason = OutcomeInfrastructureFailure
+						}
 						return result, fmt.Errorf("review attempt %d: %w", attempt, err)
 					}
 					entry.Review = reviewReport
+					entry.Reviewed = true
 					if reviewReport.Verdict == review.VerdictApproved {
-						result.Attempts = append(result.Attempts, entry)
+						result.Reason = OutcomePreexistingOnly
+						appendAttempt(&result, entry)
 						// The staged change introduced no known regression, but the
 						// deterministic verification still fails. Never turn that
 						// into a false PASS.
@@ -160,11 +237,13 @@ func (l Loop) Run(ctx context.Context, workspace, task string, allowedFiles []st
 		}
 
 		if attempt == maxAttempts {
-			result.Attempts = append(result.Attempts, entry)
+			result.Reason = OutcomeMaxAttempts
+			appendAttempt(&result, entry)
 			return result, nil
 		}
 		if l.Corrector == nil {
-			result.Attempts = append(result.Attempts, entry)
+			result.Reason = failureOutcome(verificationOK, reviewReport)
+			appendAttempt(&result, entry)
 			return result, fmt.Errorf("quality gate failed and no corrector is configured")
 		}
 
@@ -176,23 +255,49 @@ func (l Loop) Run(ctx context.Context, workspace, task string, allowedFiles []st
 			Review:       reviewReport,
 		}
 		fingerprint := correctionFingerprint(request)
+		entry.ActionableFingerprint = fingerprint
 		if fingerprint != "" && fingerprint == previousCorrectionFingerprint {
 			entry.NoProgress = true
-			result.Attempts = append(result.Attempts, entry)
+			result.Reason = OutcomeNoProgress
+			appendAttempt(&result, entry)
 			return result, nil
 		}
 
+		entry.CorrectionAttempted = true
 		if err := l.Corrector.Correct(ctx, request); err != nil {
 			entry.CorrectionError = err.Error()
-			result.Attempts = append(result.Attempts, entry)
+			result.Reason = failureOutcome(verificationOK || preexistingOnly, reviewReport)
+			appendAttempt(&result, entry)
 			return result, nil
 		}
 		previousCorrectionFingerprint = fingerprint
 		entry.Corrected = true
-		result.Attempts = append(result.Attempts, entry)
+		appendAttempt(&result, entry)
 	}
 
+	result.Reason = OutcomeMaxAttempts
 	return result, nil
+}
+
+func appendAttempt(result *Result, entry Attempt) {
+	result.Attempts = append(result.Attempts, entry)
+	result.Summary.VerificationAttempts++
+	if entry.Reviewed {
+		result.Summary.ReviewAttempts++
+	}
+	if entry.CorrectionAttempted {
+		result.Summary.CorrectionAttempts++
+	}
+	if entry.BaselineCompared {
+		result.Summary.BaselineComparisons++
+	}
+}
+
+func failureOutcome(verificationSatisfied bool, reviewReport review.Report) OutcomeReason {
+	if verificationSatisfied && reviewReport.Verdict == review.VerdictRejected {
+		return OutcomeReviewRejected
+	}
+	return OutcomeVerificationRegression
 }
 
 func FailureSummary(v verification.Report, r review.Report) string {
