@@ -167,6 +167,7 @@ func TestCoordinatorFailureBlocksDependentAndContinuesIndependentBranch(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
+	var qaRan int32
 	result, err := (Coordinator{
 		Config: Config{MaxConcurrency: 2},
 		Workers: map[string]Worker{
@@ -174,7 +175,7 @@ func TestCoordinatorFailureBlocksDependentAndContinuesIndependentBranch(t *testi
 				return WorkResult{}, errors.New("backend failed")
 			}),
 			"qa-engineer": workerFunc(func(context.Context, scheduler.Task) (WorkResult, error) {
-				t.Fatal("qa must not run")
+				atomic.StoreInt32(&qaRan, 1)
 				return WorkResult{}, nil
 			}),
 			"researcher": workerFunc(func(_ context.Context, task scheduler.Task) (WorkResult, error) {
@@ -190,6 +191,9 @@ func TestCoordinatorFailureBlocksDependentAndContinuesIndependentBranch(t *testi
 	}
 	if result.Progress.Failed != 1 || result.Progress.Blocked != 1 || result.Progress.Completed != 1 {
 		t.Fatalf("progress = %#v", result.Progress)
+	}
+	if atomic.LoadInt32(&qaRan) != 0 {
+		t.Fatal("qa ran despite blocked dependency")
 	}
 }
 
