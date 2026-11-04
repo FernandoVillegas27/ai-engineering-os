@@ -33,7 +33,7 @@ func (s mutationTaskEventSink) Record(ctx context.Context, input coordinator.Eve
 		eventType = controlplane.EventTaskCompleted
 	case coordinator.EventTaskFailed:
 		eventType = controlplane.EventTaskFailed
-	case coordinator.EventRunStarted, coordinator.EventRunCompleted, coordinator.EventRunCancelled:
+	case coordinator.EventRunStarted, coordinator.EventRunCompleted, coordinator.EventRunFailed, coordinator.EventRunCancelled:
 		return nil
 	default:
 		return nil
