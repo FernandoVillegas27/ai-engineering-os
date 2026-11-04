@@ -18,8 +18,9 @@ import (
 type QualityGateConfig struct {
 	OriginalRoot string
 	Plan         Plan
-	Workspace    IntegratedWorkspace
-	Task         string
+	Workspace       IntegratedWorkspace
+	ExpectedChanges []staging.WorkspaceChange
+	Task            string
 	Verifier     verification.Runtime
 	Reviewer     review.Runtime
 	Corrector    quality.Corrector
@@ -56,9 +57,13 @@ func RunQualityGate(ctx context.Context, config QualityGateConfig) (QualityGateR
 		return QualityGateResult{}, errors.New("integration quality gate requires task")
 	}
 
-	declared := plannedWorkspaceChanges(config.Plan)
+	declared := append([]staging.WorkspaceChange(nil), config.ExpectedChanges...)
 	if len(declared) == 0 {
-		return QualityGateResult{}, errors.New("integration quality gate requires planned changes")
+		declared = plannedWorkspaceChanges(config.Plan)
+	}
+	declared = sortedWorkspaceChanges(declared)
+	if len(declared) == 0 {
+		return QualityGateResult{}, errors.New("integration quality gate requires expected changes")
 	}
 	if err := exactChanges(config.Workspace.Changes, declared); err != nil {
 		return QualityGateResult{}, fmt.Errorf("integration workspace does not match plan before quality: %w", err)
