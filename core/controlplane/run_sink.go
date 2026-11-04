@@ -41,7 +41,7 @@ func (s *RunCoordinatorSink) Record(ctx context.Context, input coordinator.Event
 			return err
 		}
 		for _, task := range s.Tasks {
-			if err := s.append(ctx, EventTaskCreated, task.ID, "", "", nil, nil, now); err != nil {
+			if err := s.appendTaskCreated(ctx, task, now); err != nil {
 				return err
 			}
 			if err := s.append(ctx, EventTaskAssigned, task.ID, task.AgentID, "", nil, nil, now); err != nil {
@@ -94,6 +94,27 @@ func (s *RunCoordinatorSink) append(
 		MessageRefs:  messageRefs,
 		Data: map[string]any{
 			"source": "coordinator",
+		},
+	}, now)
+	if err != nil {
+		return err
+	}
+	_, err = s.Store.Append(ctx, event)
+	return err
+}
+
+
+func (s *RunCoordinatorSink) appendTaskCreated(ctx context.Context, task scheduler.Task, now time.Time) error {
+	event, err := NewEvent(NewEventRequest{
+		RunID:   s.RunID,
+		Type:    EventTaskCreated,
+		TaskID:  task.ID,
+		Summary: "",
+		Data: map[string]any{
+			"source":     "coordinator",
+			"depends_on": task.DependsOn,
+			"mutating":   task.Mutating,
+			"scopes":     task.Scopes,
 		},
 	}, now)
 	if err != nil {
