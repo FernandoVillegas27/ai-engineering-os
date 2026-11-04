@@ -20,6 +20,10 @@ type PlannedChange struct {
 type Plan struct {
 	PreImageDigest string          `json:"pre_image_digest"`
 	Changes        []PlannedChange `json:"changes"`
+
+	// sourceHashes are intentionally not serialized or exposed. They bind each
+	// create/modify operation to the exact bytes captured by task inspection.
+	sourceHashes map[string][32]byte
 }
 
 func Build(workspaces []taskworkspace.Workspace, inspections map[string]taskworkspace.Inspection) (Plan, error) {
@@ -35,6 +39,7 @@ func Build(workspaces []taskworkspace.Workspace, inspections map[string]taskwork
 
 	expectedDigest := ""
 	seenTasks := map[string]bool{}
+	sourceHashes := map[string][32]byte{}
 	var changes []PlannedChange
 
 	for _, workspace := range workspaces {
@@ -61,13 +66,43 @@ func Build(workspaces []taskworkspace.Workspace, inspections map[string]taskwork
 		if !ok {
 			return Plan{}, fmt.Errorf("missing inspection for task workspace %s", taskID)
 		}
+		if inspection.ResultImage.IsZero() {
+			return Plan{}, fmt.Errorf("inspection for %s has no frozen result image", taskID)
+		}
+		frozenChanges := staging.ChangesBetween(
+			workspace.PreImage.Snapshot(),
+			inspection.ResultImage.Snapshot(),
+		)
+		declaredInspection := append([]staging.WorkspaceChange(nil), inspection.Changes...)
+		sort.Slice(declaredInspection, func(i, j int) bool {
+			if declaredInspection[i].Path != declaredInspection[j].Path {
+				return declaredInspection[i].Path < declaredInspection[j].Path
+			}
+			return declaredInspection[i].Action < declaredInspection[j].Action
+		})
+		if err := exactChanges(frozenChanges, declaredInspection); err != nil {
+			return Plan{}, fmt.Errorf("inspection for %s does not match its frozen result image: %w", taskID, err)
+		}
 		if len(inspection.Changes) == 0 {
 			continue
 		}
 		if err := staging.EnsureChangesMatchDeclared(inspection.Changes, workspace.Declared); err != nil {
 			return Plan{}, fmt.Errorf("inspection for %s violates declared scope: %w", taskID, err)
 		}
+		resultSnapshot := inspection.ResultImage.Snapshot()
 		for _, change := range inspection.Changes {
+			switch change.Action {
+			case "create", "modify":
+				hash, exists := resultSnapshot[change.Path]
+				if !exists {
+					return Plan{}, fmt.Errorf("inspection for %s is missing result bytes for %s", taskID, change.Path)
+				}
+				sourceHashes[sourceHashKey(taskID, change.Path)] = hash
+			case "delete":
+				if _, exists := resultSnapshot[change.Path]; exists {
+					return Plan{}, fmt.Errorf("inspection for %s still contains deleted path %s", taskID, change.Path)
+				}
+			}
 			changes = append(changes, PlannedChange{
 				TaskID:  taskID,
 				AgentID: agentID,
@@ -109,5 +144,18 @@ func Build(workspaces []taskworkspace.Workspace, inspections map[string]taskwork
 	return Plan{
 		PreImageDigest: expectedDigest,
 		Changes:        changes,
+		sourceHashes:   sourceHashes,
 	}, nil
+}
+
+func sourceHashKey(taskID, path string) string {
+	return taskID + "\x00" + path
+}
+
+func (p Plan) expectedSourceHash(taskID, path string) ([32]byte, bool) {
+	if p.sourceHashes == nil {
+		return [32]byte{}, false
+	}
+	hash, ok := p.sourceHashes[sourceHashKey(taskID, path)]
+	return hash, ok
 }
