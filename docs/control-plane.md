@@ -343,3 +343,35 @@ Optional overrides:
 Otherwise the normal environment/user-config resolution applies.
 
 This lets a future visual client render conversations, decisions, handoffs, verification reports and API contracts from durable platform data rather than provider chat history.
+
+
+## Promotion candidate status endpoint
+
+The read-only Control Plane server can report the current promotion status for a run:
+
+~~~text
+GET /runs/<run-id>/promotion
+~~~
+
+The response includes:
+
+- run ID;
+- current `ready` result;
+- Quality-passed flag;
+- relative create/modify/delete changes;
+- change count;
+- candidate creation timestamp.
+
+The endpoint reconstructs the persisted promotion request and performs a fresh `promotion.DryRun`.
+
+If the original project or integrated workspace became stale, the endpoint returns `ready=false` without exposing internal integrity errors or pre-image hashes.
+
+No HTTP endpoint applies or approves the candidate.
+
+Mutation remains restricted to the explicit CLI approval boundary:
+
+~~~text
+ai run promote <run-id> --approve
+~~~
+
+`ai run serve` accepts an optional `--promotion-dir` override and otherwise uses the normal promotion-candidate storage resolution.
