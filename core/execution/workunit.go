@@ -32,8 +32,9 @@ type WorkUnit struct {
 	AgentID      string
 	Capabilities []string
 	Skills       []string
-	Tools        []string
-	Permissions  PermissionEnvelope
+	Tools                []string
+	CollaborationContext string
+	Permissions          PermissionEnvelope
 	Mode         Mode
 }
 
