@@ -55,6 +55,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+	case "run":
+		if err := runRun(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	case "memory":
 		if err := runMemory(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -968,6 +973,9 @@ func printUsage() {
 	fmt.Println()
 	fmt.Println("Uso:")
 	fmt.Println("  ai inspect [ruta-del-proyecto] [--registry ruta] [--write]")
+	fmt.Println("  ai run init --task <tarea> --project <id> [--state-dir ruta]")
+	fmt.Println("  ai run status <run-id> [--state-dir ruta] [--json]")
+	fmt.Println("  ai run list [--state-dir ruta] [--json]")
 	fmt.Println("  ai memory status")
 	fmt.Println("  ai docs status")
 	fmt.Println("  ai doctor [ruta-del-proyecto] [--registry ruta]")
@@ -984,6 +992,7 @@ func printUsage() {
 	fmt.Println()
 	fmt.Println("Comandos:")
 	fmt.Println("  inspect   Detecta el stack y resuelve skills para un proyecto")
+	fmt.Println("  run       Crea e inspecciona estado durable de ejecuciones")
 	fmt.Println("  memory    Verifica el proveedor de memoria persistente")
 	fmt.Println("  docs      Verifica el proveedor de documentación externa")
 	fmt.Println("  doctor    Diagnostica el entorno local de AI Engineering OS")
