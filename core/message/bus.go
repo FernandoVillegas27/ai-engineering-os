@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/FernandoVillegas27/ai-engineering-os/core/fslock"
 )
 
 type Bus struct {
@@ -54,11 +56,11 @@ func (b *Bus) Append(ctx context.Context, value Message) (Message, error) {
 	if err != nil {
 		return Message{}, err
 	}
-	release, err := acquireLock(ctx, runDir)
+	lock, err := fslock.Acquire(ctx, filepath.Join(runDir, ".append.lock"), fslock.Options{})
 	if err != nil {
-		return Message{}, err
+		return Message{}, fmt.Errorf("acquire message append lock: %w", err)
 	}
-	defer release()
+	defer lock.Release()
 
 	messages, err := loadMessages(runDir)
 	if err != nil {
@@ -219,27 +221,6 @@ func filenameSequence(name string) uint64 {
 	return value
 }
 
-func acquireLock(ctx context.Context, runDir string) (func(), error) {
-	lockPath := filepath.Join(runDir, ".append.lock")
-	ticker := time.NewTicker(20 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-		if err == nil {
-			_, _ = file.WriteString(fmt.Sprintf("%d\n", os.Getpid()))
-			_ = file.Close()
-			return func() { _ = os.Remove(lockPath) }, nil
-		}
-		if !os.IsExist(err) {
-			return nil, fmt.Errorf("acquire message append lock: %w", err)
-		}
-		select {
-		case <-ctx.Done():
-			return nil, fmt.Errorf("acquire message append lock: %w", ctx.Err())
-		case <-ticker.C:
-		}
-	}
-}
 
 func safeToken(value string) bool {
 	value = strings.TrimSpace(value)
