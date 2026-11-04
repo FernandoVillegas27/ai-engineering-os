@@ -13,6 +13,7 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/integration"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/mutation"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/promotion"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/promotioncandidate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/proposal"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/staging"
@@ -235,6 +236,30 @@ func runCoordinatedMutation(
 		return fmt.Errorf("promotion dry-run did not produce a ready plan")
 	}
 
+	candidateRoot, err := resolveRunAuxDir(
+		options.promotionDir,
+		"AI_ENGINEERING_OS_PROMOTION_DIR",
+		"promotion-candidates",
+	)
+	if err != nil {
+		_ = failMutationRun(runStore, &run)
+		return err
+	}
+	candidateStore, err := promotioncandidate.NewStore(candidateRoot)
+	if err != nil {
+		_ = failMutationRun(runStore, &run)
+		return err
+	}
+	record, err := promotioncandidate.New(run.ID, candidate.Request, time.Now().UTC())
+	if err != nil {
+		_ = failMutationRun(runStore, &run)
+		return err
+	}
+	if err := candidateStore.Save(record); err != nil {
+		_ = failMutationRun(runStore, &run)
+		return fmt.Errorf("persist promotion candidate: %w", err)
+	}
+
 	if err := emit(controlplane.EventApprovalRequested, "", "", "explicit promotion approval required"); err != nil {
 		_ = failMutationRun(runStore, &run)
 		return err
@@ -281,6 +306,7 @@ func runCoordinatedMutation(
 	fmt.Printf("Integrated workspace: %s\n", integrated.Root)
 	fmt.Printf("Quality: %s\n", gate.Quality.Reason)
 	fmt.Printf("Promotion candidate: READY (%d change(s))\n", len(gate.FinalChanges))
+	fmt.Println("Promotion candidate persisted: YES")
 	fmt.Println("Approval required: YES")
 	fmt.Println()
 	fmt.Println("The original project was NOT modified.")
