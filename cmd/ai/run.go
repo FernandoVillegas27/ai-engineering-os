@@ -511,6 +511,7 @@ func printRunUsage() {
 	fmt.Println("  ai run control <run-id> [--events-dir ruta] [--json]")
 	fmt.Println("  ai run events <run-id> [--events-dir ruta] [--json]")
 	fmt.Println("  ai run execute [ruta] --task <tarea> (--dry-run | --runtime codex) [--project id] [--max-concurrency N] [--ai] [--json]")
+	fmt.Println("  ai run execute [ruta] --task <tarea> --runtime auto|codex|cursor --multi-agent-write [--model-policy auto|economy|balanced|deep] [--model id] [--max-concurrency N]")
 	fmt.Println("  ai run serve [--addr 127.0.0.1:8765] [--events-dir ruta]")
 	fmt.Println()
 	fmt.Println("Sin --state-dir usa AI_ENGINEERING_OS_STATE_DIR o el directorio de configuración del usuario.")
