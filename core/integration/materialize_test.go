@@ -236,3 +236,18 @@ func TestCleanupRejectsNonIntegrationPath(t *testing.T) {
 		t.Fatalf("ordinary path was removed: %v", err)
 	}
 }
+
+
+func TestMaterializeRejectsDeletedPathReappearingAfterInspection(t *testing.T) {
+	f := newMaterializeFixture(t)
+	defer f.cleanup(t)
+
+	writeIntegrationFile(t, f.backend.Root, "obsolete.go", "package main\nconst resurrected = true\n")
+	_, err := Materialize(context.Background(), MaterializeConfig{
+		OriginalRoot: f.original,
+		Parent:       f.integrationParent,
+	}, f.plan, []taskworkspace.Workspace{f.backend, f.frontend})
+	if err == nil || !strings.Contains(err.Error(), "deleted path reappeared") {
+		t.Fatalf("err = %#v", err)
+	}
+}
