@@ -2058,6 +2058,104 @@ Before beginning work, always verify that this checkpoint is still current.
 
 ---
 
+# 19.5 Active implementation stack — validation checkpoint
+
+This section records the current **unmerged** implementation stack so a future session can distinguish completed work on `master` from work that is implemented and awaiting human validation.
+
+At this checkpoint, `master` still has P2a as the latest functional merged milestone. The following PRs are intentionally stacked and remain open for ordered review.
+
+| PR | Phase / capability | Validation state |
+|---|---|---|
+| #66 | P2b — lazy baseline in Quality Loop | CI passed |
+| #67 | P2c — structured quality outcomes | CI passed |
+| #68 | P3a — promotion dry-run | CI passed |
+| #69 | P3b — approval-gated apply + rollback | CI passed |
+| #70 | P4 — durable run state | CI passed |
+| #71 | durable run CLI | CI passed |
+| #72 | P5 — Engram project save/recall | CI passed |
+| #73 | P6 — immutable agent artifacts | CI passed |
+| #74 | P7 — typed inter-agent message bus | CI passed |
+| #75 | P8 — dependency-aware DAG scheduler | CI passed |
+| #76 | P9 — concurrent execution coordinator | CI passed |
+| #77 | P9.5 — durable Control Plane event stream/projector | CI passed |
+| #78 | Control Plane CLI inspection | CI passed |
+| #79 | integrated durable coordinated read-only run | CI passed |
+| #80 | deterministic specialist collaboration DAG | CI passed |
+| #81 | automatic durable specialist handoffs | CI passed |
+| #82 | bounded receiver inbox context | CI passed |
+| #83 | loopback JSON/SSE live Control Plane API | SSE test fix pending CI revalidation |
+| #84 | projected task-graph edges and scopes | depends on #83 fix; pending CI revalidation |
+| #85 | stale append-lock recovery | pending CI |
+
+Review/merge order must remain:
+
+~~~text
+#66 -> #67 -> #68 -> #69 -> #70 -> #71 -> #72 -> #73 -> #74
+-> #75 -> #76 -> #77 -> #78 -> #79 -> #80 -> #81 -> #82
+-> #83 -> #84 -> #85
+~~~
+
+Do not merge later PRs before their stacked bases unless the branch is deliberately rebased and the resulting diff is revalidated.
+
+## Functional capability reached by the open stack
+
+If the stack through #84 is validated and merged, AI Engineering OS has the first complete read-only multi-agent collaboration path:
+
+~~~text
+user task
+  -> classification
+  -> deterministic specialist plan
+  -> durable run
+  -> role-aware DAG
+  -> bounded concurrent coordinator
+  -> agent execution
+  -> immutable handoff artifact
+  -> typed message to dependent agent
+  -> bounded receiver inbox
+  -> dependent agent execution
+  -> durable Control Plane events
+  -> CLI / JSON / SSE observation
+~~~
+
+The Control Plane can expose:
+
+- real run state;
+- agents and their task state;
+- DAG edges;
+- task ownership;
+- dependency state;
+- mutating/file-scope metadata;
+- message/artifact counts;
+- quality state;
+- approvals;
+- runtime/model summaries;
+- ordered event history;
+- resumable SSE events.
+
+This is the first functional foundation for the Promix-like experience described earlier. It is intentionally backend-first; no visual UI is required for the coordination semantics to work.
+
+## Current safety boundary
+
+The integrated multi-agent path remains **read-only**.
+
+Do not enable parallel write-capable agents until isolated per-task staging plus merge/conflict coordination are implemented and tested.
+
+Promotion exists separately behind explicit approval and integrity checks.
+
+## Recommended next implementation after this stack
+
+After #85 is green and the stack is reviewed, the next high-value milestones are:
+
+1. typed high-value artifacts such as `ArchitectureDecision`, `APIContract`, and `VerificationReport` with dedicated payload validation;
+2. per-task isolated writable workspaces;
+3. deterministic integration/merge coordination for disjoint staged outputs;
+4. run-wide multi-agent Quality Loop;
+5. persisted Control Plane snapshots/compaction for long runs;
+6. richer human controls (pause/resume/cancel/retry) wired to actual coordinator execution;
+7. only then consider a visual web/IDE/3D client.
+
+---
+
 # 20. Living roadmap rule
 
 This file must evolve with the implementation.
