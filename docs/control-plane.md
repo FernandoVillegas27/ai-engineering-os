@@ -140,3 +140,38 @@ It does not yet provide:
 - dynamic orchestrator replanning.
 
 Those can be added without changing the principle that the event stream is authoritative.
+
+
+## CLI inspection
+
+The first human-facing Control Plane client is the CLI.
+
+~~~text
+ai run control <run-id>
+ai run events <run-id>
+~~~
+
+Use `--json` for machine-readable output.
+
+`ai run control` replays the authoritative event stream and prints:
+
+- run status and last event sequence;
+- deterministic task-state progress;
+- agents and their current derived state;
+- active tasks per agent;
+- task ownership/status;
+- verification and review state;
+- baseline/correction counters;
+- message/artifact counts;
+- pending approvals;
+- runtime/model summary when present.
+
+`ai run events` prints the ordered event history for audit/debugging.
+
+Event storage resolution order is:
+
+1. explicit `--events-dir`;
+2. `AI_ENGINEERING_OS_EVENTS_DIR`;
+3. the OS user configuration directory under `ai-engineering-os/events`.
+
+This terminal view is deliberately a client of the same Control Plane state that a future web/IDE/3D interface will consume.
