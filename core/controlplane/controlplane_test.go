@@ -390,3 +390,74 @@ func TestProjectorTracksCancelRequestUntilRunCancels(t *testing.T) {
 		t.Fatalf("final=%#v", final)
 	}
 }
+
+
+func TestProjectorTracksMutationPipelinePhases(t *testing.T) {
+	now := time.Now().UTC()
+	types := []EventType{
+		EventRunStarted,
+		EventProposalStarted,
+		EventProposalCompleted,
+		EventStageStarted,
+		EventStageCompleted,
+		EventIntegrationStarted,
+		EventIntegrationCompleted,
+	}
+	events := make([]Event, 0, len(types))
+	for i, typ := range types {
+		value, err := NewEvent(NewEventRequest{
+			RunID: "run-pipeline",
+			Type:  typ,
+			Data:  map[string]string{"phase": "source"},
+		}, now.Add(time.Duration(i)*time.Second))
+		if err != nil {
+			t.Fatal(err)
+		}
+		value.Sequence = uint64(i + 1)
+		events = append(events, value)
+	}
+	state, err := Project(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Pipeline.Proposal != "completed" ||
+		state.Pipeline.Stage != "completed" ||
+		state.Pipeline.Integration != "completed" {
+		t.Fatalf("pipeline=%#v", state.Pipeline)
+	}
+}
+
+func TestProjectorTracksFailedMutationPipelinePhase(t *testing.T) {
+	now := time.Now().UTC()
+	started, err := NewEvent(NewEventRequest{
+		RunID: "run-pipeline-failed", Type: EventRunStarted, Data: map[string]bool{},
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proposalStarted, err := NewEvent(NewEventRequest{
+		RunID: "run-pipeline-failed", Type: EventProposalStarted, Data: map[string]bool{},
+	}, now.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	proposalFailed, err := NewEvent(NewEventRequest{
+		RunID: "run-pipeline-failed", Type: EventProposalFailed, Data: map[string]bool{},
+	}, now.Add(2*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	started.Sequence = 1
+	proposalStarted.Sequence = 2
+	proposalFailed.Sequence = 3
+	state, err := Project([]Event{started, proposalStarted, proposalFailed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Pipeline.Proposal != "failed" {
+		t.Fatalf("pipeline=%#v", state.Pipeline)
+	}
+	if state.Pipeline.Stage != "" || state.Pipeline.Integration != "" {
+		t.Fatalf("unexpected downstream phase state=%#v", state.Pipeline)
+	}
+}
