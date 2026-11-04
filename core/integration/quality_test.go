@@ -9,6 +9,7 @@ import (
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/quality"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/review"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/staging"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/taskworkspace"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/verification"
 )
@@ -275,5 +276,74 @@ func TestRunQualityGatePropagatesVerifierInfrastructureError(t *testing.T) {
 	}
 	if result.Promotable {
 		t.Fatalf("result = %#v", result)
+	}
+}
+
+
+func TestRunQualityGateAcceptsExplicitFinalExpectedChanges(t *testing.T) {
+	fixture := newMaterializeFixture(t)
+	defer fixture.cleanup(t)
+	base, err := Materialize(context.Background(), MaterializeConfig{
+		OriginalRoot: fixture.original,
+		Parent:       fixture.integrationParent,
+	}, fixture.plan, []taskworkspace.Workspace{fixture.backend, fixture.frontend})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer Cleanup(base, fixture.integrationParent)
+
+	qaParent := filepath.Join(fixture.base, "quality-qa")
+	if err := os.MkdirAll(qaParent, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := taskworkspace.New(taskworkspace.Config{
+		OriginalRoot: base.Root,
+		Parent:       qaParent,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	qa, err := manager.Prepare(context.Background(), "qa", "qa-engineer", []staging.WorkspaceChange{
+		{Path: "backend/service_test.go", Action: "create"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Cleanup(qa)
+	writeIntegrationFile(t, qa.Root, "backend/service_test.go", "package backend\n")
+	inspection, err := manager.Inspect(context.Background(), qa)
+	if err != nil {
+		t.Fatal(err)
+	}
+	final, err := OverlayTests(
+		context.Background(),
+		TestOverlayConfig{Parent: fixture.integrationParent},
+		base,
+		qa,
+		inspection,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer Cleanup(final, fixture.integrationParent)
+
+	verifier := &sequenceVerifier{reports: []verification.Report{passReport(), passReport()}}
+	reviewer := &gateReviewer{report: review.Report{Verdict: review.VerdictApproved}}
+	result, err := RunQualityGate(context.Background(), QualityGateConfig{
+		OriginalRoot:    fixture.original,
+		Plan:            fixture.plan,
+		Workspace:       final,
+		ExpectedChanges: final.Changes,
+		Task:            "integrate source and QA tests",
+		Verifier:        verifier,
+		Reviewer:        reviewer,
+		MaxAttempts:     2,
+		TempParent:      fixture.integrationParent,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Promotable || len(result.FinalChanges) != len(final.Changes) {
+		t.Fatalf("result=%#v", result)
 	}
 }
