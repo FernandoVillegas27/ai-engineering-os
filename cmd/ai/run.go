@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
-	"sort"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/controlplane"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
@@ -243,6 +243,10 @@ func runRunTransition(args []string) error {
 }
 
 func runRunControl(args []string) error {
+	if len(args) == 1 && (args[0] == "-h" || args[0] == "--help") {
+		printRunUsage()
+		return nil
+	}
 	options := runCommandOptions{}
 	id, err := parseControlPlaneArgs(args, &options)
 	if err != nil {
@@ -271,6 +275,10 @@ func runRunControl(args []string) error {
 }
 
 func runRunEvents(args []string) error {
+	if len(args) == 1 && (args[0] == "-h" || args[0] == "--help") {
+		printRunUsage()
+		return nil
+	}
 	options := runCommandOptions{}
 	id, err := parseControlPlaneArgs(args, &options)
 	if err != nil {
@@ -320,8 +328,7 @@ func parseControlPlaneArgs(args []string, options *runCommandOptions) (string, e
 		case "--json":
 			options.json = true
 		case "-h", "--help":
-			printRunUsage()
-			return "", nil
+			return "", fmt.Errorf("--help debe usarse sin otros argumentos")
 		default:
 			if strings.HasPrefix(args[i], "-") {
 				return "", fmt.Errorf("opción desconocida: %s", args[i])
