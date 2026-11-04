@@ -334,3 +334,26 @@ func TestProjectorStillRejectsTaskMutationAfterRunCompleted(t *testing.T) {
 		t.Fatal("expected post-terminal task rejection")
 	}
 }
+
+
+func TestEventStoreRunIDsRejectsSymlinkRunEntry(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewEventStore(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(root, "target")
+	if err := os.Mkdir(target, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "run-link")
+	if err := os.Symlink(target, link); err != nil {
+		if os.IsPermission(err) {
+			t.Skip("symlink creation not permitted")
+		}
+		t.Fatal(err)
+	}
+	if _, err := store.RunIDs(); err == nil {
+		t.Fatal("expected symlink run entry rejection")
+	}
+}
