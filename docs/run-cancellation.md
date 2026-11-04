@@ -78,3 +78,15 @@ This phase adds cancellation only.
 Pause/resume/retry require additional durable execution checkpoints and are intentionally separate.
 
 A runtime/provider that ignores context cancellation may not stop until its current subprocess boundary returns; the coordinator will not schedule additional work after cancellation.
+
+
+## Event-stream binding
+
+Before a cancel marker is persisted, the CLI validates that the selected Control Plane store already contains the target run and starts with `run.started`.
+
+This prevents a mismatched `--events-dir` from:
+
+- creating a detached cancellation event stream;
+- persisting a cancellation signal for a command that ultimately reports configuration failure.
+
+Validation happens before the durable control request is written.
