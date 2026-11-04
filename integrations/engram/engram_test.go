@@ -5,6 +5,8 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/FernandoVillegas27/ai-engineering-os/core/memory"
 )
 
 type fakeRunner struct {
@@ -93,5 +95,104 @@ func TestSetupCommand(t *testing.T) {
 func TestSetupCommandRejectsUnknownRuntime(t *testing.T) {
 	if _, err := SetupCommand("unknown-runtime"); err == nil {
 		t.Fatal("expected unsupported target error")
+	}
+}
+
+
+func TestSaveUsesExplicitProjectAndCuratedType(t *testing.T) {
+	runner := &fakeRunner{path: "/usr/local/bin/engram"}
+	client := Client{Binary: "engram", Runner: runner}
+
+	result, err := client.Save(context.Background(), memory.SaveRequest{
+		Project:  "ai-engineering-os",
+		Title:    "Chose typed agent messages",
+		Content:  "Agents exchange typed messages and artifact references.",
+		Type:     memory.TypeArchitecture,
+		TopicKey: "architecture/agent-messages",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Saved || result.Project != "ai-engineering-os" {
+		t.Fatalf("result = %#v", result)
+	}
+	want := []string{
+		"/usr/local/bin/engram",
+		"save",
+		"Chose typed agent messages",
+		"Agents exchange typed messages and artifact references.",
+		"--project", "ai-engineering-os",
+		"--type", "architecture",
+		"--scope", "project",
+		"--topic", "architecture/agent-messages",
+	}
+	if len(runner.calls) != 1 || !reflect.DeepEqual(runner.calls[0], want) {
+		t.Fatalf("calls = %#v", runner.calls)
+	}
+}
+
+func TestRecallUsesExplicitProjectAndBoundedLimit(t *testing.T) {
+	runner := &fakeRunner{path: "/usr/local/bin/engram"}
+	client := Client{Binary: "engram", Runner: runner}
+
+	result, err := client.Recall(context.Background(), memory.RecallRequest{
+		Project: "ai-engineering-os",
+		Query:   "quality baseline",
+		Limit:   3,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Project != "ai-engineering-os" || result.Query != "quality baseline" {
+		t.Fatalf("result = %#v", result)
+	}
+	want := []string{
+		"/usr/local/bin/engram",
+		"search",
+		"quality baseline",
+		"--project", "ai-engineering-os",
+		"--limit", "3",
+	}
+	if len(runner.calls) != 1 || !reflect.DeepEqual(runner.calls[0], want) {
+		t.Fatalf("calls = %#v", runner.calls)
+	}
+}
+
+func TestRecallDefaultsToFiveResults(t *testing.T) {
+	runner := &fakeRunner{path: "/usr/local/bin/engram"}
+	client := Client{Binary: "engram", Runner: runner}
+
+	if _, err := client.Recall(context.Background(), memory.RecallRequest{
+		Project: "ai-engineering-os",
+		Query:   "current architecture",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	call := runner.calls[0]
+	if got := call[len(call)-1]; got != "5" {
+		t.Fatalf("limit = %q, want 5", got)
+	}
+}
+
+func TestProjectMemoryRejectsInvalidRequestsBeforeEngramCall(t *testing.T) {
+	runner := &fakeRunner{path: "/usr/local/bin/engram"}
+	client := Client{Binary: "engram", Runner: runner}
+
+	if _, err := client.Save(context.Background(), memory.SaveRequest{
+		Project: "ai-engineering-os",
+		Title:   "Missing type",
+		Content: "content",
+	}); err == nil {
+		t.Fatal("expected invalid memory type")
+	}
+	if _, err := client.Recall(context.Background(), memory.RecallRequest{
+		Project: "ai-engineering-os",
+		Query:   "query",
+		Limit:   100,
+	}); err == nil {
+		t.Fatal("expected recall limit rejection")
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("invalid requests reached Engram: %#v", runner.calls)
 	}
 }
