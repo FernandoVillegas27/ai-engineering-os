@@ -83,6 +83,28 @@ func proposalRuntimeFor(runtimeName, cursorModel string) (proposal.Runtime, erro
 	}
 }
 
+func executionRuntimeFor(runtimeName string, options modelRoutingOptions) (execution.Runtime, string, error) {
+	decision := modelpolicy.Resolve(options.Policy, modelpolicy.RoleExecution, options.Override, false)
+	cursorRuntime := cursorintegration.NewExecutionRuntimeWithModel(decision.Model)
+	switch runtimeName {
+	case "auto":
+		codexRuntime := codexintegration.NewExecutionRuntime()
+		codexRuntime.Model = decision.Model
+		return runtimefallback.ExecutionRuntime{
+			Primary: codexRuntime,
+			Fallback: cursorRuntime,
+		}, decision.Model, nil
+	case "codex":
+		codexRuntime := codexintegration.NewExecutionRuntime()
+		codexRuntime.Model = decision.Model
+		return codexRuntime, decision.Model, nil
+	case "cursor":
+		return cursorRuntime, decision.Model, nil
+	default:
+		return nil, "", fmt.Errorf("runtime no soportado: %s", runtimeName)
+	}
+}
+
 func stageRuntimeFor(runtimeName string, options modelRoutingOptions, escalated bool) (staging.Runtime, string, error) {
 	decision := modelpolicy.Resolve(options.Policy, modelpolicy.RoleStage, options.Override, escalated)
 	cursorRuntime := cursorintegration.NewStageRuntimeWithModel(decision.Model)
