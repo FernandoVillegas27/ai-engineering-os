@@ -32,6 +32,15 @@ const (
 	EventTaskCancelled         EventType = "task.cancelled"
 	EventAgentMessageSent      EventType = "agent.message.sent"
 	EventArtifactCreated       EventType = "artifact.created"
+	EventProposalStarted       EventType = "proposal.started"
+	EventProposalCompleted     EventType = "proposal.completed"
+	EventProposalFailed        EventType = "proposal.failed"
+	EventStageStarted          EventType = "stage.started"
+	EventStageCompleted        EventType = "stage.completed"
+	EventStageFailed           EventType = "stage.failed"
+	EventIntegrationStarted    EventType = "integration.started"
+	EventIntegrationCompleted  EventType = "integration.completed"
+	EventIntegrationFailed     EventType = "integration.failed"
 	EventVerificationStarted   EventType = "verification.started"
 	EventVerificationPassed    EventType = "verification.passed"
 	EventVerificationFailed    EventType = "verification.failed"
@@ -178,7 +187,10 @@ func validEventType(value EventType) bool {
 	case EventRunStarted, EventRunPaused, EventRunResumed, EventRunCompleted, EventRunCancelled, EventRunCancelRequested,
 		EventTaskCreated, EventTaskAssigned, EventTaskStarted, EventTaskWaiting, EventTaskBlocked,
 		EventTaskCompleted, EventTaskFailed, EventTaskCancelled, EventAgentMessageSent,
-		EventArtifactCreated, EventVerificationStarted, EventVerificationPassed, EventVerificationFailed,
+		EventArtifactCreated, EventProposalStarted, EventProposalCompleted, EventProposalFailed,
+		EventStageStarted, EventStageCompleted, EventStageFailed,
+		EventIntegrationStarted, EventIntegrationCompleted, EventIntegrationFailed,
+		EventVerificationStarted, EventVerificationPassed, EventVerificationFailed,
 		EventBaselineCompared, EventCorrectionStarted, EventCorrectionCompleted, EventCorrectionFailed,
 		EventReviewStarted, EventReviewApproved, EventReviewRejected, EventApprovalRequested,
 		EventApprovalGranted, EventApprovalRejected, EventRuntimeSelected, EventModelEscalated,
