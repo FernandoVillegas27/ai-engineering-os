@@ -239,3 +239,36 @@ func TestBusRejectsUnsafeRunDirectorySymlink(t *testing.T) {
 		t.Fatal("expected symlink run directory rejection")
 	}
 }
+
+
+func TestBusReclaimsStaleAppendLock(t *testing.T) {
+	root := t.TempDir()
+	bus, err := NewBus(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runDir, err := bus.ensureRunDir("run-stale")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(runDir, ".append.lock")
+	if err := os.WriteFile(lockPath, []byte("stale\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-10 * time.Minute)
+	if err := os.Chtimes(lockPath, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	value := testMessage(t, "run-stale")
+	if _, err := bus.Append(context.Background(), value); err != nil {
+		t.Fatal(err)
+	}
+	values, err := bus.List("run-stale", true, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(values) != 1 {
+		t.Fatalf("values = %#v", values)
+	}
+}
