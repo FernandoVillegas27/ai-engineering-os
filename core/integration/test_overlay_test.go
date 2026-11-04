@@ -217,3 +217,91 @@ func TestOverlayTestsRejectsConflictWithExistingIntegratedChange(t *testing.T) {
 		t.Fatal("expected source/QA path conflict")
 	}
 }
+
+
+func TestOverlayTestWorkspacesCombinesDisjointTestsOnlyAgents(t *testing.T) {
+	fixture := newMaterializeFixture(t)
+	defer fixture.cleanup(t)
+	base, err := Materialize(context.Background(), MaterializeConfig{
+		OriginalRoot: fixture.original,
+		Parent:       fixture.integrationParent,
+	}, fixture.plan, []taskworkspace.Workspace{fixture.backend, fixture.frontend})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer Cleanup(base, fixture.integrationParent)
+
+	qaParent := filepath.Join(fixture.base, "qa-multi")
+	if err := os.MkdirAll(qaParent, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := taskworkspace.New(taskworkspace.Config{OriginalRoot: base.Root, Parent: qaParent})
+	if err != nil {
+		t.Fatal(err)
+	}
+	qaA, err := manager.Prepare(context.Background(), "qa-a", "qa-engineer", []staging.WorkspaceChange{
+		{Path: "backend/service_test.go", Action: "create"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Cleanup(qaA)
+	qaB, err := manager.Prepare(context.Background(), "qa-b", "test-auditor", []staging.WorkspaceChange{
+		{Path: "frontend/app.spec.ts", Action: "create"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Cleanup(qaB)
+
+	writeIntegrationFile(t, qaA.Root, "backend/service_test.go", "package backend\n")
+	writeIntegrationFile(t, qaB.Root, "frontend/app.spec.ts", "export const ok = true;\n")
+	inspectionA, err := manager.Inspect(context.Background(), qaA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inspectionB, err := manager.Inspect(context.Background(), qaB)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	final, err := OverlayTestWorkspaces(
+		context.Background(),
+		TestOverlayConfig{Parent: fixture.integrationParent},
+		base,
+		[]taskworkspace.Workspace{qaB, qaA},
+		map[string]taskworkspace.Inspection{
+			"qa-a": inspectionA,
+			"qa-b": inspectionB,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer Cleanup(final, fixture.integrationParent)
+
+	if _, err := os.Stat(filepath.Join(final.Root, "backend", "service_test.go")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(final.Root, "frontend", "app.spec.ts")); err != nil {
+		t.Fatal(err)
+	}
+	if len(final.Changes) != len(base.Changes)+2 {
+		t.Fatalf("final changes=%#v", final.Changes)
+	}
+}
+
+func TestOverlayTestWorkspacesRejectsDuplicateTestOwnership(t *testing.T) {
+	changes := []staging.WorkspaceChange{{Path: "pkg/service_test.go", Action: "create"}}
+	workspaces := []taskworkspace.Workspace{
+		{TaskID: "qa-a", AgentID: "qa-a", Declared: changes},
+		{TaskID: "qa-b", AgentID: "qa-b", Declared: changes},
+	}
+	inspections := map[string]taskworkspace.Inspection{
+		"qa-a": {Changes: changes},
+		"qa-b": {Changes: changes},
+	}
+	if err := rejectDuplicateOverlayPaths(workspaces, inspections); err == nil {
+		t.Fatal("expected duplicate tests-only path rejection")
+	}
+}
