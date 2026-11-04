@@ -115,3 +115,53 @@ It does not yet:
 - visualize messages.
 
 Those are scheduler/orchestrator/control-plane responsibilities built on top of this layer.
+
+
+## Automatic specialist handoffs
+
+Coordinated runs now publish a durable handoff when a worker completes successfully.
+
+For every completed task:
+
+1. the worker result becomes a versioned `handoff` artifact;
+2. the artifact records the producing agent, task, summary, and related refs;
+3. the task graph is inspected for direct dependents;
+4. one typed `handoff` message is sent to each dependent agent;
+5. the coordinator returns the new artifact/message IDs;
+6. the Control Plane records/counts those refs from the task lifecycle event.
+
+Example:
+
+~~~text
+architect completes
+  -> handoff artifact A
+  -> message A -> backend-engineer
+  -> message A -> frontend-engineer
+  -> message A -> database-engineer
+
+backend/frontend/database complete
+  -> handoff artifacts
+  -> messages -> qa-engineer
+
+qa-engineer completes
+  -> handoff artifact
+  -> message -> reviewer
+~~~
+
+The producer does not gain permission to invoke or modify the receiver.
+
+The scheduler still decides when the receiver becomes runnable.
+
+### Storage
+
+Coordinated CLI runs resolve artifact/message stores from:
+
+1. explicit `--artifacts-dir` / `--messages-dir`;
+2. `AI_ENGINEERING_OS_ARTIFACTS_DIR` / `AI_ENGINEERING_OS_MESSAGES_DIR`;
+3. the OS user config directory under `ai-engineering-os/artifacts` and `ai-engineering-os/messages`.
+
+### Current boundary
+
+This phase publishes the inbox material.
+
+The next collaboration step is to load only the receiver's relevant handoff messages/artifacts and inject a bounded provider-independent collaboration context into that receiver's work unit.
