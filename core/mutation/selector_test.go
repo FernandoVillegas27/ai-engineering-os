@@ -41,3 +41,22 @@ func TestSelectSourceMutatingUnitsRejectsReadOnlyOrTestsOnlySet(t *testing.T) {
 		t.Fatal("expected no source-code-write units rejection")
 	}
 }
+
+
+func TestSelectTestsOnlyUnitsKeepsTestsWriteWithoutSourceWrite(t *testing.T) {
+	units := []execution.WorkUnit{
+		{ID: "backend", AgentID: "backend-engineer", Mutation: execution.MutationCapability{SourceCode: true, Tests: true}},
+		{ID: "qa", AgentID: "qa-engineer", Mutation: execution.MutationCapability{Tests: true}},
+		{ID: "reviewer", AgentID: "reviewer"},
+		{ID: "test-auditor", AgentID: "test-auditor", Mutation: execution.MutationCapability{Tests: true}},
+	}
+	selected := SelectTestsOnlyUnits(units)
+	if len(selected) != 2 || selected[0].ID != "qa" || selected[1].ID != "test-auditor" {
+		t.Fatalf("selected = %#v", selected)
+	}
+	for _, unit := range selected {
+		if !unit.Mutation.Tests || unit.Mutation.SourceCode {
+			t.Fatalf("invalid tests-only selection: %#v", unit)
+		}
+	}
+}
