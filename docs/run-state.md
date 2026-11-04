@@ -112,3 +112,30 @@ Those are later phases.
 The key invariant introduced here is:
 
 > A run has a durable, versioned state that can be reconstructed without the chat that created it.
+
+
+## CLI inspection
+
+The durable state can be inspected independently from the provider that created it.
+
+Initial commands:
+
+~~~text
+ai run init --task "..." --project my-project
+ai run list
+ai run status <run-id>
+ai run transition <run-id> --status running
+ai run transition <run-id> --status paused
+~~~
+
+Use `--json` for machine-readable output.
+
+Storage resolution order:
+
+1. explicit `--state-dir`;
+2. `AI_ENGINEERING_OS_STATE_DIR`;
+3. the operating system user configuration directory under `ai-engineering-os/runs`.
+
+This keeps run state outside source repositories by default while still allowing deterministic explicit storage for tests, automation and future control-plane services.
+
+These commands manipulate only run metadata. They do not resume an AI provider session or execute project code.
