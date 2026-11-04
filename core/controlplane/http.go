@@ -27,6 +27,11 @@ func (s HTTPServer) handleHealth(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s HTTPServer) handleRuns(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
 	if s.Store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "control-plane event store is not configured"})
 		return
@@ -92,6 +97,16 @@ func (s HTTPServer) handleStream(w http.ResponseWriter, r *http.Request, runID s
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "streaming is not supported"})
+		return
+	}
+
+	initial, err := s.Store.List(runID)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	if len(initial) == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "run not found"})
 		return
 	}
 
