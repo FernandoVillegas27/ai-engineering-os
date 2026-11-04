@@ -175,10 +175,35 @@ ai run status <run-id>
 
 after execution to inspect the same run from the durable state and Control Plane.
 
-### Current graph limitation
+### Specialist collaboration DAG
 
-The existing deterministic planner selects agents by capability but does not yet emit task dependencies.
+The first deterministic role-aware graph is now active for selected agents.
 
-Therefore the first `ai run execute` graph contains independent read-only work units. Dependency-aware execution is already supported by the scheduler/coordinator and will become active once Orchestrator v2 decomposition produces an explicit DAG.
+When the corresponding roles are present, the default collaboration order is:
+
+~~~text
+Researcher
+   |
+Architect
+   |
+Backend / Frontend / Database
+   |
+QA
+   |
+Reviewer
+~~~
+
+Missing roles are skipped rather than invented.
+
+Examples:
+
+- without an Architect, implementation roles may depend directly on Researcher when Researcher is selected;
+- QA depends on selected implementation roles;
+- Reviewer waits for every other selected work unit;
+- unknown future roles remain independent until an explicit collaboration rule is defined.
+
+These are deterministic platform rules, not model-generated scheduling decisions.
+
+Future Orchestrator v2 decomposition can replace or refine this default graph with an explicit validated task DAG for a specific objective.
 
 Write-capable multi-agent execution remains intentionally out of scope until isolated per-task staging and merge/conflict coordination are implemented.
