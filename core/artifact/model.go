@@ -143,6 +143,9 @@ func Validate(value Artifact) error {
 	if len(value.Payload) > 256*1024 {
 		return errors.New("artifact payload exceeds 256 KiB")
 	}
+	if err := validateTypedPayload(value.Type, value.Payload); err != nil {
+		return err
+	}
 	if value.CreatedAt.IsZero() || value.UpdatedAt.IsZero() || value.UpdatedAt.Before(value.CreatedAt) {
 		return errors.New("artifact timestamps are invalid")
 	}
