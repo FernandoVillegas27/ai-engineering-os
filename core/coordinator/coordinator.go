@@ -28,6 +28,7 @@ const (
 	EventTaskCompleted EventType = "task.completed"
 	EventTaskFailed    EventType = "task.failed"
 	EventRunCompleted  EventType = "run.completed"
+	EventRunFailed     EventType = "run.failed"
 	EventRunCancelled  EventType = "run.cancelled"
 )
 
@@ -142,12 +143,17 @@ func (c Coordinator) Run(ctx context.Context, graph *scheduler.Scheduler) (Resul
 		}
 
 		if graph.Done() && active == 0 {
+			progress := graph.Progress()
 			result := Result{
 				Completed: true,
-				Progress:  graph.Progress(),
+				Progress:  progress,
 				Tasks:     sortedTaskResults(taskResults),
 			}
-			if err := c.emit(ctx, Event{Type: EventRunCompleted}); err != nil {
+			eventType := EventRunCompleted
+			if progress.Failed > 0 || progress.Blocked > 0 || progress.Cancelled > 0 {
+				eventType = EventRunFailed
+			}
+			if err := c.emit(ctx, Event{Type: eventType}); err != nil {
 				return result, err
 			}
 			return result, nil
