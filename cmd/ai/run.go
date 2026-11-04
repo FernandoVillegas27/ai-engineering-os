@@ -36,6 +36,8 @@ func runRun(args []string) error {
 		return runRunControl(args[1:])
 	case "events":
 		return runRunEvents(args[1:])
+	case "execute":
+		return runRunExecute(args[1:])
 	default:
 		return fmt.Errorf("subcomando run desconocido: %s", args[0])
 	}
@@ -506,6 +508,7 @@ func printRunUsage() {
 	fmt.Println("  ai run transition <run-id> --status planned|running|paused|completed|failed|cancelled [--state-dir ruta] [--json]")
 	fmt.Println("  ai run control <run-id> [--events-dir ruta] [--json]")
 	fmt.Println("  ai run events <run-id> [--events-dir ruta] [--json]")
+	fmt.Println("  ai run execute [ruta] --task <tarea> (--dry-run | --runtime codex) [--project id] [--max-concurrency N] [--ai] [--json]")
 	fmt.Println()
 	fmt.Println("Sin --state-dir usa AI_ENGINEERING_OS_STATE_DIR o el directorio de configuración del usuario.")
 	fmt.Println("Sin --events-dir usa AI_ENGINEERING_OS_EVENTS_DIR o el directorio de configuración del usuario.")
