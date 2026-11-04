@@ -72,6 +72,14 @@ type QualityState struct {
 	Corrections        int    `json:"corrections"`
 }
 
+type PipelineState struct {
+	Proposal    string `json:"proposal,omitempty"`
+	Stage       string `json:"stage,omitempty"`
+	Integration string `json:"integration,omitempty"`
+}
+
+
+
 type Progress struct {
 	Total     int `json:"total"`
 	Queued    int `json:"queued"`
@@ -93,6 +101,7 @@ type State struct {
 	Edges            []TaskEdge            `json:"edges,omitempty"`
 	Progress         Progress              `json:"progress"`
 	Quality          QualityState          `json:"quality"`
+	Pipeline         PipelineState         `json:"pipeline"`
 	MessageCount     int                   `json:"message_count"`
 	ArtifactCount    int                   `json:"artifact_count"`
 	PendingApprovals int                   `json:"pending_approvals"`
@@ -225,6 +234,24 @@ func Project(events []Event) (State, error) {
 			task.Summary = event.Summary
 			task.LastSequence = event.Sequence
 			state.Tasks[event.TaskID] = task
+		case EventProposalStarted:
+			state.Pipeline.Proposal = "running"
+		case EventProposalCompleted:
+			state.Pipeline.Proposal = "completed"
+		case EventProposalFailed:
+			state.Pipeline.Proposal = "failed"
+		case EventStageStarted:
+			state.Pipeline.Stage = "running"
+		case EventStageCompleted:
+			state.Pipeline.Stage = "completed"
+		case EventStageFailed:
+			state.Pipeline.Stage = "failed"
+		case EventIntegrationStarted:
+			state.Pipeline.Integration = "running"
+		case EventIntegrationCompleted:
+			state.Pipeline.Integration = "completed"
+		case EventIntegrationFailed:
+			state.Pipeline.Integration = "failed"
 		case EventAgentMessageSent:
 			state.MessageCount++
 		case EventArtifactCreated:
