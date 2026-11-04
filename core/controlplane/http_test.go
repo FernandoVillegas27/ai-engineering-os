@@ -5,12 +5,18 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/artifact"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/message"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/promotion"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/promotioncandidate"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/staging"
 )
 
 func testHTTPStore(t *testing.T) (*EventStore, string) {
@@ -251,5 +257,92 @@ func TestHTTPCollaborationEndpointsRequireConfiguredStores(t *testing.T) {
 		if rec.Code != http.StatusServiceUnavailable {
 			t.Fatalf("%s status=%d", path, rec.Code)
 		}
+	}
+}
+
+
+func TestHTTPPromotionStatusReportsCurrentDryRunReadiness(t *testing.T) {
+	eventStore, runID := testHTTPStore(t)
+	base := t.TempDir()
+	original := filepath.Join(base, "original")
+	staged := filepath.Join(base, "staged")
+	if err := os.MkdirAll(original, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(staged, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(original, "main.go"), []byte("old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staged, "main.go"), []byte("new\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before, err := staging.SnapshotWorkspace(original, execution.DefaultSafeViewPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := promotion.Request{
+		OriginalRoot: original, StagedWorkspace: staged,
+		PreImage: staging.NewPreImage(before),
+		Declared: []staging.WorkspaceChange{{Path: "main.go", Action: "modify"}},
+		QualityPassed: true, TempParent: base,
+	}
+	record, err := promotioncandidate.New(runID, request, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := promotioncandidate.NewStore(filepath.Join(base, "candidates"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	handler := (HTTPServer{Store: eventStore, Promotions: store}).Handler()
+
+	req := httptest.NewRequest(http.MethodGet, "/runs/"+runID+"/promotion", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var status PromotionStatus
+	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
+		t.Fatal(err)
+	}
+	if !status.Ready || !status.QualityPassed || status.ChangeCount != 1 {
+		t.Fatalf("status=%#v", status)
+	}
+
+	// Stale the candidate by changing the original. The endpoint remains
+	// read-only and reports ready=false without leaking the integrity error.
+	if err := os.WriteFile(filepath.Join(original, "main.go"), []byte("changed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
+		t.Fatal(err)
+	}
+	if status.Ready {
+		t.Fatalf("stale promotion reported ready: %#v", status)
+	}
+}
+
+func TestHTTPPromotionStatusReturns404WithoutCandidate(t *testing.T) {
+	eventStore, runID := testHTTPStore(t)
+	store, err := promotioncandidate.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/runs/"+runID+"/promotion", nil)
+	rec := httptest.NewRecorder()
+	(HTTPServer{Store: eventStore, Promotions: store}).Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
