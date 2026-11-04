@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -18,12 +19,76 @@ type HTTPServer struct {
 func (s HTTPServer) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.handleHealth)
+	mux.HandleFunc("/runs", s.handleRunIndex)
 	mux.HandleFunc("/runs/", s.handleRuns)
 	return securityHeaders(mux)
 }
 
 func (s HTTPServer) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+type RunSummary struct {
+	RunID            string    `json:"run_id"`
+	Status           RunStatus `json:"status"`
+	LastSequence     uint64    `json:"last_sequence"`
+	Progress         Progress  `json:"progress"`
+	AgentCount       int       `json:"agent_count"`
+	MessageCount     int       `json:"message_count"`
+	ArtifactCount    int       `json:"artifact_count"`
+	PendingApprovals int       `json:"pending_approvals"`
+	LastEventAt      time.Time `json:"last_event_at"`
+}
+
+func (s HTTPServer) handleRunIndex(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	if s.Store == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "control-plane event store is not configured"})
+		return
+	}
+	ids, err := s.Store.RunIDs()
+	if err != nil {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+		return
+	}
+	summaries := make([]RunSummary, 0, len(ids))
+	for _, runID := range ids {
+		events, err := s.Store.List(runID)
+		if err != nil {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+			return
+		}
+		if len(events) == 0 {
+			continue
+		}
+		state, err := Project(events)
+		if err != nil {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+			return
+		}
+		summaries = append(summaries, RunSummary{
+			RunID:            runID,
+			Status:           state.Status,
+			LastSequence:     state.LastSequence,
+			Progress:         state.Progress,
+			AgentCount:       len(state.Agents),
+			MessageCount:     state.MessageCount,
+			ArtifactCount:    state.ArtifactCount,
+			PendingApprovals: state.PendingApprovals,
+			LastEventAt:      events[len(events)-1].CreatedAt,
+		})
+	}
+	sort.Slice(summaries, func(i, j int) bool {
+		if !summaries[i].LastEventAt.Equal(summaries[j].LastEventAt) {
+			return summaries[i].LastEventAt.After(summaries[j].LastEventAt)
+		}
+		return summaries[i].RunID < summaries[j].RunID
+	})
+	writeJSON(w, http.StatusOK, summaries)
 }
 
 func (s HTTPServer) handleRuns(w http.ResponseWriter, r *http.Request) {
