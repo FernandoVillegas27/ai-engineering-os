@@ -297,3 +297,49 @@ Each summary includes:
 The index is still derived from the authoritative event streams: every listed run is replayed through the same state projector used by `/runs/<run-id>/state`.
 
 Unsafe/non-run filesystem entries are ignored, while a symlink pretending to be a valid run directory is rejected.
+
+
+## Collaboration detail endpoints
+
+The local Control Plane server can expose the real collaboration records for a run:
+
+~~~text
+GET /runs/<run-id>/messages
+GET /runs/<run-id>/artifacts
+~~~
+
+### Messages
+
+The messages endpoint reads the persisted MessageBus history for the requested run, including expired messages for audit/reconstruction.
+
+It exposes the typed provider-independent envelope:
+
+- sender;
+- target;
+- kind;
+- priority;
+- reply relationship;
+- artifact references;
+- sequence;
+- timestamps.
+
+### Artifacts
+
+The artifacts endpoint reads immutable ArtifactStore entries filtered by `run_id` and ordered by creation time.
+
+No separate UI database is introduced.
+
+### Server configuration
+
+`ai run serve` now opens the same collaboration stores used by coordinated execution.
+
+Optional overrides:
+
+~~~text
+--artifacts-dir <path>
+--messages-dir <path>
+~~~
+
+Otherwise the normal environment/user-config resolution applies.
+
+This lets a future visual client render conversations, decisions, handoffs, verification reports and API contracts from durable platform data rather than provider chat history.
