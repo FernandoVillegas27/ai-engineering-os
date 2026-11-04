@@ -10,7 +10,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
+
+	"github.com/FernandoVillegas27/ai-engineering-os/core/fslock"
 )
 
 type EventStore struct {
@@ -53,11 +54,11 @@ func (s *EventStore) Append(ctx context.Context, value Event) (Event, error) {
 	if err != nil {
 		return Event{}, err
 	}
-	release, err := acquireAppendLock(ctx, runDir)
+	lock, err := fslock.Acquire(ctx, filepath.Join(runDir, ".append.lock"), fslock.Options{})
 	if err != nil {
-		return Event{}, err
+		return Event{}, fmt.Errorf("acquire control-plane append lock: %w", err)
 	}
-	defer release()
+	defer lock.Release()
 
 	events, err := loadEvents(runDir)
 	if err != nil {
@@ -185,27 +186,6 @@ func filenameSequence(name string) uint64 {
 	return value
 }
 
-func acquireAppendLock(ctx context.Context, runDir string) (func(), error) {
-	lockPath := filepath.Join(runDir, ".append.lock")
-	ticker := time.NewTicker(20 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-		if err == nil {
-			_, _ = file.WriteString(fmt.Sprintf("%d\n", os.Getpid()))
-			_ = file.Close()
-			return func() { _ = os.Remove(lockPath) }, nil
-		}
-		if !os.IsExist(err) {
-			return nil, fmt.Errorf("acquire control-plane append lock: %w", err)
-		}
-		select {
-		case <-ctx.Done():
-			return nil, fmt.Errorf("acquire control-plane append lock: %w", ctx.Err())
-		case <-ticker.C:
-		}
-	}
-}
 
 func safeToken(value string) bool {
 	value = strings.TrimSpace(value)
