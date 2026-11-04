@@ -123,17 +123,13 @@ func runRunExecute(args []string) error {
 	}
 
 	if options.multiAgentWrite {
-		mutatingUnits, err := mutation.SelectSourceMutatingUnits(units)
-		if err != nil {
-			return err
-		}
 		return runCoordinatedMutation(
 			context.Background(),
 			options,
 			root,
 			plan.RequestedCapabilities,
 			string(plan.Intent),
-			mutatingUnits,
+			units,
 		)
 	}
 
