@@ -239,3 +239,28 @@ The initial server:
 Remote access/authentication is intentionally not supported yet.
 
 A future UI should either run from the same trusted local application boundary or introduce explicit authentication before any non-loopback exposure.
+
+
+## Task graph metadata
+
+The Control Plane state now preserves the scheduler graph itself.
+
+Each task projection can include:
+
+- `depends_on`;
+- `mutating`;
+- repository-relative `scopes`.
+
+The projected state also exposes deterministic graph edges:
+
+~~~json
+{
+  "edges": [
+    {"from": "work-01-architect", "to": "work-02-backend"}
+  ]
+}
+~~~
+
+This lets visual clients render the real task/agent DAG and highlight mutation-scope conflicts without reconstructing scheduling rules from prose or model output.
+
+The graph is sourced from the scheduler tasks recorded at run initialization.
