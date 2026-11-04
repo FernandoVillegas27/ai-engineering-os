@@ -65,6 +65,9 @@ func runRunCancel(args []string) error {
 	if err != nil {
 		return err
 	}
+	if len(events) == 0 || events[0].Type != controlplane.EventRunStarted {
+		return fmt.Errorf("run %s has no valid Control Plane event stream in the selected --events-dir", run.ID)
+	}
 	alreadyRecorded := false
 	for _, existing := range events {
 		if existing.Type == controlplane.EventRunCancelRequested {
