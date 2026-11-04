@@ -63,3 +63,14 @@ func TestParseRunServeArgsCollaborationStoreOverrides(t *testing.T) {
 		t.Fatalf("options=%#v", options)
 	}
 }
+
+
+func TestParseRunServeArgsPromotionStoreOverride(t *testing.T) {
+	options, err := parseRunServeArgs([]string{"--promotion-dir", "./promotion"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.promotionDir != "./promotion" {
+		t.Fatalf("options=%#v", options)
+	}
+}
