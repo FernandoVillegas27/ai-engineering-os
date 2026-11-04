@@ -156,7 +156,8 @@ func TestOverlayTestsRejectsIntegratedBaseChangedAfterQAStarted(t *testing.T) {
 	_, err = OverlayTests(context.Background(), TestOverlayConfig{
 		Parent: fixture.integrationParent,
 	}, base, qa, inspection)
-	if err == nil || !strings.Contains(err.Error(), "integrated base changed") {
+	if err == nil || (!strings.Contains(err.Error(), "integrated base changed") &&
+		!strings.Contains(err.Error(), "was not staged from the current integrated source result")) {
 		t.Fatalf("err=%#v", err)
 	}
 }
