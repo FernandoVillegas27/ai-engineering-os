@@ -107,10 +107,10 @@ func TestHTTPStreamCanResumeAfterSequence(t *testing.T) {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	if strings.Contains(body, "id: 1\\n") {
+	if strings.Contains(body, "id: 1\n") {
 		t.Fatalf("stream replayed already acknowledged event: %q", body)
 	}
-	if !strings.Contains(body, "id: 2\\n") || !strings.Contains(body, "id: 3\\n") {
+	if !strings.Contains(body, "id: 2\n") || !strings.Contains(body, "id: 3\n") {
 		t.Fatalf("stream did not resume correctly: %q", body)
 	}
 	if !strings.Contains(rec.Header().Get("Content-Type"), "text/event-stream") {
