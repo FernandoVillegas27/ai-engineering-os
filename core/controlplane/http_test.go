@@ -8,6 +8,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/FernandoVillegas27/ai-engineering-os/core/artifact"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/message"
 )
 
 func testHTTPStore(t *testing.T) (*EventStore, string) {
@@ -186,5 +189,67 @@ func TestHTTPRunIndexIsGetOnly(t *testing.T) {
 	(HTTPServer{Store: store}).Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusMethodNotAllowed || rec.Header().Get("Allow") != http.MethodGet {
 		t.Fatalf("status=%d headers=%#v", rec.Code, rec.Header())
+	}
+}
+
+
+func TestHTTPCollaborationEndpointsReturnRunScopedData(t *testing.T) {
+	eventStore, runID := testHTTPStore(t)
+	artifactStore, err := artifact.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	messageBus, err := message.NewBus(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	value, err := artifact.New(artifact.NewRequest{
+		RunID: runID, TaskID: "task-1", ProducerAgent: "architect",
+		Type: artifact.TypeHandoff, Summary: "handoff", Payload: map[string]string{"ok": "true"},
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := artifactStore.Save(value); err != nil {
+		t.Fatal(err)
+	}
+	msg, err := message.New(message.NewRequest{
+		RunID: runID, TaskID: "task-1", FromAgent: "architect",
+		To: message.Target{Kind: message.TargetAgent, ID: "backend-engineer"},
+		Kind: message.KindHandoff, ArtifactRefs: []string{value.ID},
+		Payload: map[string]string{"summary": "handoff"},
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := messageBus.Append(context.Background(), msg); err != nil {
+		t.Fatal(err)
+	}
+	handler := (HTTPServer{Store: eventStore, Artifacts: artifactStore, Messages: messageBus}).Handler()
+
+	for _, path := range []string{"/runs/" + runID + "/messages", "/runs/" + runID + "/artifacts"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s status=%d body=%s", path, rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), runID) {
+			t.Fatalf("%s body=%s", path, rec.Body.String())
+		}
+	}
+}
+
+func TestHTTPCollaborationEndpointsRequireConfiguredStores(t *testing.T) {
+	eventStore, runID := testHTTPStore(t)
+	handler := (HTTPServer{Store: eventStore}).Handler()
+	for _, path := range []string{"/runs/" + runID + "/messages", "/runs/" + runID + "/artifacts"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("%s status=%d", path, rec.Code)
+		}
 	}
 }
