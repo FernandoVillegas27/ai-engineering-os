@@ -169,13 +169,12 @@ func executeMutationPreStage(
 }
 
 
-func mutationParticipants(readOnly, mutating []execution.WorkUnit) []execution.WorkUnit {
+func mutationParticipants(groups ...[]execution.WorkUnit) []execution.WorkUnit {
 	byID := map[string]execution.WorkUnit{}
-	for _, unit := range readOnly {
-		byID[unit.ID] = unit
-	}
-	for _, unit := range mutating {
-		byID[unit.ID] = unit
+	for _, group := range groups {
+		for _, unit := range group {
+			byID[unit.ID] = unit
+		}
 	}
 	out := make([]execution.WorkUnit, 0, len(byID))
 	for _, unit := range byID {
