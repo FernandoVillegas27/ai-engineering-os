@@ -109,3 +109,48 @@ func TestRunCoordinatorSinkProjectsArtifactAndMessageReferences(t *testing.T) {
 		t.Fatalf("state = %#v", state)
 	}
 }
+
+
+func TestRunCoordinatorSinkProjectsTaskDependenciesAndScopes(t *testing.T) {
+	store, err := NewEventStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sink := &RunCoordinatorSink{
+		RunID: "run-graph",
+		Store: store,
+		Tasks: []scheduler.Task{
+			{ID: "architect", AgentID: "architect"},
+			{
+				ID: "backend", AgentID: "backend-engineer",
+				DependsOn: []string{"architect"},
+				Mutating: true,
+				Scopes: []string{"backend/api", "backend/service"},
+			},
+		},
+	}
+	if err := sink.Record(context.Background(), coordinator.Event{Type: coordinator.EventRunStarted}); err != nil {
+		t.Fatal(err)
+	}
+	events, err := store.List("run-graph")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := Project(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend := state.Tasks["backend"]
+	if len(backend.DependsOn) != 1 || backend.DependsOn[0] != "architect" {
+		t.Fatalf("backend deps = %#v", backend.DependsOn)
+	}
+	if !backend.Mutating {
+		t.Fatal("backend mutating flag was lost")
+	}
+	if len(backend.Scopes) != 2 || backend.Scopes[0] != "backend/api" || backend.Scopes[1] != "backend/service" {
+		t.Fatalf("backend scopes = %#v", backend.Scopes)
+	}
+	if len(state.Edges) != 1 || state.Edges[0].From != "architect" || state.Edges[0].To != "backend" {
+		t.Fatalf("edges = %#v", state.Edges)
+	}
+}
