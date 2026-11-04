@@ -11,7 +11,6 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/controlplane"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/integration"
-	"github.com/FernandoVillegas27/ai-engineering-os/core/modelpolicy"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/mutation"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/promotion"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/proposal"
