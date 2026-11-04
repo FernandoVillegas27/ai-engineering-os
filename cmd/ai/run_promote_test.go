@@ -7,7 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/FernandoVillegas27/ai-engineering-os/core/controlplane"\n\t"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/controlplane"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/promotion"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/promotioncandidate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
