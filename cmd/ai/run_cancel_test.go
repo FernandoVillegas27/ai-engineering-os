@@ -148,3 +148,48 @@ func TestRunCancelRejectsTerminalRun(t *testing.T) {
 		t.Fatal("expected terminal run cancellation rejection")
 	}
 }
+
+
+func TestRunCancelRejectsMismatchedEventsDirectory(t *testing.T) {
+	base := t.TempDir()
+	stateDir := base + "/runs"
+	runStore, err := runstate.NewStore(stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	run, err := runstate.New(runstate.NewRunRequest{
+		Task: "running", ProjectID: "project", ProjectRoot: base,
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runstate.Transition(&run, runstate.StatusRunning, now.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := runStore.Save(run); err != nil {
+		t.Fatal(err)
+	}
+
+	err = runRunCancel([]string{
+		run.ID,
+		"--state-dir", stateDir,
+		"--events-dir", base + "/wrong-events",
+		"--control-dir", base + "/control",
+	})
+	if err == nil {
+		t.Fatal("expected mismatched events directory rejection")
+	}
+	// The durable request may exist, but no invalid event stream may be created.
+	eventStore, openErr := controlplane.NewEventStore(base + "/wrong-events")
+	if openErr != nil {
+		t.Fatal(openErr)
+	}
+	events, listErr := eventStore.List(run.ID)
+	if listErr != nil {
+		t.Fatal(listErr)
+	}
+	if len(events) != 0 {
+		t.Fatalf("invalid event stream created: %#v", events)
+	}
+}
