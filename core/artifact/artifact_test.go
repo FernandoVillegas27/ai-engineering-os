@@ -121,3 +121,38 @@ func TestArtifactRelatedIDsAreSortedAndDeduplicated(t *testing.T) {
 		t.Fatalf("related = %#v", value.Related)
 	}
 }
+
+
+func TestStoreListRunFiltersAndOrdersArtifacts(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	makeArtifact := func(runID, taskID string, at time.Time) Artifact {
+		t.Helper()
+		value, err := New(NewRequest{
+			RunID: runID, TaskID: taskID, ProducerAgent: "architect",
+			Type: TypeHandoff, Summary: taskID, Payload: map[string]string{"task": taskID},
+		}, at)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return value
+	}
+	later := makeArtifact("run-a", "later", now.Add(time.Minute))
+	earlier := makeArtifact("run-a", "earlier", now)
+	other := makeArtifact("run-b", "other", now)
+	for _, value := range []Artifact{later, other, earlier} {
+		if err := store.Save(value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	values, err := store.ListRun("run-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(values) != 2 || values[0].TaskID != "earlier" || values[1].TaskID != "later" {
+		t.Fatalf("values=%#v", values)
+	}
+}
