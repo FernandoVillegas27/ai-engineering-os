@@ -18,6 +18,7 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/message"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/modelpolicy"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/mutation"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
@@ -122,13 +123,17 @@ func runRunExecute(args []string) error {
 	}
 
 	if options.multiAgentWrite {
+		mutatingUnits, err := mutation.SelectSourceMutatingUnits(units)
+		if err != nil {
+			return err
+		}
 		return runCoordinatedMutation(
 			context.Background(),
 			options,
 			root,
 			plan.RequestedCapabilities,
 			string(plan.Intent),
-			units,
+			mutatingUnits,
 		)
 	}
 
