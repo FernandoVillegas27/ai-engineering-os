@@ -135,7 +135,10 @@ func TestRunCancelRejectsTerminalRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := runstate.Transition(&run, runstate.StatusCompleted, now.Add(time.Second)); err != nil {
+	if err := runstate.Transition(&run, runstate.StatusRunning, now.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := runstate.Transition(&run, runstate.StatusCompleted, now.Add(2*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.Save(run); err != nil {
