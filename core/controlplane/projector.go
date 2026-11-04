@@ -1,6 +1,7 @@
 package controlplane
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -46,7 +47,15 @@ type TaskState struct {
 	AgentID      string     `json:"agent_id,omitempty"`
 	Status       TaskStatus `json:"status"`
 	Summary      string     `json:"summary,omitempty"`
+	DependsOn    []string   `json:"depends_on,omitempty"`
+	Mutating     bool       `json:"mutating"`
+	Scopes       []string   `json:"scopes,omitempty"`
 	LastSequence uint64     `json:"last_sequence"`
+}
+
+type TaskEdge struct {
+	From string `json:"from"`
+	To   string `json:"to"`
 }
 
 type AgentState struct {
@@ -81,6 +90,7 @@ type State struct {
 	LastSequence     uint64                `json:"last_sequence"`
 	Tasks            map[string]TaskState  `json:"tasks"`
 	Agents           map[string]AgentState `json:"agents"`
+	Edges            []TaskEdge            `json:"edges,omitempty"`
 	Progress         Progress              `json:"progress"`
 	Quality          QualityState          `json:"quality"`
 	MessageCount     int                   `json:"message_count"`
@@ -133,11 +143,22 @@ func Project(events []Event) (State, error) {
 			if _, exists := state.Tasks[event.TaskID]; exists {
 				return State{}, fmt.Errorf("task %s already exists", event.TaskID)
 			}
+			var metadata struct {
+				DependsOn []string `json:"depends_on"`
+				Mutating  bool     `json:"mutating"`
+				Scopes    []string `json:"scopes"`
+			}
+			if err := json.Unmarshal(event.Data, &metadata); err != nil {
+				return State{}, fmt.Errorf("decode task metadata for %s: %w", event.TaskID, err)
+			}
 			state.Tasks[event.TaskID] = TaskState{
 				ID:           event.TaskID,
 				AgentID:      event.AgentID,
 				Status:       TaskQueued,
 				Summary:      event.Summary,
+				DependsOn:    sortedStrings(metadata.DependsOn),
+				Mutating:     metadata.Mutating,
+				Scopes:       sortedStrings(metadata.Scopes),
 				LastSequence: event.Sequence,
 			}
 		case EventTaskAssigned:
@@ -246,8 +267,12 @@ func (s State) task(id string) TaskState {
 func (s *State) recompute() {
 	s.Progress = Progress{}
 	s.Agents = map[string]AgentState{}
+	s.Edges = nil
 	for _, task := range s.Tasks {
 		s.Progress.Total++
+		for _, dependency := range task.DependsOn {
+			s.Edges = append(s.Edges, TaskEdge{From: dependency, To: task.ID})
+		}
 		switch task.Status {
 		case TaskQueued:
 			s.Progress.Queued++
@@ -282,6 +307,18 @@ func (s *State) recompute() {
 		sort.Strings(agent.ActiveTasks)
 		s.Agents[id] = agent
 	}
+	sort.Slice(s.Edges, func(i, j int) bool {
+		if s.Edges[i].From != s.Edges[j].From {
+			return s.Edges[i].From < s.Edges[j].From
+		}
+		return s.Edges[i].To < s.Edges[j].To
+	})
+}
+
+func sortedStrings(values []string) []string {
+	out := append([]string(nil), values...)
+	sort.Strings(out)
+	return out
 }
 
 func mergeAgentStatus(current AgentStatus, task TaskStatus) AgentStatus {
