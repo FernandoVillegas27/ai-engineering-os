@@ -92,3 +92,54 @@ qa-engineer
 ~~~
 
 The typed inter-agent message bus is the next phase.
+
+
+## Typed high-value payloads
+
+The artifact envelope remains generic, but high-value coordination artifacts now validate dedicated payload contracts.
+
+### ArchitectureDecision
+
+Required:
+
+- `decision`
+- `rationale`
+
+Optional bounded lists:
+
+- `constraints`
+- `interfaces`
+- `unknowns`
+
+### APIContract
+
+Required:
+
+- version;
+- HTTP/HTTPS/REST protocol;
+- one or more operations.
+
+Every operation has a unique ID, supported HTTP method, absolute API path, and optional bounded request/response schema summaries.
+
+### VerificationReport
+
+Required:
+
+- terminal report status: `passed`, `failed`, `partial`, or `infrastructure`;
+- one or more uniquely identified checks.
+
+Checks have explicit status, summary, and optional bounded evidence.
+
+### Strict validation
+
+For these artifact types:
+
+- unknown JSON fields are rejected;
+- trailing/multiple JSON values are rejected;
+- duplicate operation/check IDs are rejected;
+- list and text sizes are bounded;
+- validation occurs both when creating and when loading persisted artifacts.
+
+This lets collaborating agents treat these artifacts as stable contracts rather than arbitrary JSON blobs.
+
+Other artifact types retain the generic payload contract until their dedicated schema is introduced.
