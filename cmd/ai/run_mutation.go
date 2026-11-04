@@ -249,6 +249,9 @@ func runCoordinatedMutation(
 	if err := runStore.Save(run); err != nil {
 		return err
 	}
+	if err := emit(controlplane.EventRunCompleted, "", "", "coordinated mutating run completed with promotion candidate ready"); err != nil {
+		return err
+	}
 
 	// Preserve only the final integrated workspace. It is still outside the
 	// original project and promotion.Apply has NOT been called.
