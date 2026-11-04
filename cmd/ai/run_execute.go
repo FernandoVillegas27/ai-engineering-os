@@ -17,6 +17,7 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/detector"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/message"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/modelpolicy"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
@@ -37,6 +38,9 @@ type runExecuteOptions struct {
 	artifactsDir   string
 	messagesDir    string
 	maxConcurrency int
+	modelPolicy    modelpolicy.Policy
+	model          string
+	multiAgentWrite bool
 	json           bool
 }
 
@@ -114,6 +118,17 @@ func runRunExecute(args []string) error {
 	units, err := execution.BuildWorkUnits(options.task, root, plan, agents)
 	if err != nil {
 		return err
+	}
+
+	if options.multiAgentWrite {
+		return runCoordinatedMutation(
+			context.Background(),
+			options,
+			root,
+			plan.RequestedCapabilities,
+			string(plan.Intent),
+			units,
+		)
 	}
 
 	runStore, err := openRunStore(options.stateDir)
@@ -351,6 +366,7 @@ func parseRunExecuteArgs(args []string) (runExecuteOptions, error) {
 	options := runExecuteOptions{
 		root:           ".",
 		maxConcurrency: 2,
+		modelPolicy:    modelpolicy.PolicyAuto,
 	}
 	var positional []string
 	for i := 0; i < len(args); i++ {
@@ -377,6 +393,24 @@ func parseRunExecuteArgs(args []string) (runExecuteOptions, error) {
 			}
 			i++
 			options.runtime = args[i]
+		case "--model-policy":
+			if i+1 >= len(args) {
+				return runExecuteOptions{}, fmt.Errorf("--model-policy requiere un valor")
+			}
+			i++
+			policy, err := modelpolicy.Parse(args[i])
+			if err != nil {
+				return runExecuteOptions{}, err
+			}
+			options.modelPolicy = policy
+		case "--model":
+			if i+1 >= len(args) {
+				return runExecuteOptions{}, fmt.Errorf("--model requiere un id")
+			}
+			i++
+			options.model = strings.TrimSpace(args[i])
+		case "--multi-agent-write":
+			options.multiAgentWrite = true
 		case "--state-dir":
 			if i+1 >= len(args) {
 				return runExecuteOptions{}, fmt.Errorf("--state-dir requiere una ruta")
@@ -414,7 +448,7 @@ func parseRunExecuteArgs(args []string) (runExecuteOptions, error) {
 		case "--json":
 			options.json = true
 		case "-h", "--help":
-			return runExecuteOptions{}, fmt.Errorf("uso: ai run execute [ruta] --task <tarea> (--dry-run | --runtime codex) [--project id] [--max-concurrency N] [--ai] [--artifacts-dir ruta] [--messages-dir ruta]")
+			return runExecuteOptions{}, fmt.Errorf("uso: ai run execute [ruta] --task <tarea> (--dry-run | --runtime auto|codex|cursor) [--multi-agent-write] [--project id] [--max-concurrency N] [--model-policy auto|economy|balanced|deep] [--model id] [--ai]")
 		default:
 			if strings.HasPrefix(args[i], "-") {
 				return runExecuteOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
@@ -434,11 +468,18 @@ func parseRunExecuteArgs(args []string) (runExecuteOptions, error) {
 	if options.dryRun && options.runtime != "" {
 		return runExecuteOptions{}, fmt.Errorf("--dry-run y --runtime no se pueden usar juntos")
 	}
-	if !options.dryRun && options.runtime == "" {
-		return runExecuteOptions{}, fmt.Errorf("indicá --dry-run o --runtime codex")
+	if options.multiAgentWrite && options.dryRun {
+		return runExecuteOptions{}, fmt.Errorf("--multi-agent-write no se puede combinar con --dry-run")
 	}
-	if options.runtime != "" && options.runtime != "codex" {
-		return runExecuteOptions{}, fmt.Errorf("runtime no soportado: %s", options.runtime)
+	if !options.dryRun && options.runtime == "" {
+		return runExecuteOptions{}, fmt.Errorf("indicá --dry-run o --runtime auto|codex|cursor")
+	}
+	if options.multiAgentWrite {
+		if options.runtime != "auto" && options.runtime != "codex" && options.runtime != "cursor" {
+			return runExecuteOptions{}, fmt.Errorf("runtime no soportado para multi-agent-write: %s", options.runtime)
+		}
+	} else if options.runtime != "" && options.runtime != "codex" {
+		return runExecuteOptions{}, fmt.Errorf("el modo read-only integrado soporta runtime codex; usá --multi-agent-write para auto/cursor")
 	}
 	return options, nil
 }
