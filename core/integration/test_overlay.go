@@ -27,17 +27,33 @@ func OverlayTests(
 	qa taskworkspace.Workspace,
 	inspection taskworkspace.Inspection,
 ) (IntegratedWorkspace, error) {
+	return OverlayTestWorkspaces(
+		ctx,
+		config,
+		base,
+		[]taskworkspace.Workspace{qa},
+		map[string]taskworkspace.Inspection{qa.TaskID: inspection},
+	)
+}
+
+func OverlayTestWorkspaces(
+	ctx context.Context,
+	config TestOverlayConfig,
+	base IntegratedWorkspace,
+	workspaces []taskworkspace.Workspace,
+	inspections map[string]taskworkspace.Inspection,
+) (IntegratedWorkspace, error) {
 	if err := ctx.Err(); err != nil {
 		return IntegratedWorkspace{}, fmt.Errorf("overlay tests: %w", err)
 	}
 	if strings.TrimSpace(base.Root) == "" || base.PreImage.IsZero() {
 		return IntegratedWorkspace{}, errors.New("test overlay requires integrated base workspace")
 	}
-	if strings.TrimSpace(qa.Root) == "" || qa.PreImage.IsZero() {
-		return IntegratedWorkspace{}, errors.New("test overlay requires QA workspace and pre-image")
+	if len(workspaces) == 0 {
+		return IntegratedWorkspace{}, errors.New("test overlay requires at least one tests-only workspace")
 	}
-	if inspection.ResultImage.IsZero() {
-		return IntegratedWorkspace{}, errors.New("test overlay requires frozen QA result image")
+	if len(inspections) == 0 {
+		return IntegratedWorkspace{}, errors.New("test overlay requires inspections")
 	}
 
 	policy := config.Policy
@@ -65,24 +81,66 @@ func OverlayTests(
 	if err := exactChanges(sortedWorkspaceChanges(baseActual), sortedWorkspaceChanges(base.Changes)); err != nil {
 		return IntegratedWorkspace{}, fmt.Errorf("integrated base changed before QA overlay: %w", err)
 	}
-	if staging.NewPreImage(baseSnapshot).Digest() != qa.PreImage.Digest() {
-		return IntegratedWorkspace{}, errors.New("QA workspace was not staged from the current integrated source result")
+	baseDigest := staging.NewPreImage(baseSnapshot).Digest()
+
+	byTask := map[string]taskworkspace.Workspace{}
+	var overlayChanges []staging.WorkspaceChange
+	for _, qa := range workspaces {
+		if strings.TrimSpace(qa.TaskID) == "" || strings.TrimSpace(qa.AgentID) == "" {
+			return IntegratedWorkspace{}, errors.New("tests-only workspace requires task and agent ids")
+		}
+		if _, exists := byTask[qa.TaskID]; exists {
+			return IntegratedWorkspace{}, fmt.Errorf("duplicate tests-only workspace: %s", qa.TaskID)
+		}
+		if strings.TrimSpace(qa.Root) == "" || qa.PreImage.IsZero() {
+			return IntegratedWorkspace{}, fmt.Errorf("tests-only workspace %s has no root/pre-image", qa.TaskID)
+		}
+		if qa.PreImage.Digest() != baseDigest {
+			return IntegratedWorkspace{}, fmt.Errorf(
+				"tests-only workspace %s was not staged from the current integrated source result",
+				qa.TaskID,
+			)
+		}
+		inspection, ok := inspections[qa.TaskID]
+		if !ok {
+			return IntegratedWorkspace{}, fmt.Errorf("missing tests-only inspection for %s", qa.TaskID)
+		}
+		if inspection.ResultImage.IsZero() {
+			return IntegratedWorkspace{}, fmt.Errorf("tests-only inspection %s has no frozen result image", qa.TaskID)
+		}
+		frozenChanges := staging.ChangesBetween(
+			qa.PreImage.Snapshot(),
+			inspection.ResultImage.Snapshot(),
+		)
+		if err := exactChanges(
+			sortedWorkspaceChanges(frozenChanges),
+			sortedWorkspaceChanges(inspection.Changes),
+		); err != nil {
+			return IntegratedWorkspace{}, fmt.Errorf(
+				"tests-only inspection %s does not match frozen result image: %w",
+				qa.TaskID,
+				err,
+			)
+		}
+		if err := staging.EnsureChangesMatchDeclared(inspection.Changes, qa.Declared); err != nil {
+			return IntegratedWorkspace{}, fmt.Errorf("tests-only inspection %s violates declared scope: %w", qa.TaskID, err)
+		}
+		if err := filekind.ValidateTestsOnly(inspection.Changes); err != nil {
+			return IntegratedWorkspace{}, fmt.Errorf("tests-only policy for %s: %w", qa.TaskID, err)
+		}
+		byTask[qa.TaskID] = qa
+		overlayChanges = append(overlayChanges, inspection.Changes...)
 	}
 
-	frozenQAChanges := staging.ChangesBetween(
-		qa.PreImage.Snapshot(),
-		inspection.ResultImage.Snapshot(),
-	)
-	if err := exactChanges(sortedWorkspaceChanges(frozenQAChanges), sortedWorkspaceChanges(inspection.Changes)); err != nil {
-		return IntegratedWorkspace{}, fmt.Errorf("QA inspection does not match frozen result image: %w", err)
+	for taskID := range inspections {
+		if _, ok := byTask[taskID]; !ok {
+			return IntegratedWorkspace{}, fmt.Errorf("inspection references unknown tests-only workspace %s", taskID)
+		}
 	}
-	if err := staging.EnsureChangesMatchDeclared(inspection.Changes, qa.Declared); err != nil {
-		return IntegratedWorkspace{}, fmt.Errorf("QA inspection violates declared scope: %w", err)
+	if err := rejectOverlayConflicts(base.Changes, overlayChanges); err != nil {
+		return IntegratedWorkspace{}, err
 	}
-	if err := filekind.ValidateTestsOnly(inspection.Changes); err != nil {
-		return IntegratedWorkspace{}, fmt.Errorf("QA tests-only policy: %w", err)
-	}
-	if err := rejectOverlayConflicts(base.Changes, inspection.Changes); err != nil {
+	if err := rejectDuplicateOverlayPaths(workspaces, inspections); err != nil {
 		return IntegratedWorkspace{}, err
 	}
 
@@ -104,35 +162,58 @@ func OverlayTests(
 	if err != nil {
 		return IntegratedWorkspace{}, err
 	}
-	if staging.NewPreImage(copiedBase).Digest() != staging.NewPreImage(baseSnapshot).Digest() {
+	if staging.NewPreImage(copiedBase).Digest() != baseDigest {
 		return IntegratedWorkspace{}, errors.New("test overlay copy does not match integrated base")
 	}
 
-	resultSnapshot := inspection.ResultImage.Snapshot()
-	for _, change := range sortedWorkspaceChanges(inspection.Changes) {
-		var expected [32]byte
-		hasExpected := false
-		switch change.Action {
-		case "create", "modify":
-			var ok bool
-			expected, ok = resultSnapshot[change.Path]
-			if !ok {
-				return IntegratedWorkspace{}, fmt.Errorf("QA frozen result is missing %s", change.Path)
+	taskIDs := make([]string, 0, len(byTask))
+	for taskID := range byTask {
+		taskIDs = append(taskIDs, taskID)
+	}
+	sort.Strings(taskIDs)
+
+	for _, taskID := range taskIDs {
+		qa := byTask[taskID]
+		inspection := inspections[taskID]
+		resultSnapshot := inspection.ResultImage.Snapshot()
+		for _, change := range sortedWorkspaceChanges(inspection.Changes) {
+			var expected [32]byte
+			hasExpected := false
+			switch change.Action {
+			case "create", "modify":
+				var ok bool
+				expected, ok = resultSnapshot[change.Path]
+				if !ok {
+					return IntegratedWorkspace{}, fmt.Errorf(
+						"tests-only frozen result %s is missing %s",
+						taskID,
+						change.Path,
+					)
+				}
+				hasExpected = true
+			case "delete":
+				if _, exists := resultSnapshot[change.Path]; exists {
+					return IntegratedWorkspace{}, fmt.Errorf(
+						"tests-only frozen result %s still contains deleted path %s",
+						taskID,
+						change.Path,
+					)
+				}
 			}
-			hasExpected = true
-		case "delete":
-			if _, exists := resultSnapshot[change.Path]; exists {
-				return IntegratedWorkspace{}, fmt.Errorf("QA frozen result still contains deleted path %s", change.Path)
+			planned := PlannedChange{
+				TaskID:  qa.TaskID,
+				AgentID: qa.AgentID,
+				Path:    change.Path,
+				Action:  change.Action,
 			}
-		}
-		planned := PlannedChange{
-			TaskID:  qa.TaskID,
-			AgentID: qa.AgentID,
-			Path:    change.Path,
-			Action:  change.Action,
-		}
-		if err := applyPlannedChange(qa.Root, dir, planned, policy, expected, hasExpected); err != nil {
-			return IntegratedWorkspace{}, fmt.Errorf("apply QA test change %s: %w", change.Path, err)
+			if err := applyPlannedChange(qa.Root, dir, planned, policy, expected, hasExpected); err != nil {
+				return IntegratedWorkspace{}, fmt.Errorf(
+					"apply tests-only change %s from %s: %w",
+					change.Path,
+					taskID,
+					err,
+				)
+			}
 		}
 	}
 
@@ -142,12 +223,12 @@ func OverlayTests(
 	}
 	finalChanges := staging.ChangesBetween(base.PreImage.Snapshot(), finalSnapshot)
 	expectedChanges := append([]staging.WorkspaceChange(nil), base.Changes...)
-	expectedChanges = append(expectedChanges, inspection.Changes...)
+	expectedChanges = append(expectedChanges, overlayChanges...)
 	if err := exactChanges(
 		sortedWorkspaceChanges(finalChanges),
 		sortedWorkspaceChanges(expectedChanges),
 	); err != nil {
-		return IntegratedWorkspace{}, fmt.Errorf("final source+QA workspace differs from expected overlay: %w", err)
+		return IntegratedWorkspace{}, fmt.Errorf("final source+tests workspace differs from expected overlay: %w", err)
 	}
 
 	cleanup = false
@@ -165,7 +246,29 @@ func rejectOverlayConflicts(base, overlay []staging.WorkspaceChange) error {
 	}
 	for _, change := range overlay {
 		if paths[change.Path] {
-			return fmt.Errorf("QA test overlay conflicts with existing integrated change: %s", change.Path)
+			return fmt.Errorf("tests-only overlay conflicts with existing integrated change: %s", change.Path)
+		}
+	}
+	return nil
+}
+
+func rejectDuplicateOverlayPaths(
+	workspaces []taskworkspace.Workspace,
+	inspections map[string]taskworkspace.Inspection,
+) error {
+	owners := map[string]string{}
+	for _, workspace := range workspaces {
+		inspection := inspections[workspace.TaskID]
+		for _, change := range inspection.Changes {
+			if owner, exists := owners[change.Path]; exists {
+				return fmt.Errorf(
+					"tests-only overlay conflict on %s between tasks %s and %s",
+					change.Path,
+					owner,
+					workspace.TaskID,
+				)
+			}
+			owners[change.Path] = workspace.TaskID
 		}
 	}
 	return nil
