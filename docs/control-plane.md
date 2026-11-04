@@ -271,3 +271,29 @@ The graph is sourced from the scheduler tasks recorded at run initialization.
 Control Plane event append uses the same ownership-aware filesystem lock as the message bus.
 
 A process crash can therefore leave an old lock file without permanently freezing event ingestion. Stale recovery is age-bounded, symlink-safe, cancellation-aware, and release checks the ownership token before removing the lock.
+
+
+## Run index for visual clients
+
+The live Control Plane API can enumerate known runs:
+
+~~~text
+GET /runs
+~~~
+
+The response is ordered by most recent event activity and contains projected summaries rather than raw directory metadata.
+
+Each summary includes:
+
+- run ID;
+- run status;
+- last event sequence;
+- deterministic task progress;
+- agent count;
+- message/artifact counts;
+- pending approvals;
+- last event timestamp.
+
+The index is still derived from the authoritative event streams: every listed run is replayed through the same state projector used by `/runs/<run-id>/state`.
+
+Unsafe/non-run filesystem entries are ignored, while a symlink pretending to be a valid run directory is rejected.
