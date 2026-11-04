@@ -766,6 +766,162 @@ Use deterministic validation for the generated plan.
 
 ---
 
+## Phase P9.5 — Multi-agent Control Plane
+
+### Goal
+
+Expose and govern the live multi-agent system as an inspectable control plane.
+
+This is a functional requirement, not a visual-dashboard requirement.
+
+The system must be able to answer, in real time or from persisted run state:
+
+- which agents exist in the current run;
+- which agents are active, waiting, blocked, completed, failed, cancelled, or retrying;
+- which task/work unit each agent owns;
+- which agent is waiting on another agent;
+- what dependencies exist between work units;
+- what messages agents sent to each other;
+- what artifacts each agent produced or consumed;
+- what file scope each mutating agent owns;
+- what runtime/model/provider each invocation used;
+- what verification/review gates have passed or failed;
+- what retry/correction budget remains;
+- what memory/context was loaded;
+- what tool calls were attempted and whether they succeeded;
+- what approvals are currently required;
+- why the orchestrator made a routing, retry, escalation, or stop decision;
+- aggregate progress for the whole run.
+
+### Functional model
+
+The control plane should be driven from authoritative run events and persisted state rather than scraping provider conversations.
+
+~~~text
+Agents / Runtimes
+      |
+      v
+Message Bus + Artifact Store
+      |
+      v
+Run Event Stream
+      |
+      +--> Task Graph / Scheduler State
+      +--> Agent State Registry
+      +--> Quality / Verification State
+      +--> Tool / Runtime State
+      +--> Memory / Context State
+      +--> Budget / Retry State
+      +--> Approval State
+      |
+      v
+Control Plane API / CLI / future UI
+~~~
+
+### Agent state machine
+
+At minimum, support explicit states such as:
+
+- `queued`;
+- `ready`;
+- `running`;
+- `waiting`;
+- `blocked`;
+- `verifying`;
+- `reviewing`;
+- `correcting`;
+- `completed`;
+- `failed`;
+- `cancelled`.
+
+Transitions must be explicit and auditable.
+
+### Run event stream
+
+Every important transition should emit a typed event.
+
+Examples:
+
+- `run.started`;
+- `task.created`;
+- `task.assigned`;
+- `agent.started`;
+- `agent.message.sent`;
+- `artifact.created`;
+- `agent.waiting`;
+- `agent.blocked`;
+- `verification.started`;
+- `verification.failed`;
+- `baseline.compared`;
+- `correction.started`;
+- `review.rejected`;
+- `approval.requested`;
+- `agent.completed`;
+- `run.completed`.
+
+The control plane should be reconstructable by replaying persisted events plus snapshots/checkpoints.
+
+### Orchestrator visibility
+
+The orchestrator must have a deterministic view of:
+
+- active task graph;
+- agent states;
+- open questions;
+- blockers;
+- dependency readiness;
+- owned file scopes;
+- verification state;
+- retry counts;
+- budgets;
+- pending approvals.
+
+This same state should also be inspectable by a human.
+
+### Human control
+
+The control plane should eventually support commands such as:
+
+~~~text
+ai run status <run-id>
+ai run agents <run-id>
+ai run graph <run-id>
+ai run messages <run-id>
+ai run artifacts <run-id>
+ai run pause <run-id>
+ai run resume <run-id>
+ai run cancel <run-id>
+ai run retry <run-id> <task-id>
+~~~
+
+Human intervention must be explicit and recorded as events.
+
+### Progress
+
+Progress must be derived from task graph state, not invented percentages from an LLM.
+
+Useful metrics include:
+
+- total tasks;
+- ready/running/waiting/blocked/completed tasks;
+- completed required dependencies;
+- current critical path;
+- corrections/retries used;
+- verification gates completed;
+- messages pending response.
+
+### Important boundary
+
+A future 2D/3D interface may visualize this state, but the backend control-plane semantics must exist first.
+
+The visual layer must remain replaceable.
+
+The product goal is therefore:
+
+> Build the multi-agent coordination engine and observable control plane first; any dashboard is only one client of that system.
+
+---
+
 ## Phase P10 — Specialist collaboration patterns
 
 ### Goal
