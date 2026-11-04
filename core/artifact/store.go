@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -122,4 +123,50 @@ func (s *Store) Load(id string) (Artifact, error) {
 		return Artifact{}, errors.New("persisted artifact id does not match requested id")
 	}
 	return value, nil
+}
+
+
+func (s *Store) ListRun(runID string) ([]Artifact, error) {
+	if s == nil {
+		return nil, errors.New("artifact store is required")
+	}
+	runID = strings.TrimSpace(runID)
+	if runID == "" {
+		return nil, errors.New("artifact run id is required")
+	}
+	entries, err := os.ReadDir(s.root)
+	if err != nil {
+		return nil, err
+	}
+	var values []Artifact
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("artifact entry must be a regular file: %s", entry.Name())
+		}
+		id := strings.TrimSuffix(entry.Name(), ".json")
+		if !safeID(id, "artifact-") {
+			return nil, fmt.Errorf("invalid artifact entry filename: %s", entry.Name())
+		}
+		value, err := s.Load(id)
+		if err != nil {
+			return nil, err
+		}
+		if value.RunID == runID {
+			values = append(values, value)
+		}
+	}
+	sort.Slice(values, func(i, j int) bool {
+		if !values[i].CreatedAt.Equal(values[j].CreatedAt) {
+			return values[i].CreatedAt.Before(values[j].CreatedAt)
+		}
+		return values[i].ID < values[j].ID
+	})
+	return values, nil
 }
