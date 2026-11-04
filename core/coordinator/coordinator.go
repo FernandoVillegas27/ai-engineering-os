@@ -108,8 +108,10 @@ func (c Coordinator) Run(ctx context.Context, graph *scheduler.Scheduler) (Resul
 		}
 
 		capacity := maxConcurrency - active
+		stateAdvanced := false
 		if capacity > 0 {
 			for _, task := range graph.AcquireReady(capacity) {
+				stateAdvanced = true
 				worker, ok := c.Workers[task.AgentID]
 				if !ok || worker == nil {
 					if err := graph.Fail(task.ID); err != nil {
@@ -151,6 +153,9 @@ func (c Coordinator) Run(ctx context.Context, graph *scheduler.Scheduler) (Resul
 			return result, nil
 		}
 
+		if active == 0 && stateAdvanced {
+			continue
+		}
 		if active == 0 {
 			// A valid DAG with no running work must either expose a ready task or
 			// be terminal. Anything else is an internal scheduler/coordinator bug.
