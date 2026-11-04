@@ -12,6 +12,7 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/artifact"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/controlplane"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/message"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/promotioncandidate"
 )
 
 type runServeOptions struct {
@@ -19,6 +20,7 @@ type runServeOptions struct {
 	eventsDir    string
 	artifactsDir string
 	messagesDir  string
+	promotionDir string
 }
 
 func runRunServe(args []string) error {
@@ -49,13 +51,22 @@ func runRunServe(args []string) error {
 	if err != nil {
 		return err
 	}
+	promotionRoot, err := resolveRunAuxDir(options.promotionDir, "AI_ENGINEERING_OS_PROMOTION_DIR", "promotion-candidates")
+	if err != nil {
+		return err
+	}
+	promotionStore, err := promotioncandidate.NewStore(promotionRoot)
+	if err != nil {
+		return err
+	}
 
 	server := &http.Server{
 		Addr: options.addr,
 		Handler: (controlplane.HTTPServer{
 			Store:     store,
 			Artifacts: artifactStore,
-			Messages:  messageBus,
+			Messages:   messageBus,
+			Promotions: promotionStore,
 		}).Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -68,6 +79,7 @@ func runRunServe(args []string) error {
 	fmt.Println("  GET /runs/<run-id>/stream?after=<sequence>")
 	fmt.Println("  GET /runs/<run-id>/messages")
 	fmt.Println("  GET /runs/<run-id>/artifacts")
+	fmt.Println("  GET /runs/<run-id>/promotion")
 	fmt.Println("Binding is restricted to loopback in this version.")
 
 	err = server.ListenAndServe()
@@ -105,8 +117,14 @@ func parseRunServeArgs(args []string) (runServeOptions, error) {
 			}
 			i++
 			options.messagesDir = args[i]
+		case "--promotion-dir":
+			if i+1 >= len(args) {
+				return runServeOptions{}, fmt.Errorf("--promotion-dir requiere una ruta")
+			}
+			i++
+			options.promotionDir = args[i]
 		case "-h", "--help":
-			return runServeOptions{}, fmt.Errorf("uso: ai run serve [--addr 127.0.0.1:8765] [--events-dir ruta] [--artifacts-dir ruta] [--messages-dir ruta]")
+			return runServeOptions{}, fmt.Errorf("uso: ai run serve [--addr 127.0.0.1:8765] [--events-dir ruta] [--artifacts-dir ruta] [--messages-dir ruta] [--promotion-dir ruta]")
 		default:
 			return runServeOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
 		}
