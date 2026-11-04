@@ -126,7 +126,7 @@ func Project(events []Event) (State, error) {
 		if event.Sequence == 1 && event.Type != EventRunStarted {
 			return State{}, errors.New("first control-plane event must be run.started")
 		}
-		if terminalRun(state.Status) && event.Type != EventArtifactCreated && event.Type != EventAgentMessageSent {
+		if terminalRun(state.Status) && !allowedAfterTerminal(event.Type) {
 			return State{}, fmt.Errorf("event %s appears after terminal run state", event.Type)
 		}
 
@@ -366,4 +366,14 @@ func agentRank(status AgentStatus) int {
 
 func terminalRun(status RunStatus) bool {
 	return status == RunCompleted || status == RunCancelled
+}
+
+
+func allowedAfterTerminal(eventType EventType) bool {
+	switch eventType {
+	case EventArtifactCreated, EventAgentMessageSent, EventApprovalGranted, EventApprovalRejected:
+		return true
+	default:
+		return false
+	}
 }
