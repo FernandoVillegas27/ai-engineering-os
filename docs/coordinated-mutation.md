@@ -111,3 +111,24 @@ ai run events <run-id>
 ~~~
 
 The integration workspace remains outside the original project until a separate explicit promotion action is introduced.
+
+
+## Source-writer role selection
+
+The coordinated mutating path now selects write-capable work units from registry-derived metadata instead of agent names.
+
+`BuildWorkUnits` still narrows every effective runtime permission to read-only, but it also preserves non-granting mutation metadata describing whether the registry originally allowed source-code or test writes.
+
+The initial multi-agent staging path admits only work units with:
+
+~~~text
+source_code: write
+~~~
+
+This currently includes implementation roles such as Frontend, Backend and Database engineers when selected by the planner.
+
+Read-only roles such as Architect, Researcher and Reviewer are excluded from Proposal Freeze/Stage.
+
+QA currently has `tests: write` but not `source_code: write`. It is intentionally excluded from write staging until proposal file types can be validated as test-only. QA still participates through deterministic verification/review boundaries.
+
+This avoids broadening a tests-only permission into arbitrary source-code writes.
