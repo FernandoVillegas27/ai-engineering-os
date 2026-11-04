@@ -129,3 +129,62 @@ func TestHTTPStreamRejectsInvalidAfter(t *testing.T) {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
+
+
+func TestHTTPRunIndexReturnsRecentProjectedSummaries(t *testing.T) {
+	store, err := NewEventStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 11, 4, 22, 0, 0, 0, time.UTC)
+
+	appendForRun := func(runID string, typ EventType, at time.Time) {
+		t.Helper()
+		req := NewEventRequest{RunID: runID, Type: typ, Data: map[string]bool{"ok": true}}
+		if typ == EventTaskStarted || typ == EventTaskCompleted {
+			req.TaskID = "task-1"
+			req.AgentID = "backend-engineer"
+		}
+		value, newErr := NewEvent(req, at)
+		if newErr != nil {
+			t.Fatal(newErr)
+		}
+		if _, appendErr := store.Append(context.Background(), value); appendErr != nil {
+			t.Fatal(appendErr)
+		}
+	}
+	appendForRun("run-old", EventRunStarted, now)
+	appendForRun("run-old", EventTaskCompleted, now.Add(time.Minute))
+	appendForRun("run-new", EventRunStarted, now.Add(2*time.Minute))
+	appendForRun("run-new", EventTaskStarted, now.Add(3*time.Minute))
+
+	req := httptest.NewRequest(http.MethodGet, "/runs", nil)
+	rec := httptest.NewRecorder()
+	(HTTPServer{Store: store}).Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var summaries []RunSummary
+	if err := json.Unmarshal(rec.Body.Bytes(), &summaries); err != nil {
+		t.Fatal(err)
+	}
+	if len(summaries) != 2 || summaries[0].RunID != "run-new" || summaries[1].RunID != "run-old" {
+		t.Fatalf("summaries=%#v", summaries)
+	}
+	if summaries[0].Progress.Running != 1 || summaries[0].AgentCount != 1 {
+		t.Fatalf("new summary=%#v", summaries[0])
+	}
+	if summaries[1].Progress.Completed != 1 {
+		t.Fatalf("old summary=%#v", summaries[1])
+	}
+}
+
+func TestHTTPRunIndexIsGetOnly(t *testing.T) {
+	store, _ := NewEventStore(t.TempDir())
+	req := httptest.NewRequest(http.MethodPost, "/runs", nil)
+	rec := httptest.NewRecorder()
+	(HTTPServer{Store: store}).Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed || rec.Header().Get("Allow") != http.MethodGet {
+		t.Fatalf("status=%d headers=%#v", rec.Code, rec.Header())
+	}
+}
