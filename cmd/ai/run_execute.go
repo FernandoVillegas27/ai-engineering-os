@@ -17,6 +17,7 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/scheduler"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/taskgraph"
 	codexintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/codex"
 )
 
@@ -139,14 +140,12 @@ func runRunExecute(args []string) error {
 		return err
 	}
 
-	tasks := make([]scheduler.Task, 0, len(units))
+	tasks, err := taskgraph.Build(units)
+	if err != nil {
+		return err
+	}
 	unitByID := make(map[string]execution.WorkUnit, len(units))
 	for _, unit := range units {
-		tasks = append(tasks, scheduler.Task{
-			ID:       unit.ID,
-			AgentID:  unit.AgentID,
-			Mutating: false,
-		})
 		unitByID[unit.ID] = unit
 	}
 	graph, err := scheduler.New(tasks)
