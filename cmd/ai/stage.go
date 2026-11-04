@@ -288,16 +288,38 @@ func runStage(args []string) error {
 		for _, finding := range attempt.Review.Findings {
 			fmt.Printf("    - [%s] %s: %s\n", finding.Severity, finding.Title, finding.Detail)
 		}
+		if attempt.BaselineCompared && attempt.Comparison != nil {
+			fmt.Printf("  Baseline: preexisting=%d regressions=%d changed=%d unclassified=%d blocking=%d resolved=%d\n",
+				len(attempt.Comparison.Preexisting),
+				len(attempt.Comparison.Regressions),
+				len(attempt.Comparison.ChangedCause),
+				len(attempt.Comparison.Unclassified),
+				len(attempt.Comparison.Blocking),
+				len(attempt.Comparison.Resolved),
+			)
+		}
 		if attempt.Corrected {
 			fmt.Println("  Correction: aplicada en el workspace aislado")
+		} else if attempt.CorrectionAttempted {
+			fmt.Println("  Correction: intentada")
+		}
+		if attempt.NoProgress {
+			fmt.Println("  No progress: el conjunto accionable de fallos se repitió; no se volvió a invocar el modelo")
 		}
 		if attempt.Blocked {
-			fmt.Println("  Correction: omitida; el fallo requiere resolver infraestructura/entorno")
+			fmt.Println("  Correction: bloqueada por una condición no tolerable")
 		}
 		if strings.TrimSpace(attempt.CorrectionError) != "" {
 			fmt.Printf("  Correction: no produjo una corrección aplicable: %s\n", attempt.CorrectionError)
 		}
 	}
+	fmt.Printf("Outcome: %s\n", qualityResult.Reason)
+	fmt.Printf("Summary: verification=%d review=%d correction=%d baseline=%d\n",
+		qualityResult.Summary.VerificationAttempts,
+		qualityResult.Summary.ReviewAttempts,
+		qualityResult.Summary.CorrectionAttempts,
+		qualityResult.Summary.BaselineComparisons,
+	)
 
 	if qualityErr != nil {
 		fmt.Println()
@@ -309,8 +331,9 @@ func runStage(args []string) error {
 	fmt.Println()
 	if !qualityResult.Passed {
 		fmt.Println("Quality Gate FAILED")
+		fmt.Printf("Reason: %s\n", qualityResult.Reason)
 		fmt.Println("El workspace aislado se conserva para inspección. El proyecto original sigue intacto.")
-		return fmt.Errorf("quality gate failed after %d attempt(s)", len(qualityResult.Attempts))
+		return fmt.Errorf("quality gate failed (%s) after %d attempt(s)", qualityResult.Reason, len(qualityResult.Attempts))
 	}
 
 	fmt.Println("Quality Gate PASSED")
