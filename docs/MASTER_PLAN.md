@@ -2083,23 +2083,29 @@ At this checkpoint, `master` still has P2a as the latest functional merged miles
 | #80 | deterministic specialist collaboration DAG | CI passed |
 | #81 | automatic durable specialist handoffs | CI passed |
 | #82 | bounded receiver inbox context | CI passed |
-| #83 | loopback JSON/SSE live Control Plane API | SSE test fix pending CI revalidation |
-| #84 | projected task-graph edges and scopes | depends on #83 fix; pending CI revalidation |
-| #85 | stale append-lock recovery | pending CI |
+| #83 | loopback JSON/SSE live Control Plane API | CI passed |
+| #84 | projected task-graph edges and scopes | CI passed |
+| #85 | stale append-lock recovery | CI passed |
+| #86 | typed ArchitectureDecision/APIContract/VerificationReport payloads | CI passed |
+| #87 | isolated per-task mutating workspaces | CI passed |
+| #88 | deterministic multi-workspace integration plan | CI passed |
+| #89 | isolated integration workspace materialization + frozen-result TOCTOU protection | CI passed |
+| #90 | run-wide baseline-aware integration Quality Gate | CI passed |
+| #91 | bridge promotable integration to explicit promotion boundary | CI pending |
 
 Review/merge order must remain:
 
 ~~~text
 #66 -> #67 -> #68 -> #69 -> #70 -> #71 -> #72 -> #73 -> #74
 -> #75 -> #76 -> #77 -> #78 -> #79 -> #80 -> #81 -> #82
--> #83 -> #84 -> #85
+-> #83 -> #84 -> #85 -> #86 -> #87 -> #88 -> #89 -> #90 -> #91
 ~~~
 
 Do not merge later PRs before their stacked bases unless the branch is deliberately rebased and the resulting diff is revalidated.
 
 ## Functional capability reached by the open stack
 
-If the stack through #84 is validated and merged, AI Engineering OS has the first complete read-only multi-agent collaboration path:
+If the stack through #90 is validated and merged, AI Engineering OS has both the first complete read-only multi-agent collaboration path and the safety pipeline required before write-capable coordination is enabled:
 
 ~~~text
 user task
@@ -2134,24 +2140,43 @@ The Control Plane can expose:
 
 This is the first functional foundation for the Promix-like experience described earlier. It is intentionally backend-first; no visual UI is required for the coordination semantics to work.
 
+The open stack now also contains the write-safety pipeline:
+
+~~~text
+per-task isolated writable workspace
+  -> immutable PreImage
+  -> inspected frozen ResultImage
+  -> deterministic disjoint integration plan
+  -> isolated integration workspace
+  -> source-hash TOCTOU validation
+  -> run-wide baseline-aware Quality Gate
+  -> Promotable=true
+  -> promotion candidate
+  -> promotion dry-run
+  -> explicit approval required
+  -> apply
+~~~
+
 ## Current safety boundary
 
-The integrated multi-agent path remains **read-only**.
+The main coordinated command remains **read-only**.
 
-Do not enable parallel write-capable agents until isolated per-task staging plus merge/conflict coordination are implemented and tested.
+The components needed for safe multi-agent writes now exist through #91, but write-capable stage runtimes are not yet wired into `ai run execute`.
 
-Promotion exists separately behind explicit approval and integrity checks.
+That wiring must remain opt-in and must route every mutating task through the isolated task/integration/Quality pipeline above.
+
+Promotion remains a separate explicit approval boundary.
 
 ## Recommended next implementation after this stack
 
-After #85 is green and the stack is reviewed, the next high-value milestones are:
+After #91 is green and the stack is reviewed, the next high-value milestones are:
 
-1. typed high-value artifacts such as `ArchitectureDecision`, `APIContract`, and `VerificationReport` with dedicated payload validation;
-2. per-task isolated writable workspaces;
-3. deterministic integration/merge coordination for disjoint staged outputs;
-4. run-wide multi-agent Quality Loop;
-5. persisted Control Plane snapshots/compaction for long runs;
-6. richer human controls (pause/resume/cancel/retry) wired to actual coordinator execution;
+1. adapt existing Cursor/Codex stage runtimes to the coordinated mutating-task pipeline behind an explicit opt-in policy;
+2. generate/freeze proposals before mutating task execution so exact file ownership is known before integration;
+3. persist integration/quality/promotion lifecycle events in the Control Plane;
+4. add Control Plane snapshots/compaction for long runs;
+5. wire real pause/resume/cancel/retry human controls into active coordinator executions;
+6. add dedicated typed schemas for remaining high-value artifacts/handoffs;
 7. only then consider a visual web/IDE/3D client.
 
 ---
