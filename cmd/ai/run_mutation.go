@@ -8,15 +8,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FernandoVillegas27/ai-engineering-os/core/artifact"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/controlplane"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/integration"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/message"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/mutation"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/promotion"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/promotioncandidate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/proposal"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/staging"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/taskgraph"
 	"github.com/FernandoVillegas27/ai-engineering-os/integrations/localverify"
 )
 
@@ -50,11 +53,41 @@ func runCoordinatedMutation(
 		return fmt.Errorf("--multi-agent-write cannot be combined with --dry-run")
 	}
 
+	mutatingUnits, err := mutation.SelectSourceMutatingUnits(units)
+	if err != nil {
+		return err
+	}
+	fullTasks, err := taskgraph.Build(units)
+	if err != nil {
+		return err
+	}
+	preStagePlan, err := mutation.BuildPreStagePlan(units, fullTasks, mutatingUnits)
+	if err != nil {
+		return err
+	}
+	participants := mutationParticipants(preStagePlan.Units, mutatingUnits)
+
 	runStore, err := openRunStore(options.stateDir)
 	if err != nil {
 		return err
 	}
 	eventStore, err := openControlPlaneStore(options.eventsDir)
+	if err != nil {
+		return err
+	}
+	artifactsRoot, err := resolveRunAuxDir(options.artifactsDir, "AI_ENGINEERING_OS_ARTIFACTS_DIR", "artifacts")
+	if err != nil {
+		return err
+	}
+	artifactStore, err := artifact.NewStore(artifactsRoot)
+	if err != nil {
+		return err
+	}
+	messagesRoot, err := resolveRunAuxDir(options.messagesDir, "AI_ENGINEERING_OS_MESSAGES_DIR", "messages")
+	if err != nil {
+		return err
+	}
+	messageBus, err := message.NewBus(messagesRoot)
 	if err != nil {
 		return err
 	}
@@ -68,7 +101,7 @@ func runCoordinatedMutation(
 			Provider: options.runtime,
 			Model:    options.model,
 		},
-		WorkUnits: units,
+		WorkUnits: participants,
 	}, time.Now().UTC())
 	if err != nil {
 		return err
@@ -104,8 +137,12 @@ func runCoordinatedMutation(
 	if err := emit(controlplane.EventRunStarted, "", "", "coordinated mutating run started"); err != nil {
 		return err
 	}
-	for _, unit := range units {
-		if err := emit(controlplane.EventTaskCreated, unit.ID, "", "mutating work unit created"); err != nil {
+	for _, unit := range participants {
+		summary := "mutating work unit created"
+		if !unit.Mutation.SourceCode {
+			summary = "read-only pre-stage work unit created"
+		}
+		if err := emit(controlplane.EventTaskCreated, unit.ID, "", summary); err != nil {
 			return err
 		}
 		if err := emit(controlplane.EventTaskAssigned, unit.ID, unit.AgentID, "mutating work unit assigned"); err != nil {
@@ -114,7 +151,23 @@ func runCoordinatedMutation(
 	}
 
 	routing := modelRoutingOptions{Policy: options.modelPolicy, Override: options.model}
-	frozen, err := mutation.FreezeProposals(ctx, units, func(unit execution.WorkUnit) (proposal.Runtime, error) {
+	mutatingUnits, err = executeMutationPreStage(
+		ctx,
+		options,
+		run.ID,
+		preStagePlan,
+		mutatingUnits,
+		artifactStore,
+		messageBus,
+		eventStore,
+		routing,
+	)
+	if err != nil {
+		_ = failMutationRun(runStore, &run)
+		return err
+	}
+
+	frozen, err := mutation.FreezeProposals(ctx, mutatingUnits, func(unit execution.WorkUnit) (proposal.Runtime, error) {
 		// Routed runtime preserves the existing proposal alignment/escalation behavior.
 		return routedProposalRuntime{runtimeName: options.runtime, routing: routing}, nil
 	}, mutation.FreezeConfig{
@@ -131,7 +184,7 @@ func runCoordinatedMutation(
 		}
 	}
 
-	staged, err := mutation.StageFrozenProposals(ctx, units, frozen, func(unit execution.WorkUnit) (staging.Runtime, error) {
+	staged, err := mutation.StageFrozenProposals(ctx, mutatingUnits, frozen, func(unit execution.WorkUnit) (staging.Runtime, error) {
 		runtime, _, runtimeErr := stageRuntimeFor(options.runtime, routing, false)
 		return runtime, runtimeErr
 	}, mutation.StageConfig{
