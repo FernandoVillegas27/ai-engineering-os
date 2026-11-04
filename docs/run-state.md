@@ -139,3 +139,46 @@ Storage resolution order:
 This keeps run state outside source repositories by default while still allowing deterministic explicit storage for tests, automation and future control-plane services.
 
 These commands manipulate only run metadata. They do not resume an AI provider session or execute project code.
+
+
+## Coordinated execution
+
+The first integrated run path is:
+
+~~~text
+ai run execute [project-path] --task "..." --dry-run
+ai run execute [project-path] --task "..." --runtime codex
+~~~
+
+This command now connects the previously separate foundations:
+
+1. task classification;
+2. deterministic orchestration plan;
+3. execution work units;
+4. durable run creation;
+5. deterministic scheduler graph;
+6. bounded multi-agent coordinator;
+7. Control Plane event persistence;
+8. durable terminal run/work-unit state.
+
+The initial integrated path is deliberately **read-only**.
+
+Selected agents may execute concurrently when the scheduler permits it, but no agent in this path receives write access to source code, tests, Git, secrets or production.
+
+Use:
+
+~~~text
+ai run control <run-id>
+ai run events <run-id>
+ai run status <run-id>
+~~~
+
+after execution to inspect the same run from the durable state and Control Plane.
+
+### Current graph limitation
+
+The existing deterministic planner selects agents by capability but does not yet emit task dependencies.
+
+Therefore the first `ai run execute` graph contains independent read-only work units. Dependency-aware execution is already supported by the scheduler/coordinator and will become active once Orchestrator v2 decomposition produces an explicit DAG.
+
+Write-capable multi-agent execution remains intentionally out of scope until isolated per-task staging and merge/conflict coordination are implemented.
