@@ -114,7 +114,6 @@ func runCoordinatedMutation(
 	}
 
 	routing := modelRoutingOptions{Policy: options.modelPolicy, Override: options.model}
-	proposalDecision := modelpolicy.Resolve(options.modelPolicy, modelpolicy.RoleProposal, options.model, false)
 	frozen, err := mutation.FreezeProposals(ctx, units, func(unit execution.WorkUnit) (proposal.Runtime, error) {
 		// Routed runtime preserves the existing proposal alignment/escalation behavior.
 		return routedProposalRuntime{runtimeName: options.runtime, routing: routing}, nil
@@ -125,8 +124,6 @@ func runCoordinatedMutation(
 		_ = failMutationRun(runStore, &run)
 		return fmt.Errorf("freeze mutating proposals: %w", err)
 	}
-	_ = proposalDecision
-
 	for _, item := range frozen {
 		if err := emit(controlplane.EventArtifactCreated, item.TaskID, item.AgentID, "proposal ownership frozen"); err != nil {
 			_ = failMutationRun(runStore, &run)
