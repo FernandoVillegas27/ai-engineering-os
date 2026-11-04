@@ -37,7 +37,8 @@ type Workspace struct {
 }
 
 type Inspection struct {
-	Changes []staging.WorkspaceChange
+	Changes     []staging.WorkspaceChange
+	ResultImage staging.PreImage
 }
 
 func New(config Config) (*Manager, error) {
@@ -157,17 +158,25 @@ func (m *Manager) Inspect(ctx context.Context, workspace Workspace) (Inspection,
 		return Inspection{}, errors.New("task workspace root must be a regular directory")
 	}
 
-	changes, err := staging.DetectWorkspaceChanges(workspace.PreImage.Snapshot(), root, m.policy)
+	after, err := staging.SnapshotWorkspace(root, m.policy)
 	if err != nil {
 		return Inspection{}, err
 	}
+	resultImage := staging.NewPreImage(after)
+	changes := staging.ChangesBetween(workspace.PreImage.Snapshot(), after)
 	if len(changes) == 0 {
-		return Inspection{Changes: []staging.WorkspaceChange{}}, nil
+		return Inspection{
+			Changes:     []staging.WorkspaceChange{},
+			ResultImage: resultImage,
+		}, nil
 	}
 	if err := staging.EnsureChangesMatchDeclared(changes, workspace.Declared); err != nil {
 		return Inspection{}, err
 	}
-	return Inspection{Changes: append([]staging.WorkspaceChange(nil), changes...)}, nil
+	return Inspection{
+		Changes:     append([]staging.WorkspaceChange(nil), changes...),
+		ResultImage: resultImage,
+	}, nil
 }
 
 func (m *Manager) Cleanup(workspace Workspace) error {
