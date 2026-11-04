@@ -37,6 +37,18 @@ func runRunCancel(args []string) error {
 		return fmt.Errorf("run %s is already terminal with status %s", run.ID, run.Status)
 	}
 
+	eventStore, err := openControlPlaneStore(options.eventsDir)
+	if err != nil {
+		return err
+	}
+	events, err := eventStore.List(run.ID)
+	if err != nil {
+		return err
+	}
+	if len(events) == 0 || events[0].Type != controlplane.EventRunStarted {
+		return fmt.Errorf("run %s has no valid Control Plane event stream in the selected --events-dir", run.ID)
+	}
+
 	controlStore, err := openRunControlStore(options.controlDir)
 	if err != nil {
 		return err
@@ -46,10 +58,6 @@ func runRunCancel(args []string) error {
 		return err
 	}
 
-	eventStore, err := openControlPlaneStore(options.eventsDir)
-	if err != nil {
-		return err
-	}
 	event, err := controlplane.NewEvent(controlplane.NewEventRequest{
 		RunID:   run.ID,
 		Type:    controlplane.EventRunCancelRequested,
@@ -60,13 +68,6 @@ func runRunCancel(args []string) error {
 	}, request.RequestedAt)
 	if err != nil {
 		return err
-	}
-	events, err := eventStore.List(run.ID)
-	if err != nil {
-		return err
-	}
-	if len(events) == 0 || events[0].Type != controlplane.EventRunStarted {
-		return fmt.Errorf("run %s has no valid Control Plane event stream in the selected --events-dir", run.ID)
 	}
 	alreadyRecorded := false
 	for _, existing := range events {
