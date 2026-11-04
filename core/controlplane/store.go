@@ -117,6 +117,36 @@ func (s *EventStore) List(runID string) ([]Event, error) {
 	return loadEvents(runDir)
 }
 
+func (s *EventStore) RunIDs() ([]string, error) {
+	if s == nil {
+		return nil, errors.New("control-plane event store is required")
+	}
+	entries, err := os.ReadDir(s.root)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if !safeToken(name) {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil, fmt.Errorf("control-plane run entry must not be a symlink: %s", name)
+		}
+		if !info.IsDir() {
+			continue
+		}
+		ids = append(ids, name)
+	}
+	sort.Strings(ids)
+	return ids, nil
+}
+
 func (s *EventStore) ensureRunDir(runID string) (string, error) {
 	runDir := filepath.Join(s.root, runID)
 	if err := os.Mkdir(runDir, 0o700); err != nil && !os.IsExist(err) {
