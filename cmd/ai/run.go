@@ -42,6 +42,8 @@ func runRun(args []string) error {
 		return runRunServe(args[1:])
 	case "promotion":
 		return runRunPromotion(args[1:])
+	case "promote":
+		return runRunPromote(args[1:])
 	default:
 		return fmt.Errorf("subcomando run desconocido: %s", args[0])
 	}
@@ -516,6 +518,7 @@ func printRunUsage() {
 	fmt.Println("  ai run execute [ruta] --task <tarea> --runtime auto|codex|cursor --multi-agent-write [--model-policy auto|economy|balanced|deep] [--model id] [--max-concurrency N]")
 	fmt.Println("  ai run serve [--addr 127.0.0.1:8765] [--events-dir ruta]")
 	fmt.Println("  ai run promotion <run-id> [--promotion-dir ruta] [--json]")
+	fmt.Println("  ai run promote <run-id> --approve [--promotion-dir ruta] [--state-dir ruta] [--events-dir ruta] [--json]")
 	fmt.Println()
 	fmt.Println("Sin --state-dir usa AI_ENGINEERING_OS_STATE_DIR o el directorio de configuración del usuario.")
 	fmt.Println("Sin --events-dir usa AI_ENGINEERING_OS_EVENTS_DIR o el directorio de configuración del usuario.")
