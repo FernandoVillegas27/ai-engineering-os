@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/modelpolicy"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/scheduler"
@@ -113,6 +114,28 @@ func TestParseRunExecuteArgsMultiAgentWriteRequiresExplicitCompatibleMode(t *tes
 	for _, args := range cases {
 		if _, err := parseRunExecuteArgs(args); err == nil {
 			t.Fatalf("expected error for %#v", args)
+		}
+	}
+}
+
+
+func TestMutationParticipantsContainOnlyExecutedPreStageAndSourceWriters(t *testing.T) {
+	readOnly := []execution.WorkUnit{
+		{ID: "research", AgentID: "researcher"},
+		{ID: "architect", AgentID: "architect"},
+	}
+	mutating := []execution.WorkUnit{
+		{ID: "backend", AgentID: "backend-engineer"},
+		{ID: "frontend", AgentID: "frontend-engineer"},
+	}
+	participants := mutationParticipants(readOnly, mutating)
+	if len(participants) != 4 {
+		t.Fatalf("participants = %#v", participants)
+	}
+	want := []string{"architect", "backend", "frontend", "research"}
+	for i, id := range want {
+		if participants[i].ID != id {
+			t.Fatalf("participants = %#v", participants)
 		}
 	}
 }
