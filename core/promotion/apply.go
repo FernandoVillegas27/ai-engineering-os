@@ -430,7 +430,7 @@ func rollbackApplied(root, backupRoot string, applied []staging.WorkspaceChange)
 			}
 		case "modify", "delete":
 			backup := filepath.Join(backupRoot, filepath.FromSlash(change.Path))
-			if err := restoreRegularFile(backup, target); err != nil {
+			if err := restoreRegularFile(root, backup, target, change.Path); err != nil {
 				return fmt.Errorf("rollback %s %s: %w", change.Action, change.Path, err)
 			}
 		default:
@@ -454,15 +454,9 @@ func removeRegularIfPresent(path string) error {
 	return os.Remove(path)
 }
 
-func restoreRegularFile(backup, target string) error {
-	if err := ensureSafeParent(filepath.Dir(filepath.Dir(target)), filepath.Base(filepath.Dir(target))+"/"+filepath.Base(target), true); err != nil {
-		// The generic parent helper is intentionally not trusted for arbitrary
-		// absolute paths here; fallback to a direct, symlink-aware directory check.
-		parent := filepath.Dir(target)
-		info, statErr := os.Lstat(parent)
-		if statErr != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-			return fmt.Errorf("rollback destination parent is unsafe")
-		}
+func restoreRegularFile(root, backup, target, relative string) error {
+	if err := ensureSafeParent(root, relative, true); err != nil {
+		return err
 	}
 	if err := removeRegularIfPresent(target); err != nil {
 		return err
