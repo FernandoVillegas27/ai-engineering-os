@@ -14,6 +14,7 @@ const (
 	RunRunning   RunStatus = "running"
 	RunPaused    RunStatus = "paused"
 	RunCompleted RunStatus = "completed"
+	RunFailed    RunStatus = "failed"
 	RunCancelled RunStatus = "cancelled"
 )
 
@@ -396,7 +397,7 @@ func agentRank(status AgentStatus) int {
 }
 
 func terminalRun(status RunStatus) bool {
-	return status == RunCompleted || status == RunCancelled
+	return status == RunCompleted || status == RunFailed || status == RunCancelled
 }
 
 
