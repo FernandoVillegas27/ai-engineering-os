@@ -73,3 +73,42 @@ func TestExecutionWorkerPropagatesExecutorError(t *testing.T) {
 		t.Fatal("expected executor error")
 	}
 }
+
+
+type fakeWorkContextProvider struct {
+	value string
+	err   error
+	calls int
+}
+
+func (f *fakeWorkContextProvider) Context(context.Context, scheduler.Task) (string, error) {
+	f.calls++
+	return f.value, f.err
+}
+
+func TestExecutionWorkerInjectsCollaborationContextIntoUnitCopy(t *testing.T) {
+	executor := &fakeExecutionExecutor{}
+	provider := &fakeWorkContextProvider{value: "handoff context"}
+	unit := execution.WorkUnit{
+		ID:      "work-1",
+		AgentID: "backend-engineer",
+		Mode:    execution.ModeReadOnly,
+	}
+	worker := ExecutionWorker{
+		Executor:        executor,
+		Units:           map[string]execution.WorkUnit{unit.ID: unit},
+		ContextProvider: provider,
+	}
+	if _, err := worker.Execute(context.Background(), scheduler.Task{ID: unit.ID, AgentID: unit.AgentID}); err != nil {
+		t.Fatal(err)
+	}
+	if provider.calls != 1 || len(executor.calls) != 1 {
+		t.Fatalf("provider calls=%d executor calls=%d", provider.calls, len(executor.calls))
+	}
+	if executor.calls[0].CollaborationContext != "handoff context" {
+		t.Fatalf("context = %q", executor.calls[0].CollaborationContext)
+	}
+	if unit.CollaborationContext != "" {
+		t.Fatalf("original unit was mutated: %#v", unit)
+	}
+}
