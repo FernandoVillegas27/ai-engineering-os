@@ -51,3 +51,25 @@ func TestShouldNotEscalateUnrelatedError(t *testing.T) {
 		t.Fatal("non-alignment errors must not trigger model escalation")
 	}
 }
+
+
+func TestExecutionRuntimeRoutingSupportsAutoCodexAndCursor(t *testing.T) {
+	options := modelRoutingOptions{Policy: modelpolicy.PolicyAuto}
+	cases := []struct {
+		name string
+		want string
+	}{
+		{name: "auto", want: "execution-auto"},
+		{name: "codex", want: "codex-cli"},
+		{name: "cursor", want: "cursor-cli"},
+	}
+	for _, tc := range cases {
+		runtime, _, err := executionRuntimeFor(tc.name, options)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if runtime.ID() != tc.want {
+			t.Fatalf("%s runtime id=%q want %q", tc.name, runtime.ID(), tc.want)
+		}
+	}
+}
