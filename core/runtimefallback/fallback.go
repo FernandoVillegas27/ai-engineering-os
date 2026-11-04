@@ -91,6 +91,27 @@ func asProviderError(err error, target *ProviderError) bool {
 	return false
 }
 
+type ExecutionRuntime struct {
+	Primary  execution.Runtime
+	Fallback execution.Runtime
+}
+
+func (r ExecutionRuntime) ID() string { return "execution-auto" }
+
+func (r ExecutionRuntime) Analyze(ctx context.Context, unit execution.WorkUnit) (execution.Analysis, error) {
+	if r.Primary == nil {
+		return execution.Analysis{}, fmt.Errorf("primary execution runtime is required")
+	}
+	result, err := r.Primary.Analyze(ctx, unit)
+	if err == nil {
+		return result, nil
+	}
+	if r.Fallback == nil || !IsUnavailable(err) {
+		return execution.Analysis{}, err
+	}
+	return r.Fallback.Analyze(ctx, unit)
+}
+
 type ProposalRuntime struct {
 	Primary  proposal.Runtime
 	Fallback proposal.Runtime
