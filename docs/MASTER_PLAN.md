@@ -2097,7 +2097,15 @@ At this checkpoint, `master` still has P2a as the latest functional merged miles
 | #94 | explicit `ai run execute --multi-agent-write` safe mutation pipeline | CI passed |
 | #95 | persisted promotion candidates + `ai run promotion` inspection | CI passed |
 | #96 | explicit `ai run promote --approve` apply + audit | CI passed |
-| #97 | registry-derived source-writer role selection | CI pending |
+| #97 | registry-derived source-writer role selection | CI passed |
+| #98 | collaboration context in Codex/Cursor proposal runtimes | CI passed |
+| #99 | Cursor read-only ExecutionRuntime + provider fallback | CI passed |
+| #100 | DAG-derived read-only pre-stage collaboration before mutation | CI passed |
+| #101 | projected Control Plane run index (`GET /runs`) | CI passed |
+| #102 | durable active-run cancellation (`ai run cancel`) | CI passed |
+| #103 | Control Plane run messages/artifacts endpoints | CI passed |
+| #104 | read-only promotion candidate status endpoint | CI passed |
+| #105 | cancellation event-stream binding hardening | CI pending |
 
 Review/merge order must remain:
 
@@ -2105,14 +2113,15 @@ Review/merge order must remain:
 #66 -> #67 -> #68 -> #69 -> #70 -> #71 -> #72 -> #73 -> #74
 -> #75 -> #76 -> #77 -> #78 -> #79 -> #80 -> #81 -> #82
 -> #83 -> #84 -> #85 -> #86 -> #87 -> #88 -> #89 -> #90 -> #91
--> #92 -> #93 -> #94 -> #95 -> #96 -> #97
+-> #92 -> #93 -> #94 -> #95 -> #96 -> #97 -> #98 -> #99
+-> #100 -> #101 -> #102 -> #103 -> #104 -> #105
 ~~~
 
 Do not merge later PRs before their stacked bases unless the branch is deliberately rebased and the resulting diff is revalidated.
 
 ## Functional capability reached by the open stack
 
-If the stack through #96 is validated and merged, AI Engineering OS has the first complete read-only multi-agent collaboration path plus an explicit, approval-gated coordinated mutation path:
+If the stack through #104 is validated and merged, AI Engineering OS has the first complete read-only multi-agent collaboration path, an explicit approval-gated coordinated mutation path, durable cancellation, and a Control Plane backend ready for a visual client:
 
 ~~~text
 user task
@@ -2132,18 +2141,21 @@ user task
 
 The Control Plane can expose:
 
+- a recent run index;
 - real run state;
 - agents and their task state;
 - DAG edges;
 - task ownership;
 - dependency state;
 - mutating/file-scope metadata;
-- message/artifact counts;
+- typed messages and immutable artifacts;
 - quality state;
-- approvals;
+- pending approvals;
+- current promotion-candidate readiness;
 - runtime/model summaries;
 - ordered event history;
-- resumable SSE events.
+- resumable SSE events;
+- durable cancellation-request state.
 
 This is the first functional foundation for the Promix-like experience described earlier. It is intentionally backend-first; no visual UI is required for the coordination semantics to work.
 
@@ -2188,25 +2200,50 @@ That path:
 
 #97 additionally restricts Stage to registry-derived `source_code: write` agents. QA's tests-only write permission is not broadened into source writes.
 
-### Known collaboration limitation in the mutation path
+### Mutation collaboration now active
 
-The read-only collaboration path already supports Architect/Researcher handoffs and bounded receiver inbox context.
+The write path now derives transitive read-only ancestors from the validated DAG before mutation.
 
-The current write opt-in selects only source-writer units for Proposal Freeze/Stage. It does not yet execute an upstream read-only Architect/Researcher phase and feed those artifacts into mutating agents before proposals are frozen.
+With the current specialist graph:
 
-This is intentional and must be added as a deterministic pre-stage collaboration phase rather than by allowing read-only roles to mutate.
+~~~text
+Researcher
+   |
+Architect
+   |
+Backend / Frontend / Database
+~~~
+
+Researcher/Architect execute through provider-independent read-only runtimes, persist typed handoffs, and source-writer agents load their bounded inbox before Proposal Freeze.
+
+Cursor now implements the same read-only `execution.Runtime` contract as Codex. `runtime=auto` can use Codex first and fall back to Cursor only for provider-unavailable errors.
+
+Read-only ancestors never receive mutation permissions.
+
+### Human/control-plane functionality now active
+
+The stack also contains:
+
+- `GET /runs` for run discovery;
+- `GET /runs/<id>/messages`;
+- `GET /runs/<id>/artifacts`;
+- `GET /runs/<id>/promotion`;
+- `ai run cancel <run-id>`;
+- projected `cancel_requested`;
+- cancellation-aware read-only and mutating runners.
+
+#105 additionally ensures a cancel signal cannot be persisted when the caller points at a mismatched Control Plane event store.
 
 ## Recommended next implementation after this stack
 
-After #97 is green and the stack is reviewed, the next high-value milestones are:
+After #105 is green and the stack is reviewed, the next high-value milestones are:
 
-1. add a read-only pre-stage collaboration phase (Researcher/Architect -> typed artifacts/handoffs -> mutating agents);
-2. add typed file-kind ownership so QA `tests: write` can be enforced without source-write escalation;
-3. persist richer integration/proposal/stage lifecycle details in the Control Plane;
-4. add Control Plane snapshots/compaction for long runs;
-5. wire real pause/resume/cancel/retry human controls into active coordinator executions;
-6. add dedicated typed schemas for remaining high-value artifacts/handoffs;
-7. only then consider a visual web/IDE/3D client.
+1. add deterministic file-kind ownership so QA `tests: write` can be enforced without source-write escalation;
+2. persist richer proposal/stage/integration lifecycle events and artifact references in the Control Plane;
+3. add durable pause/resume checkpoints and targeted task retry;
+4. design integrity-preserving Control Plane snapshots for long histories without hiding event corruption;
+5. add dedicated typed schemas for remaining high-value artifacts/handoffs;
+6. add an optional local visual web/IDE client only after the control semantics are stable.
 
 ---
 
