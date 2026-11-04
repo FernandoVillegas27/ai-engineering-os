@@ -20,6 +20,7 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/modelpolicy"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/runcontrol"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/scheduler"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/taskgraph"
@@ -231,7 +232,16 @@ func runRunExecute(args []string) error {
 		return err
 	}
 
-	ctx := context.Background()
+	controlStore, err := openRunControlStore(options.controlDir)
+	if err != nil {
+		return err
+	}
+	ctx, stopWatcher, err := runcontrol.WithCancellationWatcher(context.Background(), controlStore, run.ID, 250*time.Millisecond)
+	if err != nil {
+		return err
+	}
+	defer stopWatcher()
+
 	result, runErr := (coordinator.Coordinator{
 		Config: coordinator.Config{MaxConcurrency: options.maxConcurrency},
 		Workers: workers,
