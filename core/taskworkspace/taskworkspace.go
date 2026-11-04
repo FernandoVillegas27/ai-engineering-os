@@ -149,8 +149,8 @@ func (m *Manager) Inspect(ctx context.Context, workspace Workspace) (Inspection,
 	if err != nil {
 		return Inspection{}, fmt.Errorf("resolve task workspace root: %w", err)
 	}
-	if !within(m.parent, root) || root == m.parent {
-		return Inspection{}, errors.New("task workspace is outside the configured workspace parent")
+	if !within(m.parent, root) || root == m.parent || root == m.root || within(m.root, root) {
+		return Inspection{}, errors.New("task workspace is outside the isolated workspace boundary")
 	}
 	info, err := os.Lstat(root)
 	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
@@ -178,8 +178,8 @@ func (m *Manager) Cleanup(workspace Workspace) error {
 	if err != nil {
 		return fmt.Errorf("resolve task workspace root: %w", err)
 	}
-	if !within(m.parent, root) || root == m.parent {
-		return errors.New("refusing to clean a path outside task workspace parent")
+	if !within(m.parent, root) || root == m.parent || root == m.root || within(m.root, root) {
+		return errors.New("refusing to clean a path outside isolated task workspace boundary")
 	}
 	return os.RemoveAll(root)
 }
