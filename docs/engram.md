@@ -127,3 +127,49 @@ This step does not yet:
 - integrate Gentle-AI.
 
 It establishes the provider boundary and deterministic operational checks first.
+
+
+## Project memory lifecycle v1
+
+The integration now exposes the first real project-scoped read/write contract.
+
+Core requests are provider-independent:
+
+~~~text
+Save(project, title, content, type, topic_key)
+Recall(project, query, limit)
+~~~
+
+Supported curated memory types are:
+
+- `decision`
+- `architecture`
+- `bugfix`
+- `pattern`
+- `config`
+- `discovery`
+- `learning`
+
+The Engram adapter maps these contracts to the current Engram CLI:
+
+~~~text
+engram save <title> <content> --project <project> --type <type> --scope project [--topic <topic_key>]
+
+engram search <query> --project <project> --limit <N>
+~~~
+
+Project is always explicit at the AI Engineering OS boundary. The adapter does not rely on the provider guessing the current repository for these operations.
+
+Recall is bounded to at most 20 results and defaults to 5.
+
+### Curated memory rule
+
+This integration is for durable engineering knowledge, not transcript dumping.
+
+Callers should save concise decisions, architecture facts, fixes, conventions, configuration discoveries and reusable learnings. Raw provider conversations and arbitrary source files are not memory records.
+
+### Current boundary
+
+The provider can now save and recall project memory, but orchestration does not yet automatically inject recalled context or automatically persist memory candidates at the end of every run.
+
+That lifecycle wiring is the next memory step.
