@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,12 +13,16 @@ import (
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/artifact"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/message"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/promotion"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/promotioncandidate"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/staging"
 )
 
 type HTTPServer struct {
 	Store        *EventStore
 	Artifacts    *artifact.Store
 	Messages     *message.Bus
+	Promotions   *promotioncandidate.Store
 	PollInterval time.Duration
 }
 
@@ -125,6 +130,8 @@ func (s HTTPServer) handleRuns(w http.ResponseWriter, r *http.Request) {
 		s.handleMessages(w, r, runID)
 	case "artifacts":
 		s.handleArtifacts(w, r, runID)
+	case "promotion":
+		s.handlePromotion(w, r, runID)
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 	}
@@ -185,6 +192,46 @@ func (s HTTPServer) handleArtifacts(w http.ResponseWriter, _ *http.Request, runI
 		return
 	}
 	writeJSON(w, http.StatusOK, values)
+}
+
+type PromotionStatus struct {
+	RunID         string                    `json:"run_id"`
+	Ready         bool                      `json:"ready"`
+	QualityPassed bool                      `json:"quality_passed"`
+	ChangeCount   int                       `json:"change_count"`
+	Changes       []staging.WorkspaceChange `json:"changes"`
+	CreatedAt     time.Time                 `json:"created_at"`
+}
+
+func (s HTTPServer) handlePromotion(w http.ResponseWriter, _ *http.Request, runID string) {
+	if s.Promotions == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "promotion candidate store is not configured"})
+		return
+	}
+	record, err := s.Promotions.Load(runID)
+	if os.IsNotExist(err) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "promotion candidate not found"})
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "promotion candidate is invalid"})
+		return
+	}
+	request, err := record.Request()
+	if err != nil {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "promotion candidate is invalid"})
+		return
+	}
+	plan, dryRunErr := promotion.DryRun(context.Background(), request)
+	status := PromotionStatus{
+		RunID:         runID,
+		Ready:         dryRunErr == nil && plan.Ready,
+		QualityPassed: record.QualityPassed,
+		ChangeCount:   len(record.Declared),
+		Changes:       append([]staging.WorkspaceChange(nil), record.Declared...),
+		CreatedAt:     record.CreatedAt,
+	}
+	writeJSON(w, http.StatusOK, status)
 }
 
 func (s HTTPServer) handleStream(w http.ResponseWriter, r *http.Request, runID string) {
