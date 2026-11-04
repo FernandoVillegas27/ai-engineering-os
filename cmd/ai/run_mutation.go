@@ -58,6 +58,7 @@ func runCoordinatedMutation(
 	if err != nil {
 		return err
 	}
+	testsOnlyUnits := mutation.SelectTestsOnlyUnits(units)
 	fullTasks, err := taskgraph.Build(units)
 	if err != nil {
 		return err
@@ -66,7 +67,7 @@ func runCoordinatedMutation(
 	if err != nil {
 		return err
 	}
-	participants := mutationParticipants(preStagePlan.Units, mutatingUnits)
+	participants := mutationParticipants(preStagePlan.Units, mutatingUnits, testsOnlyUnits)
 
 	runStore, err := openRunStore(options.stateDir)
 	if err != nil {
@@ -152,8 +153,11 @@ func runCoordinatedMutation(
 		return err
 	}
 	for _, unit := range participants {
-		summary := "mutating work unit created"
-		if !unit.Mutation.SourceCode {
+		summary := "source-mutating work unit created"
+		switch {
+		case unit.Mutation.Tests && !unit.Mutation.SourceCode:
+			summary = "tests-only post-integration work unit created"
+		case !unit.Mutation.SourceCode:
 			summary = "read-only pre-stage work unit created"
 		}
 		if err := emit(controlplane.EventTaskCreated, unit.ID, "", summary); err != nil {
@@ -227,7 +231,7 @@ func runCoordinatedMutation(
 		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return err
 	}
-	integrated, err := integration.Materialize(ctx, integration.MaterializeConfig{
+	sourceIntegrated, err := integration.Materialize(ctx, integration.MaterializeConfig{
 		OriginalRoot: root,
 		Parent:       integrationParent,
 	}, integrationPlan, staged.Workspaces)
@@ -235,12 +239,38 @@ func runCoordinatedMutation(
 		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return fmt.Errorf("materialize integrated workspace: %w", err)
 	}
+
+	finalIntegrated := sourceIntegrated
 	keepIntegrated := false
 	defer func() {
-		if !keepIntegrated {
-			_ = integration.Cleanup(integrated, integrationParent)
+		if finalIntegrated.Root != "" && finalIntegrated.Root != sourceIntegrated.Root && !keepIntegrated {
+			_ = integration.Cleanup(finalIntegrated, integrationParent)
+		}
+		if sourceIntegrated.Root != "" && (sourceIntegrated.Root != finalIntegrated.Root || !keepIntegrated) {
+			_ = integration.Cleanup(sourceIntegrated, integrationParent)
 		}
 	}()
+
+	qaResult, err := executeMutationTestsPhase(
+		ctx,
+		options,
+		run.ID,
+		sourceIntegrated,
+		testsOnlyUnits,
+		artifactStore,
+		messageBus,
+		eventStore,
+		routing,
+		integrationParent,
+	)
+	defer cleanupTestsOnlyStages(qaResult.Staged)
+	if err != nil {
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
+		return err
+	}
+	if qaResult.Applied {
+		finalIntegrated = qaResult.Workspace
+	}
 
 	if err := emit(controlplane.EventVerificationStarted, "", "", "run-wide integration quality started"); err != nil {
 		_ = abortMutationRun(ctx, runStore, eventStore, &run)
@@ -261,7 +291,8 @@ func runCoordinatedMutation(
 	gate, qualityErr := integration.RunQualityGate(ctx, integration.QualityGateConfig{
 		OriginalRoot: root,
 		Plan:         integrationPlan,
-		Workspace:    integrated,
+		Workspace:       finalIntegrated,
+		ExpectedChanges: finalIntegrated.Changes,
 		Task:         options.task,
 		Verifier:     localverify.New(),
 		Reviewer:     reviewer,
@@ -288,7 +319,7 @@ func runCoordinatedMutation(
 		return err
 	}
 
-	candidate, err := integration.BuildPromotionCandidate(root, integrated, gate, integrationParent)
+	candidate, err := integration.BuildPromotionCandidate(root, finalIntegrated, gate, integrationParent)
 	if err != nil {
 		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return err
@@ -361,7 +392,7 @@ func runCoordinatedMutation(
 		}{
 			RunID:               run.ID,
 			Intent:              intent,
-			IntegratedWorkspace: integrated.Root,
+			IntegratedWorkspace: finalIntegrated.Root,
 			QualityPassed:       gate.Quality.Passed,
 			Promotable:          gate.Promotable,
 			PromotionReady:      promotionPlan.Ready,
@@ -372,8 +403,9 @@ func runCoordinatedMutation(
 	fmt.Println("Coordinated Mutating Run")
 	fmt.Printf("Run ID: %s\n", run.ID)
 	fmt.Printf("Intent: %s\n", intent)
-	fmt.Printf("Agents staged: %d\n", len(staged.Workspaces))
-	fmt.Printf("Integrated workspace: %s\n", integrated.Root)
+	fmt.Printf("Source agents staged: %d\n", len(staged.Workspaces))
+	fmt.Printf("Tests-only agents staged: %d\n", len(qaResult.Staged.Workspaces))
+	fmt.Printf("Integrated workspace: %s\n", finalIntegrated.Root)
 	fmt.Printf("Quality: %s\n", gate.Quality.Reason)
 	fmt.Printf("Promotion candidate: READY (%d change(s))\n", len(gate.FinalChanges))
 	fmt.Println("Promotion candidate persisted: YES")
