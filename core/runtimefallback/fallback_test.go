@@ -53,3 +53,42 @@ func TestProposalDoesNotFallbackForPolicyError(t *testing.T) {
 		t.Fatalf("fallback calls=%d", fallback.calls)
 	}
 }
+
+
+type fakeExecutionRuntime struct {
+	id     string
+	result execution.Analysis
+	err    error
+	calls  int
+}
+
+func (f *fakeExecutionRuntime) ID() string { return f.id }
+
+func (f *fakeExecutionRuntime) Analyze(context.Context, execution.WorkUnit) (execution.Analysis, error) {
+	f.calls++
+	return f.result, f.err
+}
+
+func TestExecutionFallsBackWhenPrimaryUnavailable(t *testing.T) {
+	primary := &fakeExecutionRuntime{id: "codex", err: errors.New("usage limit reached")}
+	fallback := &fakeExecutionRuntime{id: "cursor", result: execution.Analysis{Summary: "ok"}}
+	result, err := (ExecutionRuntime{Primary: primary, Fallback: fallback}).Analyze(context.Background(), execution.WorkUnit{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Summary != "ok" || primary.calls != 1 || fallback.calls != 1 {
+		t.Fatalf("result=%#v primary=%d fallback=%d", result, primary.calls, fallback.calls)
+	}
+}
+
+func TestExecutionDoesNotFallbackForPolicyError(t *testing.T) {
+	primary := &fakeExecutionRuntime{id: "codex", err: errors.New("invalid read-only work unit")}
+	fallback := &fakeExecutionRuntime{id: "cursor", result: execution.Analysis{Summary: "should not run"}}
+	_, err := (ExecutionRuntime{Primary: primary, Fallback: fallback}).Analyze(context.Background(), execution.WorkUnit{})
+	if err == nil {
+		t.Fatal("expected primary error")
+	}
+	if fallback.calls != 0 {
+		t.Fatalf("fallback calls=%d", fallback.calls)
+	}
+}
