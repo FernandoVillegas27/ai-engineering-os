@@ -9,10 +9,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/FernandoVillegas27/ai-engineering-os/core/artifact"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/message"
 )
 
 type HTTPServer struct {
 	Store        *EventStore
+	Artifacts    *artifact.Store
+	Messages     *message.Bus
 	PollInterval time.Duration
 }
 
@@ -116,6 +121,10 @@ func (s HTTPServer) handleRuns(w http.ResponseWriter, r *http.Request) {
 		s.handleEvents(w, r, runID)
 	case "stream":
 		s.handleStream(w, r, runID)
+	case "messages":
+		s.handleMessages(w, r, runID)
+	case "artifacts":
+		s.handleArtifacts(w, r, runID)
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 	}
@@ -150,6 +159,32 @@ func (s HTTPServer) handleEvents(w http.ResponseWriter, _ *http.Request, runID s
 		return
 	}
 	writeJSON(w, http.StatusOK, events)
+}
+
+func (s HTTPServer) handleMessages(w http.ResponseWriter, _ *http.Request, runID string) {
+	if s.Messages == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "message bus is not configured"})
+		return
+	}
+	values, err := s.Messages.List(runID, true, time.Time{})
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, values)
+}
+
+func (s HTTPServer) handleArtifacts(w http.ResponseWriter, _ *http.Request, runID string) {
+	if s.Artifacts == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "artifact store is not configured"})
+		return
+	}
+	values, err := s.Artifacts.ListRun(runID)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, values)
 }
 
 func (s HTTPServer) handleStream(w http.ResponseWriter, r *http.Request, runID string) {
