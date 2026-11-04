@@ -202,13 +202,6 @@ func TestOverlayTestsRejectsConflictWithExistingIntegratedChange(t *testing.T) {
 		PreImage: staging.NewPreImage(staging.WorkspaceSnapshot{}),
 		Changes:  []staging.WorkspaceChange{{Path: "pkg/service_test.go", Action: "create"}},
 	}
-	qa := taskworkspace.Workspace{
-		TaskID:   "qa",
-		AgentID:  "qa-engineer",
-		Root:     t.TempDir(),
-		PreImage: staging.NewPreImage(staging.WorkspaceSnapshot{}),
-		Declared: []staging.WorkspaceChange{{Path: "pkg/service_test.go", Action: "create"}},
-	}
 	inspection := taskworkspace.Inspection{
 		Changes:     []staging.WorkspaceChange{{Path: "pkg/service_test.go", Action: "create"}},
 		ResultImage: staging.NewPreImage(staging.WorkspaceSnapshot{}),
