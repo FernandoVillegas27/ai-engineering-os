@@ -38,6 +38,7 @@ type runExecuteOptions struct {
 	artifactsDir   string
 	messagesDir    string
 	promotionDir   string
+	controlDir     string
 	maxConcurrency int
 	modelPolicy    modelpolicy.Policy
 	model          string
@@ -442,6 +443,12 @@ func parseRunExecuteArgs(args []string) (runExecuteOptions, error) {
 			}
 			i++
 			options.promotionDir = args[i]
+		case "--control-dir":
+			if i+1 >= len(args) {
+				return runExecuteOptions{}, fmt.Errorf("--control-dir requiere una ruta")
+			}
+			i++
+			options.controlDir = args[i]
 		case "--max-concurrency":
 			if i+1 >= len(args) {
 				return runExecuteOptions{}, fmt.Errorf("--max-concurrency requiere un entero")
