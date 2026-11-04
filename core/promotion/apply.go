@@ -63,6 +63,9 @@ func Apply(ctx context.Context, request ApplyRequest) (ApplyResult, error) {
 	}()
 
 	for _, change := range plan.Changes {
+		if err := ensureSafeParent(root, change.Path, false); err != nil {
+			return ApplyResult{}, applyError("validate destination parent", change.Path, err, root, staged, backupRoot)
+		}
 		if err := backupTarget(root, backupRoot, change, preImage); err != nil {
 			return ApplyResult{}, applyError("prepare rollback copy", change.Path, err, root, staged, backupRoot)
 		}
@@ -105,7 +108,7 @@ func Apply(ctx context.Context, request ApplyRequest) (ApplyResult, error) {
 
 		switch change.Action {
 		case "create":
-			if err := ensureSafeParent(root, change.Path, true); err != nil {
+			if err := ensureSafeParent(root, change.Path, false); err != nil {
 				return fail(change, "prepare destination", err)
 			}
 			source := filepath.Join(staged, filepath.FromSlash(change.Path))
@@ -455,7 +458,7 @@ func removeRegularIfPresent(path string) error {
 }
 
 func restoreRegularFile(root, backup, target, relative string) error {
-	if err := ensureSafeParent(root, relative, true); err != nil {
+	if err := ensureSafeParent(root, relative, false); err != nil {
 		return err
 	}
 	if err := removeRegularIfPresent(target); err != nil {
