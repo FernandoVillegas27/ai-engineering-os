@@ -32,8 +32,6 @@ func Build(units []execution.WorkUnit) ([]scheduler.Task, error) {
 
 	researcherID := idFor(byAgent, "researcher")
 	architectID := idFor(byAgent, "architect")
-	qaID := idFor(byAgent, "qa-engineer")
-	reviewerID := idFor(byAgent, "reviewer")
 
 	var implementationIDs []string
 	for role := range implementationRoles {
@@ -91,8 +89,6 @@ func Build(units []execution.WorkUnit) ([]scheduler.Task, error) {
 	if _, err := scheduler.New(tasks); err != nil {
 		return nil, fmt.Errorf("validate specialist collaboration graph: %w", err)
 	}
-	_ = qaID // reserved for future explicit post-QA specialist phases.
-	_ = reviewerID
 	return tasks, nil
 }
 
