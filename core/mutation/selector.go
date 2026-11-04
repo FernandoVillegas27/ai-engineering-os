@@ -23,3 +23,18 @@ func SelectSourceMutatingUnits(units []execution.WorkUnit) ([]execution.WorkUnit
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil
 }
+
+
+// SelectTestsOnlyUnits returns work units whose registry-derived permissions
+// allow test writes but not source-code writes. These units must execute after
+// source integration so tests observe the combined implementation.
+func SelectTestsOnlyUnits(units []execution.WorkUnit) []execution.WorkUnit {
+	var out []execution.WorkUnit
+	for _, unit := range units {
+		if unit.Mutation.Tests && !unit.Mutation.SourceCode {
+			out = append(out, unit)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
