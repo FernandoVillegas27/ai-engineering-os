@@ -145,18 +145,29 @@ func executeMutationTestsPhase(
 		}
 	}
 
+	if err := appendSimpleRunEvent(ctx, eventStore, runID, controlplane.EventProposalStarted, "", "", "tests-only QA proposal freeze started", "tests-only-qa"); err != nil {
+		return mutationTestsResult{}, err
+	}
 	frozen, err := mutation.FreezeProposals(ctx, prepared, func(unit execution.WorkUnit) (proposal.Runtime, error) {
 		return routedProposalRuntime{runtimeName: options.runtime, routing: routing}, nil
 	}, mutation.FreezeConfig{
 		MaxConcurrency: options.maxConcurrency,
 	})
 	if err != nil {
+		_ = appendSimpleRunEvent(ctx, eventStore, runID, controlplane.EventProposalFailed, "", "", err.Error(), "tests-only-qa")
 		return mutationTestsResult{}, fmt.Errorf("freeze tests-only proposals: %w", err)
 	}
 	if err := mutation.ValidateFrozenTestsOnly(frozen); err != nil {
+		_ = appendSimpleRunEvent(ctx, eventStore, runID, controlplane.EventProposalFailed, "", "", err.Error(), "tests-only-qa")
+		return mutationTestsResult{}, err
+	}
+	if err := appendSimpleRunEvent(ctx, eventStore, runID, controlplane.EventProposalCompleted, "", "", "tests-only QA proposal freeze completed", "tests-only-qa"); err != nil {
 		return mutationTestsResult{}, err
 	}
 
+	if err := appendSimpleRunEvent(ctx, eventStore, runID, controlplane.EventStageStarted, "", "", "tests-only QA staging started", "tests-only-qa"); err != nil {
+		return mutationTestsResult{}, err
+	}
 	staged, err := mutation.StageFrozenProposals(
 		ctx,
 		prepared,
@@ -168,7 +179,14 @@ func executeMutationTestsPhase(
 		mutation.StageConfig{MaxConcurrency: options.maxConcurrency},
 	)
 	if err != nil {
+		_ = appendSimpleRunEvent(ctx, eventStore, runID, controlplane.EventStageFailed, "", "", err.Error(), "tests-only-qa")
 		return mutationTestsResult{Staged: staged}, fmt.Errorf("stage tests-only proposals: %w", err)
+	}
+	if err := appendSimpleRunEvent(ctx, eventStore, runID, controlplane.EventStageCompleted, "", "", "tests-only QA staging completed", "tests-only-qa"); err != nil {
+		return mutationTestsResult{Staged: staged}, err
+	}
+	if err := appendSimpleRunEvent(ctx, eventStore, runID, controlplane.EventIntegrationStarted, "", "", "tests-only QA overlay started", "tests-only-qa"); err != nil {
+		return mutationTestsResult{Staged: staged}, err
 	}
 
 	final, err := integration.OverlayTestWorkspaces(
@@ -179,7 +197,12 @@ func executeMutationTestsPhase(
 		staged.Inspections,
 	)
 	if err != nil {
+		_ = appendSimpleRunEvent(ctx, eventStore, runID, controlplane.EventIntegrationFailed, "", "", err.Error(), "tests-only-qa")
 		return mutationTestsResult{Staged: staged}, fmt.Errorf("overlay tests-only workspaces: %w", err)
+	}
+	if err := appendSimpleRunEvent(ctx, eventStore, runID, controlplane.EventIntegrationCompleted, "", "", "tests-only QA overlay completed", "tests-only-qa"); err != nil {
+		_ = integration.Cleanup(final, integrationParent)
+		return mutationTestsResult{Staged: staged}, err
 	}
 
 	for _, workspace := range staged.Workspaces {
