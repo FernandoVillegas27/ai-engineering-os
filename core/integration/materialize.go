@@ -251,6 +251,11 @@ func applyPlannedChange(
 		}
 		return replaceRegular(source, target, expectedSource)
 	case "delete":
+		if _, err := os.Lstat(source); err == nil {
+			return errors.New("task workspace source changed after inspection: deleted path reappeared")
+		} else if !os.IsNotExist(err) {
+			return err
+		}
 		if err := validateRegularTarget(target); err != nil {
 			return err
 		}
