@@ -3,16 +3,20 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/FernandoVillegas27/ai-engineering-os/core/artifact"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/classifier"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/collaboration"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/controlplane"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/coordinator"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/detector"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/message"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
@@ -30,6 +34,8 @@ type runExecuteOptions struct {
 	runtime        string
 	stateDir       string
 	eventsDir      string
+	artifactsDir   string
+	messagesDir    string
 	maxConcurrency int
 	json           bool
 }
@@ -118,6 +124,22 @@ func runRunExecute(args []string) error {
 	if err != nil {
 		return err
 	}
+	artifactsRoot, err := resolveRunAuxDir(options.artifactsDir, "AI_ENGINEERING_OS_ARTIFACTS_DIR", "artifacts")
+	if err != nil {
+		return err
+	}
+	artifactStore, err := artifact.NewStore(artifactsRoot)
+	if err != nil {
+		return err
+	}
+	messagesRoot, err := resolveRunAuxDir(options.messagesDir, "AI_ENGINEERING_OS_MESSAGES_DIR", "messages")
+	if err != nil {
+		return err
+	}
+	messageBus, err := message.NewBus(messagesRoot)
+	if err != nil {
+		return err
+	}
 
 	runtimeSelection := runstate.RuntimeSelection{
 		Provider: options.runtime,
@@ -153,6 +175,7 @@ func runRunExecute(args []string) error {
 		return err
 	}
 
+	dependents := collaboration.BuildDependents(tasks)
 	workers := make(map[string]coordinator.Worker, len(units))
 	for _, unit := range units {
 		var executor execution.Executor
@@ -161,9 +184,16 @@ func runRunExecute(args []string) error {
 		} else {
 			executor = execution.RuntimeExecutor{Runtime: codexintegration.NewExecutionRuntime()}
 		}
-		workers[unit.AgentID] = coordinator.ExecutionWorker{
+		inner := coordinator.ExecutionWorker{
 			Executor: executor,
 			Units:    unitByID,
+		}
+		workers[unit.AgentID] = collaboration.HandoffWorker{
+			Inner:         inner,
+			RunID:         run.ID,
+			ArtifactStore: artifactStore,
+			MessageBus:    messageBus,
+			Dependents:    dependents,
 		}
 	}
 
@@ -354,6 +384,18 @@ func parseRunExecuteArgs(args []string) (runExecuteOptions, error) {
 			}
 			i++
 			options.eventsDir = args[i]
+		case "--artifacts-dir":
+			if i+1 >= len(args) {
+				return runExecuteOptions{}, fmt.Errorf("--artifacts-dir requiere una ruta")
+			}
+			i++
+			options.artifactsDir = args[i]
+		case "--messages-dir":
+			if i+1 >= len(args) {
+				return runExecuteOptions{}, fmt.Errorf("--messages-dir requiere una ruta")
+			}
+			i++
+			options.messagesDir = args[i]
 		case "--max-concurrency":
 			if i+1 >= len(args) {
 				return runExecuteOptions{}, fmt.Errorf("--max-concurrency requiere un entero")
@@ -367,7 +409,7 @@ func parseRunExecuteArgs(args []string) (runExecuteOptions, error) {
 		case "--json":
 			options.json = true
 		case "-h", "--help":
-			return runExecuteOptions{}, fmt.Errorf("uso: ai run execute [ruta] --task <tarea> (--dry-run | --runtime codex) [--project id] [--max-concurrency N] [--ai]")
+			return runExecuteOptions{}, fmt.Errorf("uso: ai run execute [ruta] --task <tarea> (--dry-run | --runtime codex) [--project id] [--max-concurrency N] [--ai] [--artifacts-dir ruta] [--messages-dir ruta]")
 		default:
 			if strings.HasPrefix(args[i], "-") {
 				return runExecuteOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
@@ -394,4 +436,19 @@ func parseRunExecuteArgs(args []string) (runExecuteOptions, error) {
 		return runExecuteOptions{}, fmt.Errorf("runtime no soportado: %s", options.runtime)
 	}
 	return options, nil
+}
+
+
+func resolveRunAuxDir(explicit, envName, leaf string) (string, error) {
+	if strings.TrimSpace(explicit) != "" {
+		return explicit, nil
+	}
+	if value := strings.TrimSpace(os.Getenv(envName)); value != "" {
+		return value, nil
+	}
+	configRoot, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("resolver directorio de configuración: %w", err)
+	}
+	return filepath.Join(configRoot, "ai-engineering-os", leaf), nil
 }
