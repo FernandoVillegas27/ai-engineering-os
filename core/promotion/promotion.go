@@ -101,7 +101,6 @@ func DryRun(ctx context.Context, request Request) (Plan, error) {
 	}
 
 	policy := execution.DefaultSafeViewPolicy()
-	declared := make([]staging.WorkspaceChange, 0, len(request.Declared))
 	declaredByPath := map[string]string{}
 	for _, change := range request.Declared {
 		clean, err := staging.ValidateWorkspacePath(change.Path, policy)
@@ -116,7 +115,6 @@ func DryRun(ctx context.Context, request Request) (Plan, error) {
 			return Plan{}, &Error{Kind: KindUnsafeConfig, Detail: "duplicate declared path", Paths: []string{clean}}
 		}
 		declaredByPath[clean] = action
-		declared = append(declared, staging.WorkspaceChange{Path: clean, Action: action})
 	}
 
 	if err := verifyOriginal(ctx, root, request.PreImage, request.TempParent, policy); err != nil {
