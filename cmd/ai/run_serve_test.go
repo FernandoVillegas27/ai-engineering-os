@@ -49,3 +49,17 @@ func TestParseRunServeArgsDefaultsAndOverrides(t *testing.T) {
 		t.Fatalf("options = %#v", options)
 	}
 }
+
+
+func TestParseRunServeArgsCollaborationStoreOverrides(t *testing.T) {
+	options, err := parseRunServeArgs([]string{
+		"--artifacts-dir", "./artifacts",
+		"--messages-dir", "./messages",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.artifactsDir != "./artifacts" || options.messagesDir != "./messages" {
+		t.Fatalf("options=%#v", options)
+	}
+}
