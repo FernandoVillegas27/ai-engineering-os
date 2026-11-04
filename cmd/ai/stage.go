@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FernandoVillegas27/ai-engineering-os/core/baseline"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/classifier"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/detector"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
@@ -227,11 +228,23 @@ func runStage(args []string) error {
 	fmt.Printf("Review model: %s\n", displayModel(reviewModel))
 	fmt.Printf("Correction model: %s\n", displayModel(correctionModel))
 
+	verifier := localverify.New()
+	baselineProvider, err := baseline.New(baseline.Config{
+		OriginalRoot: root,
+		PreImage:     result.PreImage,
+		Authorized:   allowedFiles,
+		Verifier:     verifier,
+	})
+	if err != nil {
+		return fmt.Errorf("preparar baseline seguro: %w", err)
+	}
+
 	qualityResult, qualityErr := (quality.Loop{
-		Verifier:    localverify.New(),
-		Reviewer:    reviewer,
-		Corrector:   corrector,
-		MaxAttempts: 3,
+		Verifier:         verifier,
+		Reviewer:         reviewer,
+		Corrector:        corrector,
+		BaselineProvider: baselineProvider,
+		MaxAttempts:      3,
 	}).Run(context.Background(), result.Workspace, options.task, allowedFiles)
 
 	fmt.Println()
