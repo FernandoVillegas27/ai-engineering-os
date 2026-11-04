@@ -185,6 +185,10 @@ func runCoordinatedMutation(
 		return err
 	}
 
+	if err := appendSimpleRunEvent(ctx, eventStore, run.ID, controlplane.EventProposalStarted, "", "", "source proposal freeze started", "source"); err != nil {
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
+		return err
+	}
 	frozen, err := mutation.FreezeProposals(ctx, mutatingUnits, func(unit execution.WorkUnit) (proposal.Runtime, error) {
 		// Routed runtime preserves the existing proposal alignment/escalation behavior.
 		return routedProposalRuntime{runtimeName: options.runtime, routing: routing}, nil
@@ -192,8 +196,13 @@ func runCoordinatedMutation(
 		MaxConcurrency: options.maxConcurrency,
 	})
 	if err != nil {
+		_ = appendSimpleRunEvent(ctx, eventStore, run.ID, controlplane.EventProposalFailed, "", "", err.Error(), "source")
 		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return fmt.Errorf("freeze mutating proposals: %w", err)
+	}
+	if err := appendSimpleRunEvent(ctx, eventStore, run.ID, controlplane.EventProposalCompleted, "", "", "source proposal freeze completed", "source"); err != nil {
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
+		return err
 	}
 	for _, item := range frozen {
 		if err := emit(controlplane.EventArtifactCreated, item.TaskID, item.AgentID, "proposal ownership frozen"); err != nil {
@@ -202,6 +211,10 @@ func runCoordinatedMutation(
 		}
 	}
 
+	if err := appendSimpleRunEvent(ctx, eventStore, run.ID, controlplane.EventStageStarted, "", "", "source isolated staging started", "source"); err != nil {
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
+		return err
+	}
 	staged, err := mutation.StageFrozenProposals(ctx, mutatingUnits, frozen, func(unit execution.WorkUnit) (staging.Runtime, error) {
 		runtime, _, runtimeErr := stageRuntimeFor(options.runtime, routing, false)
 		return runtime, runtimeErr
@@ -210,8 +223,13 @@ func runCoordinatedMutation(
 	})
 	defer cleanupMutationStages(staged)
 	if err != nil {
+		_ = appendSimpleRunEvent(ctx, eventStore, run.ID, controlplane.EventStageFailed, "", "", err.Error(), "source")
 		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return fmt.Errorf("stage frozen proposals: %w", err)
+	}
+	if err := appendSimpleRunEvent(ctx, eventStore, run.ID, controlplane.EventStageCompleted, "", "", "source isolated staging completed", "source"); err != nil {
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
+		return err
 	}
 	for _, workspace := range staged.Workspaces {
 		if err := emit(controlplane.EventTaskCompleted, workspace.TaskID, workspace.AgentID, "isolated task staging completed"); err != nil {
@@ -220,8 +238,13 @@ func runCoordinatedMutation(
 		}
 	}
 
+	if err := appendSimpleRunEvent(ctx, eventStore, run.ID, controlplane.EventIntegrationStarted, "", "", "source integration started", "source"); err != nil {
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
+		return err
+	}
 	integrationPlan, err := integration.Build(staged.Workspaces, staged.Inspections)
 	if err != nil {
+		_ = appendSimpleRunEvent(ctx, eventStore, run.ID, controlplane.EventIntegrationFailed, "", "", err.Error(), "source")
 		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return fmt.Errorf("build integration plan: %w", err)
 	}
@@ -236,8 +259,13 @@ func runCoordinatedMutation(
 		Parent:       integrationParent,
 	}, integrationPlan, staged.Workspaces)
 	if err != nil {
+		_ = appendSimpleRunEvent(ctx, eventStore, run.ID, controlplane.EventIntegrationFailed, "", "", err.Error(), "source")
 		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return fmt.Errorf("materialize integrated workspace: %w", err)
+	}
+	if err := appendSimpleRunEvent(ctx, eventStore, run.ID, controlplane.EventIntegrationCompleted, "", "", "source integration completed", "source"); err != nil {
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
+		return err
 	}
 
 	finalIntegrated := sourceIntegrated
