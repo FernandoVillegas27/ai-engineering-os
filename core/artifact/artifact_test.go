@@ -16,9 +16,9 @@ func testArtifact(t *testing.T) Artifact {
 		ProducerAgent: "architect",
 		Type:          TypeArchitectureDecision,
 		Summary:       "Use typed inter-agent messages.",
-		Payload: map[string]any{
-			"decision": "Messages use a versioned envelope.",
-			"reason":   "Provider-independent coordination.",
+		Payload: ArchitectureDecisionPayload{
+			Decision:  "Messages use a versioned envelope.",
+			Rationale: "Provider-independent coordination.",
 		},
 		Evidence: []EvidenceRef{{Kind: "doc", Value: "docs/MASTER_PLAN.md"}},
 	}, time.Date(2026, 11, 4, 7, 30, 0, 0, time.UTC))
