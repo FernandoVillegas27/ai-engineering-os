@@ -69,6 +69,8 @@ type WorkUnit struct {
 	Skills       []string                     `json:"skills,omitempty"`
 	Tools        []string                     `json:"tools,omitempty"`
 	Permissions  execution.PermissionEnvelope `json:"permissions"`
+	Mutating     bool                         `json:"mutating,omitempty"`
+	Scopes       []string                     `json:"scopes,omitempty"`
 	DependsOn    []string                     `json:"depends_on,omitempty"`
 	ArtifactRefs []string                     `json:"artifact_refs,omitempty"`
 	MessageRefs  []string                     `json:"message_refs,omitempty"`
