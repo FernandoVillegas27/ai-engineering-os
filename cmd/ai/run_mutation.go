@@ -300,6 +300,18 @@ func runCoordinatedMutation(
 		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return fmt.Errorf("persist source integration checkpoint: %w", err)
 	}
+	if err := appendSimpleRunEvent(
+		ctx,
+		eventStore,
+		run.ID,
+		controlplane.EventCheckpointCreated,
+		"", "",
+		"source integration checkpoint persisted",
+		string(runcheckpoint.PhaseSourceIntegrated),
+	); err != nil {
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
+		return err
+	}
 
 	finalIntegrated := sourceIntegrated
 	keepIntegrated := false
@@ -342,6 +354,18 @@ func runCoordinatedMutation(
 	); err != nil {
 		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return fmt.Errorf("persist final integration checkpoint: %w", err)
+	}
+	if err := appendSimpleRunEvent(
+		ctx,
+		eventStore,
+		run.ID,
+		controlplane.EventCheckpointCreated,
+		"", "",
+		"final integration checkpoint persisted",
+		string(runcheckpoint.PhaseFinalIntegrated),
+	); err != nil {
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
+		return err
 	}
 
 	if err := emit(controlplane.EventVerificationStarted, "", "", "run-wide integration quality started"); err != nil {
