@@ -259,3 +259,32 @@ func TestCoordinatorCancellationCancelsRemainingGraph(t *testing.T) {
 		t.Fatalf("progress = %#v", result.Progress)
 	}
 }
+
+
+func TestCoordinatorEmitsRunFailedForTerminalFailure(t *testing.T) {
+	graph, err := scheduler.New([]scheduler.Task{
+		{ID: "backend", AgentID: "backend-engineer"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := &MemoryEventSink{}
+	result, err := (Coordinator{
+		Workers: map[string]Worker{
+			"backend-engineer": workerFunc(func(context.Context, scheduler.Task) (WorkResult, error) {
+				return WorkResult{}, errors.New("boom")
+			}),
+		},
+		Events: events,
+	}).Run(context.Background(), graph)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Progress.Failed != 1 {
+		t.Fatalf("result=%#v", result)
+	}
+	recorded := events.Snapshot()
+	if len(recorded) < 3 || recorded[len(recorded)-1].Type != EventRunFailed {
+		t.Fatalf("events=%#v", recorded)
+	}
+}
