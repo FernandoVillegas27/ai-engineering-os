@@ -35,9 +35,11 @@ func runRunPause(args []string) error {
 	if run.Status != runstate.StatusRunning {
 		return fmt.Errorf("run %s is not running: status=%s", run.ID, run.Status)
 	}
+	mutating := false
 	for _, unit := range run.WorkUnits {
 		if unit.Mutating {
-			return fmt.Errorf("run %s contains mutating work; durable pause is currently read-only only", run.ID)
+			mutating = true
+			break
 		}
 	}
 
@@ -101,7 +103,11 @@ func runRunPause(args []string) error {
 	fmt.Printf("Run ID: %s\n", run.ID)
 	fmt.Printf("Status: %s\n", run.Status)
 	fmt.Printf("Requested: %s\n", request.RequestedAt.Format(time.RFC3339))
-	fmt.Println("No new tasks will start after the active task boundary.")
+	if mutating {
+		fmt.Println("The mutating run will pause at the next durable integration checkpoint.")
+	} else {
+		fmt.Println("No new tasks will start after the active task boundary.")
+	}
 	return nil
 }
 
