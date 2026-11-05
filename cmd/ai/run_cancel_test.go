@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/controlplane"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runcontrol"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/scheduler"
 )
 
 func TestParseRunCancelArgs(t *testing.T) {
@@ -202,5 +204,99 @@ func TestRunCancelRejectsMismatchedEventsDirectory(t *testing.T) {
 	}
 	if len(events) != 0 {
 		t.Fatalf("invalid event stream created: %#v", events)
+	}
+}
+
+
+func TestRunCancelCancelsPausedRunSynchronously(t *testing.T) {
+	base := t.TempDir()
+	stateDir := base + "/runs"
+	eventsDir := base + "/events"
+	controlDir := base + "/control"
+	now := time.Now().UTC()
+
+	run, err := runstate.New(runstate.NewRunRequest{
+		Task: "paused work", Intent: "research", ProjectID: "project", ProjectRoot: base,
+		Runtime: runstate.RuntimeSelection{Provider: "dry-run", ModelPolicy: "auto"},
+		WorkUnits: []execution.WorkUnit{{
+			ID: "research", AgentID: "researcher", Task: "paused work",
+			Permissions: execution.PermissionEnvelope{
+				SourceCode: "read", Tests: "read", GitCommit: "deny",
+				GitPush: "deny", Secrets: "deny", Production: "deny",
+			},
+			Mode: execution.ModeReadOnly,
+		}},
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runstate.BindTaskGraph(&run, []scheduler.Task{{
+		ID: "research", AgentID: "researcher", Status: scheduler.StatusQueued,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := runstate.Transition(&run, runstate.StatusRunning, now.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := runstate.Transition(&run, runstate.StatusPaused, now.Add(2*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	runStore, err := runstate.NewStore(stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runStore.Save(run); err != nil {
+		t.Fatal(err)
+	}
+
+	eventStore, err := controlplane.NewEventStore(eventsDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	appendPauseFixtureEvent(t, eventStore, run.ID, controlplane.EventRunStarted, "", "", map[string]any{"source": "test"}, now)
+	appendPauseFixtureEvent(t, eventStore, run.ID, controlplane.EventRunPauseRequested, "", "", map[string]any{"source": "test"}, now.Add(time.Second))
+	appendPauseFixtureEvent(t, eventStore, run.ID, controlplane.EventRunPaused, "", "", map[string]any{"source": "test"}, now.Add(2*time.Second))
+
+	controlStore, err := runcontrol.NewStore(controlDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := controlStore.RequestPause(run.ID, now.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runRunCancel([]string{
+		run.ID,
+		"--state-dir", stateDir,
+		"--events-dir", eventsDir,
+		"--control-dir", controlDir,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	reloaded, err := runStore.Load(run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.Status != runstate.StatusCancelled {
+		t.Fatalf("run=%#v", reloaded)
+	}
+	requested, err := controlStore.PauseRequested(run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requested {
+		t.Fatal("pause marker remained after paused-run cancellation")
+	}
+	events, err := eventStore.List(run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := controlplane.Project(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Status != controlplane.RunCancelled || state.PauseRequested || state.CancelRequested {
+		t.Fatalf("state=%#v", state)
 	}
 }
