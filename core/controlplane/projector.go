@@ -74,9 +74,10 @@ type QualityState struct {
 }
 
 type PipelineState struct {
-	Proposal    string `json:"proposal,omitempty"`
-	Stage       string `json:"stage,omitempty"`
-	Integration string `json:"integration,omitempty"`
+	Proposal         string `json:"proposal,omitempty"`
+	Stage            string `json:"stage,omitempty"`
+	Integration      string `json:"integration,omitempty"`
+	CheckpointPhase  string `json:"checkpoint_phase,omitempty"`
 }
 
 
@@ -277,6 +278,14 @@ func Project(events []Event) (State, error) {
 			state.MessageCount++
 		case EventArtifactCreated:
 			state.ArtifactCount++
+		case EventCheckpointCreated:
+			var metadata struct {
+				Phase string `json:"phase"`
+			}
+			if err := json.Unmarshal(event.Data, &metadata); err != nil {
+				return State{}, fmt.Errorf("decode checkpoint metadata: %w", err)
+			}
+			state.Pipeline.CheckpointPhase = metadata.Phase
 		case EventVerificationStarted:
 			state.Quality.Verification = "running"
 		case EventVerificationPassed:
