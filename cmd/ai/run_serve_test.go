@@ -108,3 +108,14 @@ func TestParseRunServeArgsRecoveryControls(t *testing.T) {
 		t.Fatal("expected too-small recovery stale threshold rejection")
 	}
 }
+
+
+func TestParseRunServeArgsSnapshotStoreOverride(t *testing.T) {
+	options, err := parseRunServeArgs([]string{"--snapshot-dir", "./snapshots"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.snapshotDir != "./snapshots" {
+		t.Fatalf("options=%#v", options)
+	}
+}
