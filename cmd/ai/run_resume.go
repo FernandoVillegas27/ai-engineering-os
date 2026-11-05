@@ -26,6 +26,8 @@ type runResumeOptions struct {
 	artifactsDir   string
 	messagesDir    string
 	controlDir     string
+	checkpointDir  string
+	promotionDir   string
 	maxConcurrency int
 	json           bool
 }
@@ -50,10 +52,20 @@ func runRunResume(args []string) error {
 	if strings.TrimSpace(run.Intent) == "" {
 		return fmt.Errorf("run %s has no durable intent and cannot resume safely", run.ID)
 	}
+	mutating := false
 	for _, unit := range run.WorkUnits {
 		if unit.Mutating {
-			return fmt.Errorf("run %s contains mutating work; durable resume is currently read-only only", run.ID)
+			mutating = true
+			if unit.MutationKind == "" {
+				return fmt.Errorf(
+					"run %s contains legacy mutating work without mutation_kind; checkpoint resume is unsafe",
+					run.ID,
+				)
+			}
 		}
+	}
+	if mutating {
+		return runRunResumeMutation(options, run, runStore)
 	}
 
 	eventStore, err := openControlPlaneStore(options.eventsDir)
@@ -329,6 +341,18 @@ func parseRunResumeArgs(args []string) (runResumeOptions, error) {
 			}
 			i++
 			options.controlDir = args[i]
+		case "--checkpoint-dir":
+			if i+1 >= len(args) {
+				return runResumeOptions{}, fmt.Errorf("--checkpoint-dir requiere una ruta")
+			}
+			i++
+			options.checkpointDir = args[i]
+		case "--promotion-dir":
+			if i+1 >= len(args) {
+				return runResumeOptions{}, fmt.Errorf("--promotion-dir requiere una ruta")
+			}
+			i++
+			options.promotionDir = args[i]
 		case "--max-concurrency":
 			if i+1 >= len(args) {
 				return runResumeOptions{}, fmt.Errorf("--max-concurrency requiere un valor")
@@ -342,7 +366,7 @@ func parseRunResumeArgs(args []string) (runResumeOptions, error) {
 		case "--json":
 			options.json = true
 		case "-h", "--help":
-			return runResumeOptions{}, fmt.Errorf("uso: ai run resume <run-id> [--state-dir ruta] [--events-dir ruta] [--artifacts-dir ruta] [--messages-dir ruta] [--control-dir ruta] [--max-concurrency N] [--json]")
+			return runResumeOptions{}, fmt.Errorf("uso: ai run resume <run-id> [--state-dir ruta] [--events-dir ruta] [--artifacts-dir ruta] [--messages-dir ruta] [--control-dir ruta] [--checkpoint-dir ruta] [--promotion-dir ruta] [--max-concurrency N] [--json]")
 		default:
 			if strings.HasPrefix(args[i], "-") {
 				return runResumeOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
