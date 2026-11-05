@@ -47,6 +47,9 @@ func BindTaskGraph(run *Run, tasks []scheduler.Task) error {
 		}
 		unit.DependsOn = append([]string(nil), task.DependsOn...)
 		sort.Strings(unit.DependsOn)
+		unit.Mutating = task.Mutating
+		unit.Scopes = append([]string(nil), task.Scopes...)
+		sort.Strings(unit.Scopes)
 		unit.Status = schedulerToWorkUnitStatus(task.Status)
 	}
 	return Validate(*run)
