@@ -165,13 +165,16 @@ func runRunExecute(args []string) error {
 	}
 
 	runtimeSelection := runstate.RuntimeSelection{
-		Provider: options.runtime,
+		Provider:    options.runtime,
+		ModelPolicy: string(options.modelPolicy),
+		Model:       options.model,
 	}
 	if options.dryRun {
 		runtimeSelection.Provider = "dry-run"
 	}
 	run, err := runstate.New(runstate.NewRunRequest{
 		Task:         options.task,
+		Intent:       string(plan.Intent),
 		ProjectID:    options.projectID,
 		ProjectRoot:  root,
 		Capabilities: plan.RequestedCapabilities,
