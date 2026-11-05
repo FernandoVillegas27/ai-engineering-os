@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -454,7 +457,6 @@ func scanArchitectureViolations(root string, policy architecturePolicy) ([]archi
 }
 
 var (
-	goImportPattern     = regexp.MustCompile(`(?m)^\s*"([^"]+)"\s*$|(?m)^\s*import\s+"([^"]+)"`)
 	javaImportPattern   = regexp.MustCompile(`(?m)^\s*import\s+(?:static\s+)?([^;]+);`)
 	jsImportPattern     = regexp.MustCompile(`(?m)(?:from\s+|require\s*\(\s*)["']([^"']+)["']`)
 	sideEffectJSPattern = regexp.MustCompile(`(?m)^\s*import\s+["']([^"']+)["']`)
@@ -475,7 +477,15 @@ func extractImports(source, ext string) []string {
 	}
 	switch ext {
 	case ".go":
-		addMatches(goImportPattern)
+		file, err := parser.ParseFile(token.NewFileSet(), "source.go", source, parser.ImportsOnly)
+		if err == nil {
+			for _, spec := range file.Imports {
+				value, unquoteErr := strconv.Unquote(spec.Path.Value)
+				if unquoteErr == nil && strings.TrimSpace(value) != "" {
+					seen[value] = true
+				}
+			}
+		}
 	case ".java":
 		addMatches(javaImportPattern)
 	default:
