@@ -49,6 +49,8 @@ type RunSummary struct {
 	MessageCount     int       `json:"message_count"`
 	ArtifactCount    int       `json:"artifact_count"`
 	PendingApprovals int       `json:"pending_approvals"`
+	PauseRequested   bool      `json:"pause_requested"`
+	CancelRequested  bool      `json:"cancel_requested"`
 	LastEventAt      time.Time `json:"last_event_at"`
 }
 
@@ -93,6 +95,8 @@ func (s HTTPServer) handleRunIndex(w http.ResponseWriter, r *http.Request) {
 			MessageCount:     state.MessageCount,
 			ArtifactCount:    state.ArtifactCount,
 			PendingApprovals: state.PendingApprovals,
+			PauseRequested:   state.PauseRequested,
+			CancelRequested:  state.CancelRequested,
 			LastEventAt:      events[len(events)-1].CreatedAt,
 		})
 	}
