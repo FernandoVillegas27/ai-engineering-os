@@ -8,12 +8,15 @@ import (
 	"strings"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/baseline"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/contractverify"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/quality"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/review"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/staging"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/verification"
 )
+
+type ContractVerifier func(originalRoot, stagedRoot string) (contractverify.Result, error)
 
 type QualityGateConfig struct {
 	OriginalRoot string
@@ -25,12 +28,14 @@ type QualityGateConfig struct {
 	Reviewer     review.Runtime
 	Corrector    quality.Corrector
 	MaxAttempts  int
-	TempParent   string
+	TempParent       string
+	ContractVerifier ContractVerifier
 }
 
 type QualityGateResult struct {
 	Promotable   bool                      `json:"promotable"`
 	Quality      quality.Result            `json:"quality"`
+	Contracts    contractverify.Result     `json:"contracts"`
 	FinalChanges []staging.WorkspaceChange `json:"final_changes"`
 }
 
@@ -138,6 +143,23 @@ func RunQualityGate(ctx context.Context, config QualityGateConfig) (QualityGateR
 		return gate, fmt.Errorf("final integration scope check: %w", err)
 	}
 	gate.FinalChanges = finalChanges
+
+	verifyContracts := config.ContractVerifier
+	if verifyContracts == nil {
+		verifyContracts = contractverify.Verify
+	}
+	contractResult, err := verifyContracts(config.OriginalRoot, config.Workspace.Root)
+	if err != nil {
+		return gate, fmt.Errorf("integration contract/architecture verification: %w", err)
+	}
+	gate.Contracts = contractResult
+	if !contractResult.Passed {
+		return gate, fmt.Errorf(
+			"integration contract/architecture verification found %d blocking issue(s)",
+			len(contractResult.Findings),
+		)
+	}
+
 	gate.Promotable = true
 	return gate, nil
 }

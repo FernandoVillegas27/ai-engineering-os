@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/FernandoVillegas27/ai-engineering-os/core/contractverify"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/quality"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/review"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/staging"
@@ -344,6 +345,92 @@ func TestRunQualityGateAcceptsExplicitFinalExpectedChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !result.Promotable || len(result.FinalChanges) != len(final.Changes) {
+		t.Fatalf("result=%#v", result)
+	}
+}
+
+
+func TestRunQualityGateBlocksContractOrArchitectureRegression(t *testing.T) {
+	fixture := newMaterializeFixture(t)
+	defer fixture.cleanup(t)
+
+	integrated, err := Materialize(context.Background(), MaterializeConfig{
+		OriginalRoot: fixture.original,
+		Parent:       fixture.integrationParent,
+	}, fixture.plan, []taskworkspace.Workspace{fixture.backend, fixture.frontend})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer Cleanup(integrated, fixture.integrationParent)
+
+	verifier := &sequenceVerifier{reports: []verification.Report{
+		passReport(),
+		passReport(),
+	}}
+	reviewer := &gateReviewer{report: review.Report{Verdict: review.VerdictApproved}}
+
+	result, err := RunQualityGate(context.Background(), QualityGateConfig{
+		OriginalRoot: fixture.original,
+		Plan:         fixture.plan,
+		Workspace:    integrated,
+		Task:         "integrate",
+		Verifier:     verifier,
+		Reviewer:     reviewer,
+		MaxAttempts:  2,
+		TempParent:   fixture.integrationParent,
+		ContractVerifier: func(string, string) (contractverify.Result, error) {
+			return contractverify.Result{
+				Passed: false,
+				Findings: []contractverify.Finding{{
+					Kind: contractverify.FindingOpenAPI,
+					ID: "operation-removed:get:/users",
+					Path: "openapi.yaml",
+					Summary: "GET /users was removed",
+				}},
+			}, nil
+		},
+	})
+	if err == nil {
+		t.Fatal("expected contract/architecture gate error")
+	}
+	if result.Promotable || !result.Quality.Passed {
+		t.Fatalf("result=%#v", result)
+	}
+	if result.Contracts.Passed || len(result.Contracts.Findings) != 1 {
+		t.Fatalf("contracts=%#v", result.Contracts)
+	}
+}
+
+func TestRunQualityGateRecordsPassingContractVerification(t *testing.T) {
+	fixture := newMaterializeFixture(t)
+	defer fixture.cleanup(t)
+
+	integrated, err := Materialize(context.Background(), MaterializeConfig{
+		OriginalRoot: fixture.original,
+		Parent:       fixture.integrationParent,
+	}, fixture.plan, []taskworkspace.Workspace{fixture.backend, fixture.frontend})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer Cleanup(integrated, fixture.integrationParent)
+
+	result, err := RunQualityGate(context.Background(), QualityGateConfig{
+		OriginalRoot: fixture.original,
+		Plan:         fixture.plan,
+		Workspace:    integrated,
+		Task:         "integrate",
+		Verifier:     &sequenceVerifier{reports: []verification.Report{passReport(), passReport()}},
+		Reviewer:     &gateReviewer{report: review.Report{Verdict: review.VerdictApproved}},
+		MaxAttempts:  2,
+		TempParent:   fixture.integrationParent,
+		ContractVerifier: func(string, string) (contractverify.Result, error) {
+			return contractverify.Result{Passed: true}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Promotable || !result.Contracts.Passed {
 		t.Fatalf("result=%#v", result)
 	}
 }
