@@ -16,7 +16,6 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/promotion"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/promotioncandidate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runcheckpoint"
-	"github.com/FernandoVillegas27/ai-engineering-os/core/runcontrol"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/staging"
 	"github.com/FernandoVillegas27/ai-engineering-os/integrations/localverify"
@@ -140,6 +139,12 @@ func runRunResumeMutation(
 	if err != nil {
 		return err
 	}
+	active, err := startActiveRunContext(context.Background(), controlStore, run.ID)
+	if err != nil {
+		return fmt.Errorf("acquire run lease before mutation resume: %w", err)
+	}
+	defer active.Stop()
+
 	if _, err := controlStore.PauseRequested(run.ID); err != nil {
 		return err
 	}
@@ -176,16 +181,7 @@ func runRunResumeMutation(
 		return err
 	}
 
-	ctx, stopWatcher, err := runcontrol.WithCancellationWatcher(
-		context.Background(),
-		controlStore,
-		run.ID,
-		250*time.Millisecond,
-	)
-	if err != nil {
-		return err
-	}
-	defer stopWatcher()
+	ctx := active.Context()
 
 	if phase == runcheckpoint.PhaseSourceIntegrated {
 		testsOnly, err := reconstructMutationUnits(run, "tests-only")
