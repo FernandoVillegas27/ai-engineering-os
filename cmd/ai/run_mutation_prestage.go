@@ -190,11 +190,13 @@ func mutationParticipantTasks(
 	participants []execution.WorkUnit,
 ) ([]scheduler.Task, error) {
 	ids := map[string]bool{}
+	unitsByID := map[string]execution.WorkUnit{}
 	for _, unit := range participants {
 		if unit.ID == "" {
 			return nil, fmt.Errorf("mutation participant id is required")
 		}
 		ids[unit.ID] = true
+		unitsByID[unit.ID] = unit
 	}
 	var out []scheduler.Task
 	for _, task := range full {
@@ -210,6 +212,8 @@ func mutationParticipantTasks(
 				)
 			}
 		}
+		unit := unitsByID[task.ID]
+		task.Mutating = unit.Mutation.SourceCode || unit.Mutation.Tests
 		task.Status = scheduler.StatusQueued
 		out = append(out, task)
 	}
