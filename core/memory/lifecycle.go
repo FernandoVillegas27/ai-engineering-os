@@ -204,7 +204,7 @@ func curatedArtifactCandidates(project string, values []artifact.Artifact) []Sav
 		seen[topic] = true
 		content := curatedArtifactContent(value)
 		out = append(out, SaveRequest{
-			Project:  project
+			Project:  project,
 			Title:    truncateRunes(summary, 200),
 			Content:  content,
 			Type:     memoryType,
