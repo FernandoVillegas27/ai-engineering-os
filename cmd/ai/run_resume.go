@@ -155,12 +155,8 @@ func runRunResume(args []string) error {
 	if err != nil {
 		return err
 	}
-	requested, err := controlStore.PauseRequested(run.ID)
-	if err != nil {
+	if _, err := controlStore.PauseRequested(run.ID); err != nil {
 		return err
-	}
-	if !requested {
-		return fmt.Errorf("run %s has no durable pause request to clear", run.ID)
 	}
 	if err := controlStore.ClearPause(run.ID); err != nil {
 		return err
