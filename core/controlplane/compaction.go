@@ -16,7 +16,7 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/fslock"
 )
 
-const compactedHistoryFilename = ".compacted-history.json"
+const compactedHistoryPrefix = ".compacted-history-"
 
 type CompactionResult struct {
 	RunID           string    `json:"run_id"`
@@ -93,7 +93,10 @@ func CompactEventHistory(
 	if err != nil {
 		return CompactionResult{}, err
 	}
-	if present {
+	if present && existing.ThroughSequence > archive.ThroughSequence {
+		return CompactionResult{}, errors.New("existing compacted history is newer than requested archive")
+	}
+	if present && existing.ThroughSequence == archive.ThroughSequence {
 		alreadyPresent = true
 		if err := VerifyEventArchiveSnapshot(existing, snapshot); err != nil {
 			return CompactionResult{}, fmt.Errorf("existing compacted history does not match snapshot: %w", err)
@@ -102,6 +105,11 @@ func CompactEventHistory(
 			return CompactionResult{}, errors.New("existing compacted history does not match external archive")
 		}
 	} else {
+		if present {
+			if err := verifyArchiveExtension(existing, archive); err != nil {
+				return CompactionResult{}, err
+			}
+		}
 		if err := writeCompactedArchive(runDir, archive); err != nil {
 			return CompactionResult{}, err
 		}
@@ -109,7 +117,7 @@ func CompactEventHistory(
 		if err != nil {
 			return CompactionResult{}, err
 		}
-		if !ok {
+		if !ok || installed.ThroughSequence != archive.ThroughSequence {
 			return CompactionResult{}, errors.New("control-plane compacted history was not persisted")
 		}
 		if installed.RecordDigest != archive.RecordDigest {
@@ -159,38 +167,54 @@ func CompactEventHistory(
 }
 
 func loadCompactedArchive(runDir string) (EventArchive, bool, error) {
-	path := filepath.Join(runDir, compactedHistoryFilename)
-	info, err := os.Lstat(path)
-	if os.IsNotExist(err) {
-		return EventArchive{}, false, nil
-	}
+	entries, err := os.ReadDir(runDir)
 	if err != nil {
 		return EventArchive{}, false, err
 	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return EventArchive{}, false, errors.New("control-plane compacted history must be a regular file")
+	var latest EventArchive
+	found := false
+	for _, entry := range entries {
+		name := entry.Name()
+		if !isCompactedHistoryFilename(name) {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return EventArchive{}, false, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return EventArchive{}, false, fmt.Errorf("control-plane compacted history must be a regular file: %s", name)
+		}
+		data, err := os.ReadFile(filepath.Join(runDir, name))
+		if err != nil {
+			return EventArchive{}, false, err
+		}
+		var record EventArchive
+		decoder := json.NewDecoder(strings.NewReader(string(data)))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&record); err != nil {
+			return EventArchive{}, false, fmt.Errorf("decode control-plane compacted history %s: %w", name, err)
+		}
+		if err := ValidateEventArchive(record); err != nil {
+			return EventArchive{}, false, err
+		}
+		expected := compactedHistoryFilename(record.ThroughSequence)
+		if name != expected {
+			return EventArchive{}, false, fmt.Errorf("control-plane compacted history filename mismatch: %s", name)
+		}
+		if !found || record.ThroughSequence > latest.ThroughSequence {
+			latest = record
+			found = true
+		}
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return EventArchive{}, false, err
-	}
-	var record EventArchive
-	decoder := json.NewDecoder(strings.NewReader(string(data)))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&record); err != nil {
-		return EventArchive{}, false, fmt.Errorf("decode control-plane compacted history: %w", err)
-	}
-	if err := ValidateEventArchive(record); err != nil {
-		return EventArchive{}, false, err
-	}
-	return record, true, nil
+	return latest, found, nil
 }
 
 func writeCompactedArchive(runDir string, record EventArchive) error {
 	if err := ValidateEventArchive(record); err != nil {
 		return err
 	}
-	path := filepath.Join(runDir, compactedHistoryFilename)
+	path := filepath.Join(runDir, compactedHistoryFilename(record.ThroughSequence))
 	data, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
 		return err
@@ -217,6 +241,51 @@ func writeCompactedArchive(runDir string, record EventArchive) error {
 		return err
 	}
 	cleanup = false
+	return nil
+}
+
+func compactedHistoryFilename(through uint64) string {
+	return fmt.Sprintf("%s%020d.json", compactedHistoryPrefix, through)
+}
+
+func isCompactedHistoryFilename(name string) bool {
+	if !strings.HasPrefix(name, compactedHistoryPrefix) || !strings.HasSuffix(name, ".json") {
+		return false
+	}
+	value := strings.TrimSuffix(strings.TrimPrefix(name, compactedHistoryPrefix), ".json")
+	if len(value) != 20 {
+		return false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func verifyArchiveExtension(previous, next EventArchive) error {
+	if err := ValidateEventArchive(previous); err != nil {
+		return err
+	}
+	if err := ValidateEventArchive(next); err != nil {
+		return err
+	}
+	if previous.RunID != next.RunID || previous.ThroughSequence >= next.ThroughSequence {
+		return errors.New("control-plane compacted history extension identity is invalid")
+	}
+	if len(previous.Entries) > len(next.Entries) {
+		return errors.New("control-plane compacted history extension is shorter than previous history")
+	}
+	for i, entry := range previous.Entries {
+		candidate := next.Entries[i]
+		if entry.Sequence != candidate.Sequence ||
+			entry.Filename != candidate.Filename ||
+			entry.Content != candidate.Content ||
+			entry.SHA256 != candidate.SHA256 {
+			return fmt.Errorf("control-plane compacted history extension changed archived event %d", entry.Sequence)
+		}
+	}
 	return nil
 }
 
@@ -321,7 +390,7 @@ func rawHistoricalEventPrefix(runDir string, through uint64) ([]rawHistoricalEve
 	seen := map[uint64]bool{}
 	for _, entry := range entries {
 		name := entry.Name()
-		if name == ".append.lock" || name == compactedHistoryFilename || entry.IsDir() || filepath.Ext(name) != ".json" {
+		if name == ".append.lock" || isCompactedHistoryFilename(name) || entry.IsDir() || filepath.Ext(name) != ".json" {
 			continue
 		}
 		sequence := filenameSequence(name)
