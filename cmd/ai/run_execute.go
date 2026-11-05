@@ -39,6 +39,7 @@ type runExecuteOptions struct {
 	artifactsDir   string
 	messagesDir    string
 	promotionDir   string
+	checkpointDir  string
 	controlDir     string
 	maxConcurrency int
 	modelPolicy    modelpolicy.Policy
@@ -469,6 +470,12 @@ func parseRunExecuteArgs(args []string) (runExecuteOptions, error) {
 			}
 			i++
 			options.promotionDir = args[i]
+		case "--checkpoint-dir":
+			if i+1 >= len(args) {
+				return runExecuteOptions{}, fmt.Errorf("--checkpoint-dir requiere una ruta")
+			}
+			i++
+			options.checkpointDir = args[i]
 		case "--control-dir":
 			if i+1 >= len(args) {
 				return runExecuteOptions{}, fmt.Errorf("--control-dir requiere una ruta")
