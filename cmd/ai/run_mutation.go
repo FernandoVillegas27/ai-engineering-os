@@ -13,6 +13,7 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/integration"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/message"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/memory"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/mutation"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/promotion"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/promotioncandidate"
@@ -46,6 +47,8 @@ func runCoordinatedMutation(
 	capabilities []string,
 	intent string,
 	units []execution.WorkUnit,
+	memoryProvider memory.ProjectMemory,
+	memoryRecall memory.RecallContext,
 ) error {
 	if !options.multiAgentWrite {
 		return fmt.Errorf("coordinated mutation requires explicit --multi-agent-write")
@@ -509,6 +512,19 @@ func runCoordinatedMutation(
 	// original project and promotion.Apply has NOT been called.
 	keepIntegrated = true
 
+	memoryReport := persistMutationRunMemory(
+		context.Background(),
+		memoryProvider,
+		options.projectID,
+		run.ID,
+		options.task,
+		intent,
+		artifactStore,
+		len(gate.FinalChanges),
+		string(gate.Quality.Reason),
+	)
+	memoryReport.Recall = memoryRecall
+
 	if options.json {
 		return printJSON(struct {
 			RunID              string                    `json:"run_id"`
@@ -518,6 +534,7 @@ func runCoordinatedMutation(
 			Promotable          bool                     `json:"promotable"`
 			PromotionReady      bool                     `json:"promotion_ready"`
 			Changes             []staging.WorkspaceChange `json:"changes"`
+			Memory              runMemoryReport           `json:"memory"`
 		}{
 			RunID:               run.ID,
 			Intent:              intent,
@@ -526,6 +543,7 @@ func runCoordinatedMutation(
 			Promotable:          gate.Promotable,
 			PromotionReady:      promotionPlan.Ready,
 			Changes:             gate.FinalChanges,
+			Memory:              memoryReport,
 		})
 	}
 
@@ -537,6 +555,7 @@ func runCoordinatedMutation(
 	fmt.Printf("Integrated workspace: %s\n", finalIntegrated.Root)
 	fmt.Printf("Quality: %s\n", gate.Quality.Reason)
 	fmt.Printf("Promotion candidate: READY (%d change(s))\n", len(gate.FinalChanges))
+	printMemorySummary(memoryRecall, memoryReport)
 	fmt.Println("Promotion candidate persisted: YES")
 	fmt.Println("Approval required: YES")
 	fmt.Println()
