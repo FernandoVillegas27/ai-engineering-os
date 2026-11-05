@@ -248,53 +248,46 @@ The repository already has the foundation for:
 
 ### Latest completed milestone
 
-PR #126 — verified archive-backed Control Plane event compaction — merged to `master`.
+PR #128 — versioned typed lifecycle and coordination contracts — merged to `master`.
 
 Merge commit:
 
 ~~~text
-c9ebd899d80cd89c8012e0993fc753a2c655cab4
+345c1bf3617032a6f8f04fa024c04274261183ef
 ~~~
 
 Validation:
 
-- PR #125 introduced immutable independently verifiable event archives and passed CI;
-- PR #125 merged to `master` as `2ee786e2d0a603bff3bd123748a25552dae3ae5a`;
-- PR #126 introduced archive-backed reconstruction and explicit verified compaction and passed CI;
-- PR #126 merged to `master` as `c9ebd899d80cd89c8012e0993fc753a2c655cab4`.
+- PR #128 passed the complete Go test suite before merge;
+- automatic collaboration handoffs now emit strict versioned artifact/message payloads;
+- historical unversioned handoffs remain readable through an explicit read-legacy/write-current compatibility rule.
 
-Long-history functionality now on master:
+Typed contract functionality now on master:
 
-- immutable integrity-verified snapshots;
-- snapshot+suffix projection;
-- immutable external event archives containing exact original event bytes;
-- per-event SHA-256 and archive-record digests;
-- cryptographic archive ↔ snapshot linkage;
-- self-contained immutable versioned compacted-history generations inside each run;
-- explicit `ai run archive <run-id>`;
-- explicit `ai run compact <run-id>`;
-- archive-backed `EventStore.List` reconstruction;
-- append sequence continuity after individual historical files are removed;
-- snapshot verification and new snapshot/archive creation across prior compaction generations;
-- fail-closed detection of tampered compacted history;
-- resumable cleanup when compaction is interrupted after the archive is installed;
-- repeatable incremental compaction as long runs grow.
+- strict payload contracts for task briefs, research notes, implementation plans, change proposals, code patch references, test plans, review reports, risk assessments, questions, decisions, and handoffs;
+- existing strict architecture-decision, API-contract, and verification-report contracts retained;
+- versioned message payload contracts for handoff, question, answer, blocker, decision, and status;
+- stable payload schema identities through `artifact.PayloadSchemaID` and `message.PayloadSchemaID`;
+- unknown-field and unsupported-version fail-closed validation;
+- dependency-graph validation for implementation plans;
+- duplicate ID/severity/reference validation for review/risk/handoff payloads;
+- backward-compatible durable replay for pre-contract handoff records.
 
 ### Immediate next milestone
 
-**Dedicated typed schemas for remaining high-value lifecycle artifacts and handoffs.**
+**Cross-language Quality providers and normalized failure identity.**
 
 Highest-value targets:
 
-1. replace remaining loosely structured lifecycle payloads with explicit versioned schemas;
-2. validate producer/consumer compatibility at persistence boundaries;
-3. make artifact/message schema evolution backward-aware;
-4. expose schema identity in Control Plane/audit surfaces where useful;
-5. preserve provider independence and deterministic validation.
+1. preserve one provider-independent `verification.Failure` identity across toolchains;
+2. add structured Java/Gradle/JUnit parsing;
+3. add structured TypeScript/Angular/Vitest/Jest parsing;
+4. distinguish test failures, compile/type failures and infrastructure failures;
+5. keep baseline comparison safe by reporting parse completeness explicitly;
+6. route language/toolchain selection deterministically from project evidence.
 
 After that:
 
-- cross-language Quality providers and normalized failure identity;
 - contract/architecture verification;
 - long-run recovery/observability soak tests;
 - memory/team-learning hardening;
@@ -2201,7 +2194,6 @@ The project has crossed these earlier completion levels:
 
 Still incomplete for the full product vision:
 
-- dedicated typed schemas for remaining high-value lifecycle artifacts and handoffs;
 - broader language/toolchain Quality normalization;
 - stronger contract/architecture verification;
 - long-run recovery/observability soak coverage;
@@ -2214,16 +2206,15 @@ Still incomplete for the full product vision:
 
 Proceed in this order unless a new explicit architecture decision changes it:
 
-1. dedicated typed schemas for remaining high-value lifecycle artifacts;
-2. cross-language Quality providers and normalized failure identity;
-3. contract/architecture verification;
-4. long-run recovery/observability soak tests;
-5. memory/team-learning hardening;
-6. external tool/MCP mesh hardening;
-7. optional visual Control Plane client;
-8. final production release matrix and threat-model closure.
+1. cross-language Quality providers and normalized failure identity;
+2. contract/architecture verification;
+3. long-run recovery/observability soak tests;
+4. memory/team-learning hardening;
+5. external tool/MCP mesh hardening;
+6. optional visual Control Plane client;
+7. final production release matrix and threat-model closure.
 
-Snapshot creation, snapshot-assisted state projection, independently verifiable event archives, and explicit archive-backed event compaction are now implemented on master and are no longer pending work.
+Snapshot creation, snapshot-assisted state projection, independently verifiable event archives, explicit archive-backed event compaction, and typed lifecycle/coordination payload contracts are now implemented on master and are no longer pending work.
 
 Compaction remains explicit and fail-closed. Historical bytes remain reconstructable from immutable compacted-history generations after individual event files are removed.
 
