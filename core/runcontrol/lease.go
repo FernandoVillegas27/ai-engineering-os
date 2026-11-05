@@ -1,6 +1,7 @@
 package runcontrol
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -254,4 +256,121 @@ func newLeaseOwnerID() (string, error) {
 
 func (s *Store) leasePath(runID string) string {
 	return filepath.Join(s.root, runID+".lease.json")
+}
+
+
+type LeaseSession struct {
+	store   *Store
+	lease   Lease
+	ctx     context.Context
+	cancel  context.CancelFunc
+	done    chan struct{}
+	once    sync.Once
+	errMu   sync.Mutex
+	err     error
+}
+
+func StartLeaseSession(
+	parent context.Context,
+	store *Store,
+	runID string,
+	heartbeatInterval time.Duration,
+) (*LeaseSession, error) {
+	if store == nil {
+		return nil, errors.New("run control store is required")
+	}
+	if heartbeatInterval <= 0 {
+		heartbeatInterval = 2 * time.Second
+	}
+	if heartbeatInterval < 100*time.Millisecond {
+		heartbeatInterval = 100 * time.Millisecond
+	}
+	lease, err := store.AcquireLease(runID, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithCancel(parent)
+	session := &LeaseSession{
+		store:  store,
+		lease:  lease,
+		ctx:    ctx,
+		cancel: cancel,
+		done:   make(chan struct{}),
+	}
+	go session.heartbeatLoop(heartbeatInterval)
+	return session, nil
+}
+
+func (s *LeaseSession) Context() context.Context {
+	if s == nil {
+		return context.Background()
+	}
+	return s.ctx
+}
+
+func (s *LeaseSession) OwnerID() string {
+	if s == nil {
+		return ""
+	}
+	return s.lease.OwnerID
+}
+
+func (s *LeaseSession) Err() error {
+	if s == nil {
+		return nil
+	}
+	s.errMu.Lock()
+	defer s.errMu.Unlock()
+	return s.err
+}
+
+func (s *LeaseSession) Stop() error {
+	if s == nil {
+		return nil
+	}
+	s.once.Do(func() {
+		close(s.done)
+		s.cancel()
+		releaseErr := s.store.ReleaseLease(s.lease.RunID, s.lease.OwnerID)
+		if releaseErr != nil {
+			s.setErr(releaseErr)
+		}
+	})
+	return s.Err()
+}
+
+func (s *LeaseSession) heartbeatLoop(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.done:
+			return
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+			lease, err := s.store.HeartbeatLease(
+				s.lease.RunID,
+				s.lease.OwnerID,
+				time.Now().UTC(),
+			)
+			if err != nil {
+				s.setErr(fmt.Errorf("renew run lease: %w", err))
+				s.cancel()
+				return
+			}
+			s.lease = lease
+		}
+	}
+}
+
+func (s *LeaseSession) setErr(err error) {
+	if err == nil {
+		return
+	}
+	s.errMu.Lock()
+	defer s.errMu.Unlock()
+	if s.err == nil {
+		s.err = err
+	}
 }
