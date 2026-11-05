@@ -2,7 +2,6 @@ package engram
 
 import (
 	"context"
-	"errors"
 	"reflect"
 	"strings"
 	"testing"
