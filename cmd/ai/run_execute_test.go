@@ -152,8 +152,8 @@ func TestMutationParticipantTasksPreservesDependencies(t *testing.T) {
 	participants := []execution.WorkUnit{
 		{ID: "research", AgentID: "researcher"},
 		{ID: "architect", AgentID: "architect"},
-		{ID: "backend", AgentID: "backend-engineer"},
-		{ID: "qa", AgentID: "qa-engineer"},
+		{ID: "backend", AgentID: "backend-engineer", Mutation: execution.MutationCapability{SourceCode: true, Tests: true}},
+		{ID: "qa", AgentID: "qa-engineer", Mutation: execution.MutationCapability{Tests: true}},
 	}
 	tasks, err := mutationParticipantTasks(full, participants)
 	if err != nil {
@@ -177,6 +177,18 @@ func TestMutationParticipantTasksPreservesDependencies(t *testing.T) {
 	}
 	if len(got["qa"]) != 1 || got["qa"][0] != "backend" {
 		t.Fatalf("qa deps=%#v", got["qa"])
+	}
+	for _, task := range tasks {
+		switch task.ID {
+		case "backend", "qa":
+			if !task.Mutating {
+				t.Fatalf("%s should be mutating: %#v", task.ID, task)
+			}
+		case "research", "architect":
+			if task.Mutating {
+				t.Fatalf("%s should remain read-only: %#v", task.ID, task)
+			}
+		}
 	}
 }
 
