@@ -5,6 +5,9 @@ import (
 	"os/exec"
 	"reflect"
 	"testing"
+	"time"
+
+	"github.com/FernandoVillegas27/ai-engineering-os/core/toolhealth"
 )
 
 type fakeRunner struct {
@@ -12,6 +15,7 @@ type fakeRunner struct {
 	lookPathErr error
 	version     string
 	versionErr  error
+	block       bool
 }
 
 func (f *fakeRunner) LookPath(file string) (string, error) {
@@ -21,7 +25,11 @@ func (f *fakeRunner) LookPath(file string) (string, error) {
 	return f.path, nil
 }
 
-func (f *fakeRunner) Run(_ context.Context, _ string, args ...string) (string, error) {
+func (f *fakeRunner) Run(ctx context.Context, _ string, args ...string) (string, error) {
+	if f.block {
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
 	if len(args) == 1 && args[0] == "--version" {
 		return f.version, f.versionErr
 	}
@@ -78,5 +86,21 @@ func TestRecommendedOperations(t *testing.T) {
 	want := []string{"resolve-library-id", "query-docs"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("RecommendedOperations() = %#v", got)
+	}
+}
+
+
+func TestHealthClassifiesProbeTimeout(t *testing.T) {
+	client := Client{
+		NPX: "npx",
+		Runner: &fakeRunner{path: "/usr/bin/npx", block: true},
+		ProbeTimeout: 20 * time.Millisecond,
+	}
+	health := client.Health(context.Background())
+	if health.Healthy || !health.Available {
+		t.Fatalf("health=%#v", health)
+	}
+	if health.Failure.Kind != toolhealth.FailureTimeout || !health.Failure.Retryable {
+		t.Fatalf("failure=%#v", health.Failure)
 	}
 }
