@@ -20,6 +20,7 @@ const (
 	EventRunPaused             EventType = "run.paused"
 	EventRunResumed            EventType = "run.resumed"
 	EventRunCompleted          EventType = "run.completed"
+	EventRunFailed             EventType = "run.failed"
 	EventRunCancelled          EventType = "run.cancelled"
 	EventRunCancelRequested     EventType = "run.cancel-requested"
 	EventTaskCreated           EventType = "task.created"
@@ -184,7 +185,7 @@ func agentEvent(value EventType) bool {
 
 func validEventType(value EventType) bool {
 	switch value {
-	case EventRunStarted, EventRunPaused, EventRunResumed, EventRunCompleted, EventRunCancelled, EventRunCancelRequested,
+	case EventRunStarted, EventRunPaused, EventRunResumed, EventRunCompleted, EventRunFailed, EventRunCancelled, EventRunCancelRequested,
 		EventTaskCreated, EventTaskAssigned, EventTaskStarted, EventTaskWaiting, EventTaskBlocked,
 		EventTaskCompleted, EventTaskFailed, EventTaskCancelled, EventAgentMessageSent,
 		EventArtifactCreated, EventProposalStarted, EventProposalCompleted, EventProposalFailed,
