@@ -93,28 +93,7 @@ func (s *Store) LoadLease(runID string) (Lease, error) {
 	if !safeToken(runID) {
 		return Lease{}, errors.New("run id is unsafe for run lease")
 	}
-	path := s.leasePath(runID)
-	info, err := os.Lstat(path)
-	if err != nil {
-		return Lease{}, err
-	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return Lease{}, errors.New("run lease must be a regular file")
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return Lease{}, err
-	}
-	var lease Lease
-	decoder := json.NewDecoder(strings.NewReader(string(data)))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&lease); err != nil {
-		return Lease{}, err
-	}
-	if err := validateLease(lease, runID); err != nil {
-		return Lease{}, err
-	}
-	return lease, nil
+	return loadLeaseFile(s.leasePath(runID), runID)
 }
 
 func (s *Store) HeartbeatLease(runID, ownerID string, now time.Time) (Lease, error) {
@@ -157,6 +136,61 @@ func (s *Store) ReleaseLease(runID, ownerID string) error {
 		return errors.New("run lease owner mismatch")
 	}
 	return os.Remove(s.leasePath(runID))
+}
+
+func (s *Store) ClaimStaleLease(
+	runID string,
+	now time.Time,
+	threshold time.Duration,
+) (Lease, Lease, error) {
+	if s == nil {
+		return Lease{}, Lease{}, errors.New("run control store is required")
+	}
+	stale, previous, err := s.LeaseStale(runID, now, threshold)
+	if err != nil {
+		return Lease{}, Lease{}, err
+	}
+	if !stale {
+		return Lease{}, Lease{}, fmt.Errorf("run %s lease is not stale", runID)
+	}
+
+	path := s.leasePath(runID)
+	quarantine := filepath.Join(
+		s.root,
+		fmt.Sprintf(".%s.reclaim-%d", runID, time.Now().UTC().UnixNano()),
+	)
+	if err := os.Rename(path, quarantine); err != nil {
+		return Lease{}, Lease{}, fmt.Errorf("capture stale run lease: %w", err)
+	}
+	restore := true
+	defer func() {
+		if restore {
+			if _, err := os.Lstat(path); os.IsNotExist(err) {
+				_ = os.Rename(quarantine, path)
+			}
+		}
+	}()
+
+	captured, err := loadLeaseFile(quarantine, runID)
+	if err != nil {
+		return Lease{}, Lease{}, fmt.Errorf("validate captured stale lease: %w", err)
+	}
+	if captured.OwnerID != previous.OwnerID ||
+		!captured.HeartbeatAt.Equal(previous.HeartbeatAt) ||
+		!captured.AcquiredAt.Equal(previous.AcquiredAt) {
+		return Lease{}, Lease{}, errors.New("run lease changed during stale claim")
+	}
+
+	recovery, err := s.AcquireLease(runID, now)
+	if err != nil {
+		return Lease{}, Lease{}, fmt.Errorf("acquire recovery lease: %w", err)
+	}
+	if err := os.Remove(quarantine); err != nil {
+		_ = s.ReleaseLease(runID, recovery.OwnerID)
+		return Lease{}, Lease{}, fmt.Errorf("remove captured stale lease: %w", err)
+	}
+	restore = false
+	return recovery, previous, nil
 }
 
 func (s *Store) LeaseStale(runID string, now time.Time, threshold time.Duration) (bool, Lease, error) {
@@ -225,6 +259,30 @@ func (s *Store) replaceLease(lease Lease) error {
 	}
 	cleanup = false
 	return nil
+}
+
+func loadLeaseFile(path, runID string) (Lease, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return Lease{}, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return Lease{}, errors.New("run lease must be a regular file")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Lease{}, err
+	}
+	var lease Lease
+	decoder := json.NewDecoder(strings.NewReader(string(data)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&lease); err != nil {
+		return Lease{}, err
+	}
+	if err := validateLease(lease, runID); err != nil {
+		return Lease{}, err
+	}
+	return lease, nil
 }
 
 func validateLease(lease Lease, runID string) error {
