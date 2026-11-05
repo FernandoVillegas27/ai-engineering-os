@@ -15,6 +15,7 @@ type CapabilityInput struct {
 	Run                 runstate.Run
 	ControlPlane        controlplane.State
 	CheckpointAvailable bool
+	LeaseStale          bool
 }
 
 func DeriveCapabilities(input CapabilityInput) Capabilities {
@@ -35,6 +36,22 @@ func DeriveCapabilities(input CapabilityInput) Capabilities {
 		return out
 	}
 	out.Consistent = true
+
+	if input.LeaseStale && run.Status == runstate.StatusRunning {
+		if recovery, err := DeriveRecovery(RecoveryInput{
+			Run:                 run,
+			ControlPlane:        state,
+			CheckpointAvailable: input.CheckpointAvailable,
+		}); err == nil {
+			out.CanRecover = true
+			out.RecoveryTo = string(recovery.Status)
+			if recovery.CheckpointPhase != "" {
+				out.RecoveryFrom = recovery.CheckpointPhase
+			} else {
+				out.RecoveryFrom = "durable-task-graph"
+			}
+		}
+	}
 
 	mutating, mutationKindsComplete := mutationProfile(run)
 	switch run.Status {
