@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/scheduler"
 )
 
@@ -76,4 +77,41 @@ func schedulerToWorkUnitStatus(status scheduler.Status) WorkUnitStatus {
 	default:
 		return WorkUnitQueued
 	}
+}
+
+
+func BindMutationKinds(run *Run, units []execution.WorkUnit) error {
+	if run == nil {
+		return errors.New("run is required")
+	}
+	byID := map[string]execution.WorkUnit{}
+	for _, unit := range units {
+		if unit.ID == "" {
+			return errors.New("mutation-kind work unit id is required")
+		}
+		if _, exists := byID[unit.ID]; exists {
+			return fmt.Errorf("duplicate mutation-kind work unit: %s", unit.ID)
+		}
+		byID[unit.ID] = unit
+	}
+	for index := range run.WorkUnits {
+		durable := &run.WorkUnits[index]
+		if !durable.Mutating {
+			durable.MutationKind = ""
+			continue
+		}
+		unit, ok := byID[durable.ID]
+		if !ok {
+			return fmt.Errorf("missing mutation capability metadata for %s", durable.ID)
+		}
+		switch {
+		case unit.Mutation.SourceCode:
+			durable.MutationKind = "source"
+		case unit.Mutation.Tests:
+			durable.MutationKind = "tests-only"
+		default:
+			return fmt.Errorf("mutating work unit %s has no registry-derived write capability", durable.ID)
+		}
+	}
+	return Validate(*run)
 }
