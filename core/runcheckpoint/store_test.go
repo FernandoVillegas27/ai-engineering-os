@@ -207,3 +207,70 @@ func TestLoadRejectsSymlinkPhaseDirectory(t *testing.T) {
 		t.Fatal("expected symlink checkpoint rejection")
 	}
 }
+
+
+func TestSaveRejectsCheckpointStoreInsideOriginalProject(t *testing.T) {
+	base := t.TempDir()
+	original := filepath.Join(base, "project")
+	integrated := filepath.Join(base, "integrated")
+	if err := os.MkdirAll(original, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(integrated, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeCheckpointFile(t, original, "main.go", "package main\n")
+	policy := execution.DefaultSafeViewPolicy()
+	if _, err := execution.PrepareSafeReadOnlyViewWithPolicy(original, integrated, policy); err != nil {
+		t.Fatal(err)
+	}
+	before, err := staging.SnapshotWorkspace(original, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeCheckpointFile(t, integrated, "main.go", "package main\nconst changed = true\n")
+	changes, err := staging.DetectWorkspaceChanges(before, integrated, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := NewStore(Config{Root: filepath.Join(original, ".checkpoints")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.Save(
+		context.Background(),
+		"run-inside",
+		PhaseSourceIntegrated,
+		original,
+		integration.IntegratedWorkspace{
+			Root: integrated, PreImage: staging.NewPreImage(before), Changes: changes,
+		},
+		time.Now().UTC(),
+	)
+	if err == nil || !strings.Contains(err.Error(), "outside original project") {
+		t.Fatalf("err=%#v", err)
+	}
+}
+
+func TestRestoreRejectsParentInsideOriginalProject(t *testing.T) {
+	original, workspace, checkpointRoot := checkpointFixture(t)
+	store, err := NewStore(Config{Root: checkpointRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Save(
+		context.Background(), "run-restore-inside", PhaseSourceIntegrated,
+		original, workspace, time.Now().UTC(),
+	); err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.Restore(
+		context.Background(),
+		"run-restore-inside",
+		PhaseSourceIntegrated,
+		original,
+	)
+	if err == nil || !strings.Contains(err.Error(), "outside original project") {
+		t.Fatalf("err=%#v", err)
+	}
+}
