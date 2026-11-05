@@ -269,3 +269,55 @@ func TestBindTaskGraphRejectsIncompleteOrMismatchedGraph(t *testing.T) {
 		t.Fatal("expected agent mismatch rejection")
 	}
 }
+
+
+func TestNewPersistsRetryLineageAndIntent(t *testing.T) {
+	run, err := New(NewRunRequest{
+		Task:          "retry backend analysis",
+		Intent:        "research",
+		ParentRunID:   "run-parent",
+		RetryOfTaskID: "work-backend",
+		ProjectID:     "project",
+		Runtime: RuntimeSelection{
+			Provider:    "codex",
+			ModelPolicy: "auto",
+			Model:       "model-x",
+		},
+		WorkUnits: []execution.WorkUnit{{
+			ID: "work-backend", AgentID: "backend-engineer", Task: "retry backend analysis",
+			Permissions: execution.PermissionEnvelope{
+				SourceCode: "read", Tests: "read", GitCommit: "deny",
+				GitPush: "deny", Secrets: "deny", Production: "deny",
+			},
+		}},
+	}, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.ParentRunID != "run-parent" || run.RetryOfTaskID != "work-backend" || run.Intent != "research" {
+		t.Fatalf("run = %#v", run)
+	}
+	if run.Runtime.Provider != "codex" || run.Runtime.ModelPolicy != "auto" || run.Runtime.Model != "model-x" {
+		t.Fatalf("runtime = %#v", run.Runtime)
+	}
+}
+
+func TestValidateRejectsPartialRetryLineage(t *testing.T) {
+	run, err := New(NewRunRequest{
+		Task: "x", ProjectID: "project",
+		WorkUnits: []execution.WorkUnit{{
+			ID: "work-1", AgentID: "researcher", Task: "x",
+			Permissions: execution.PermissionEnvelope{
+				SourceCode: "read", Tests: "read", GitCommit: "deny",
+				GitPush: "deny", Secrets: "deny", Production: "deny",
+			},
+		}},
+	}, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	run.ParentRunID = "run-parent"
+	if err := Validate(run); err == nil {
+		t.Fatal("expected partial retry lineage rejection")
+	}
+}
