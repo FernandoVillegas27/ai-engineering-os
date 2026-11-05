@@ -35,6 +35,9 @@ func runRunCancel(args []string) error {
 	switch run.Status {
 	case runstate.StatusCompleted, runstate.StatusFailed, runstate.StatusCancelled:
 		return fmt.Errorf("run %s is already terminal with status %s", run.ID, run.Status)
+	case runstate.StatusRunning, runstate.StatusPaused:
+	default:
+		return fmt.Errorf("run %s cannot be cancelled from status %s", run.ID, run.Status)
 	}
 
 	eventStore, err := openControlPlaneStore(options.eventsDir)
@@ -48,11 +51,62 @@ func runRunCancel(args []string) error {
 	if len(events) == 0 || events[0].Type != controlplane.EventRunStarted {
 		return fmt.Errorf("run %s has no valid Control Plane event stream in the selected --events-dir", run.ID)
 	}
+	state, err := controlplane.Project(events)
+	if err != nil {
+		return fmt.Errorf("project run state: %w", err)
+	}
 
 	controlStore, err := openRunControlStore(options.controlDir)
 	if err != nil {
 		return err
 	}
+	if run.Status == runstate.StatusPaused {
+		if state.Status != controlplane.RunPaused {
+			return fmt.Errorf("paused run %s has Control Plane status %s", run.ID, state.Status)
+		}
+		now := time.Now().UTC()
+		requestEvent, err := controlplane.NewEvent(controlplane.NewEventRequest{
+			RunID:   run.ID,
+			Type:    controlplane.EventRunCancelRequested,
+			Summary: "paused run cancellation requested",
+			Data:    map[string]any{"requested_at": now},
+		}, now)
+		if err != nil {
+			return err
+		}
+		if _, err := eventStore.Append(context.Background(), requestEvent); err != nil {
+			return err
+		}
+		if err := runstate.Transition(&run, runstate.StatusCancelled, now); err != nil {
+			return err
+		}
+		if err := runStore.Save(run); err != nil {
+			return err
+		}
+		cancelledEvent, err := controlplane.NewEvent(controlplane.NewEventRequest{
+			RunID:   run.ID,
+			Type:    controlplane.EventRunCancelled,
+			Summary: "paused run cancelled",
+			Data:    map[string]any{"source": "run-control"},
+		}, now)
+		if err != nil {
+			return err
+		}
+		if _, err := eventStore.Append(context.Background(), cancelledEvent); err != nil {
+			return err
+		}
+		if err := controlStore.ClearPause(run.ID); err != nil {
+			return err
+		}
+		if options.json {
+			return printJSON(map[string]any{"run_id": run.ID, "status": run.Status})
+		}
+		fmt.Println("Paused Run Cancelled")
+		fmt.Printf("Run ID: %s\n", run.ID)
+		fmt.Printf("Status: %s\n", run.Status)
+		return nil
+	}
+
 	request, err := controlStore.RequestCancel(run.ID, time.Now().UTC())
 	if err != nil {
 		return err
