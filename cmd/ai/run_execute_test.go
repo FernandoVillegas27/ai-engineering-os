@@ -204,3 +204,19 @@ func TestMutationParticipantTasksRejectsExcludedDependency(t *testing.T) {
 		t.Fatal("expected excluded dependency rejection")
 	}
 }
+
+
+func TestParseRunExecuteArgsCheckpointStoreOverride(t *testing.T) {
+	options, err := parseRunExecuteArgs([]string{
+		"--task", "implement",
+		"--runtime", "cursor",
+		"--multi-agent-write",
+		"--checkpoint-dir", "./checkpoints",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.checkpointDir != "./checkpoints" {
+		t.Fatalf("options=%#v", options)
+	}
+}
