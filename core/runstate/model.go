@@ -70,6 +70,7 @@ type WorkUnit struct {
 	Tools        []string                     `json:"tools,omitempty"`
 	Permissions  execution.PermissionEnvelope `json:"permissions"`
 	Mutating     bool                         `json:"mutating,omitempty"`
+	MutationKind string                       `json:"mutation_kind,omitempty"`
 	Scopes       []string                     `json:"scopes,omitempty"`
 	DependsOn    []string                     `json:"depends_on,omitempty"`
 	ArtifactRefs []string                     `json:"artifact_refs,omitempty"`
@@ -158,6 +159,8 @@ func New(request NewRunRequest, now time.Time) (Run, error) {
 			Skills:       sortedUnique(unit.Skills),
 			Tools:        sortedUnique(unit.Tools),
 			Permissions:  unit.Permissions,
+			Mutating:     unit.CanMutate(),
+			MutationKind: mutationKind(unit.Mutation),
 		})
 	}
 	if err := Validate(run); err != nil {
@@ -199,6 +202,18 @@ func Validate(run Run) error {
 		ids[unit.ID] = true
 		if !validWorkUnitStatus(unit.Status) {
 			return fmt.Errorf("invalid work unit status for %s: %q", unit.ID, unit.Status)
+		}
+		switch unit.MutationKind {
+		case "":
+			if unit.Mutating {
+				return fmt.Errorf("mutating work unit %s requires mutation_kind", unit.ID)
+			}
+		case "source", "tests-only":
+			if !unit.Mutating {
+				return fmt.Errorf("mutation_kind on non-mutating work unit %s", unit.ID)
+			}
+		default:
+			return fmt.Errorf("invalid mutation_kind for %s: %q", unit.ID, unit.MutationKind)
 		}
 	}
 	for _, unit := range run.WorkUnits {
@@ -265,6 +280,16 @@ func validStatus(status Status) bool {
 	default:
 		return false
 	}
+}
+
+func mutationKind(value execution.MutationCapability) string {
+	if value.SourceCode {
+		return "source"
+	}
+	if value.Tests {
+		return "tests-only"
+	}
+	return ""
 }
 
 func validWorkUnitStatus(status WorkUnitStatus) bool {
