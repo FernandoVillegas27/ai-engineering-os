@@ -81,6 +81,8 @@ type WorkUnit struct {
 type Run struct {
 	SchemaVersion int              `json:"schema_version"`
 	ID            string           `json:"id"`
+	ParentRunID   string           `json:"parent_run_id,omitempty"`
+	RetryOfTaskID string           `json:"retry_of_task_id,omitempty"`
 	TaskID        string           `json:"task_id"`
 	Task          string           `json:"task"`
 	Intent        string           `json:"intent,omitempty"`
@@ -102,6 +104,8 @@ type Run struct {
 type NewRunRequest struct {
 	Task         string
 	Intent       string
+	ParentRunID  string
+	RetryOfTaskID string
 	ProjectID    string
 	ProjectRoot  string
 	Capabilities []string
@@ -131,6 +135,8 @@ func New(request NewRunRequest, now time.Time) (Run, error) {
 	run := Run{
 		SchemaVersion: SchemaVersion,
 		ID:            runID,
+		ParentRunID:   strings.TrimSpace(request.ParentRunID),
+		RetryOfTaskID: strings.TrimSpace(request.RetryOfTaskID),
 		TaskID:        taskID,
 		Task:          strings.TrimSpace(request.Task),
 		Intent:        strings.TrimSpace(request.Intent),
@@ -169,6 +175,12 @@ func Validate(run Run) error {
 	}
 	if strings.TrimSpace(run.Task) == "" || strings.TrimSpace(run.ProjectID) == "" {
 		return errors.New("run task and project id are required")
+	}
+	if (run.ParentRunID == "") != (run.RetryOfTaskID == "") {
+		return errors.New("parent_run_id and retry_of_task_id must be set together")
+	}
+	if run.ParentRunID != "" && run.ParentRunID == run.ID {
+		return errors.New("run cannot be its own parent")
 	}
 	if !validStatus(run.Status) {
 		return fmt.Errorf("invalid run status: %q", run.Status)
