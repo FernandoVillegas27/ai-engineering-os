@@ -83,6 +83,7 @@ type Run struct {
 	ID            string           `json:"id"`
 	TaskID        string           `json:"task_id"`
 	Task          string           `json:"task"`
+	Intent        string           `json:"intent,omitempty"`
 	ProjectID     string           `json:"project_id"`
 	ProjectRoot   string           `json:"project_root,omitempty"`
 	Status        Status           `json:"status"`
@@ -100,6 +101,7 @@ type Run struct {
 
 type NewRunRequest struct {
 	Task         string
+	Intent       string
 	ProjectID    string
 	ProjectRoot  string
 	Capabilities []string
@@ -131,6 +133,7 @@ func New(request NewRunRequest, now time.Time) (Run, error) {
 		ID:            runID,
 		TaskID:        taskID,
 		Task:          strings.TrimSpace(request.Task),
+		Intent:        strings.TrimSpace(request.Intent),
 		ProjectID:     strings.TrimSpace(request.ProjectID),
 		ProjectRoot:   strings.TrimSpace(request.ProjectRoot),
 		Status:        StatusPlanned,
