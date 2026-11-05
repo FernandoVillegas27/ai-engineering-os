@@ -17,6 +17,7 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/promotion"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/promotioncandidate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/proposal"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/runcheckpoint"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runcontrol"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/staging"
@@ -94,6 +95,18 @@ func runCoordinatedMutation(
 		return err
 	}
 	messageBus, err := message.NewBus(messagesRoot)
+	if err != nil {
+		return err
+	}
+	checkpointRoot, err := resolveRunAuxDir(
+		options.checkpointDir,
+		"AI_ENGINEERING_OS_CHECKPOINT_DIR",
+		"run-checkpoints",
+	)
+	if err != nil {
+		return err
+	}
+	checkpointStore, err := runcheckpoint.NewStore(runcheckpoint.Config{Root: checkpointRoot})
 	if err != nil {
 		return err
 	}
@@ -276,6 +289,17 @@ func runCoordinatedMutation(
 		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return err
 	}
+	if _, err := checkpointStore.Save(
+		ctx,
+		run.ID,
+		runcheckpoint.PhaseSourceIntegrated,
+		root,
+		sourceIntegrated,
+		time.Now().UTC(),
+	); err != nil {
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
+		return fmt.Errorf("persist source integration checkpoint: %w", err)
+	}
 
 	finalIntegrated := sourceIntegrated
 	keepIntegrated := false
@@ -307,6 +331,17 @@ func runCoordinatedMutation(
 	}
 	if qaResult.Applied {
 		finalIntegrated = qaResult.Workspace
+	}
+	if _, err := checkpointStore.Save(
+		ctx,
+		run.ID,
+		runcheckpoint.PhaseFinalIntegrated,
+		root,
+		finalIntegrated,
+		time.Now().UTC(),
+	); err != nil {
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
+		return fmt.Errorf("persist final integration checkpoint: %w", err)
 	}
 
 	if err := emit(controlplane.EventVerificationStarted, "", "", "run-wide integration quality started"); err != nil {
