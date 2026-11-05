@@ -156,14 +156,17 @@ func TestWindowsInstallCommandPinned(t *testing.T) {
 	}
 }
 
-func TestMissingRunnerErrorIsPreserved(t *testing.T) {
+func TestLookupFailureIsNormalizedIntoHealth(t *testing.T) {
 	client := Client{
 		Binary: "gentle-ai",
 		Runner: &fakeRunner{lookPathErr: errors.New("permission denied")},
 	}
-	_, err := client.Status(context.Background())
-	if err == nil {
-		t.Fatal("expected lookup error")
+	health := client.Health(context.Background())
+	if health.Available || health.Healthy {
+		t.Fatalf("health=%#v", health)
+	}
+	if health.Failure.Kind != toolhealth.FailurePermission {
+		t.Fatalf("failure=%#v", health.Failure)
 	}
 }
 
