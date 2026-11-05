@@ -110,3 +110,79 @@ func TestDeriveCapabilitiesKeepsPlannedRunFailClosed(t *testing.T) {
 		t.Fatalf("controls=%#v", value)
 	}
 }
+
+
+func TestDeriveCapabilitiesExposesRecoveryOnlyWithStaleLeaseEvidence(t *testing.T) {
+	run := runstate.Run{
+		ID: "run-stale", Status: runstate.StatusRunning, Intent: "research",
+		WorkUnits: []runstate.WorkUnit{
+			{ID: "research", Status: runstate.WorkUnitQueued},
+		},
+	}
+	state := controlplane.State{
+		RunID: "run-stale", Status: controlplane.RunRunning,
+		Tasks: map[string]controlplane.TaskState{
+			"research": {ID: "research", Status: controlplane.TaskRunning},
+		},
+	}
+	live := DeriveCapabilities(CapabilityInput{
+		Run: run, ControlPlane: state, LeaseStale: false,
+	})
+	if live.CanRecover {
+		t.Fatalf("live controls=%#v", live)
+	}
+	stale := DeriveCapabilities(CapabilityInput{
+		Run: run, ControlPlane: state, LeaseStale: true,
+	})
+	if !stale.CanRecover || stale.RecoveryTo != "paused" || stale.RecoveryFrom != "durable-task-graph" {
+		t.Fatalf("stale controls=%#v", stale)
+	}
+}
+
+func TestDeriveCapabilitiesRecoveryUsesMutationCheckpoint(t *testing.T) {
+	run := runstate.Run{
+		ID: "run-mutation-stale", Status: runstate.StatusRunning, Intent: "feature",
+		WorkUnits: []runstate.WorkUnit{
+			{ID: "backend", Mutating: true, MutationKind: "source", Status: runstate.WorkUnitCompleted},
+			{ID: "qa", Mutating: true, MutationKind: "tests-only", Status: runstate.WorkUnitRunning},
+		},
+	}
+	state := controlplane.State{
+		RunID: "run-mutation-stale", Status: controlplane.RunRunning,
+		Pipeline: controlplane.PipelineState{CheckpointPhase: "source-integrated"},
+		Tasks: map[string]controlplane.TaskState{
+			"backend": {ID: "backend", Status: controlplane.TaskCompleted},
+			"qa": {ID: "qa", Status: controlplane.TaskRunning},
+		},
+	}
+	value := DeriveCapabilities(CapabilityInput{
+		Run: run, ControlPlane: state,
+		LeaseStale: true, CheckpointAvailable: true,
+	})
+	if !value.CanRecover || value.RecoveryTo != "paused" || value.RecoveryFrom != "source-integrated" {
+		t.Fatalf("controls=%#v", value)
+	}
+}
+
+func TestDeriveCapabilitiesDoesNotExposeMutationRecoveryWithInvalidCheckpoint(t *testing.T) {
+	run := runstate.Run{
+		ID: "run-invalid-checkpoint", Status: runstate.StatusRunning, Intent: "feature",
+		WorkUnits: []runstate.WorkUnit{
+			{ID: "backend", Mutating: true, MutationKind: "source"},
+		},
+	}
+	state := controlplane.State{
+		RunID: "run-invalid-checkpoint", Status: controlplane.RunRunning,
+		Pipeline: controlplane.PipelineState{CheckpointPhase: "source-integrated"},
+		Tasks: map[string]controlplane.TaskState{
+			"backend": {ID: "backend", Status: controlplane.TaskRunning},
+		},
+	}
+	value := DeriveCapabilities(CapabilityInput{
+		Run: run, ControlPlane: state,
+		LeaseStale: true, CheckpointAvailable: false,
+	})
+	if value.CanRecover {
+		t.Fatalf("controls=%#v", value)
+	}
+}
