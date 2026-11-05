@@ -165,6 +165,58 @@ func Project(events []Event) (State, error) {
 		case EventRunPaused:
 			state.Status = RunPaused
 			state.PauseRequested = false
+		case EventRunRecovered:
+			var metadata struct {
+				Status          string            `json:"status"`
+				CheckpointPhase string            `json:"checkpoint_phase"`
+				Tasks           map[string]string `json:"tasks"`
+			}
+			if err := json.Unmarshal(event.Data, &metadata); err != nil {
+				return State{}, fmt.Errorf("decode run recovery metadata: %w", err)
+			}
+			for taskID, recoveredStatus := range metadata.Tasks {
+				task := state.task(taskID)
+				if task.ID == "" {
+					return State{}, fmt.Errorf("recovery references unknown task %s", taskID)
+				}
+				switch recoveredStatus {
+				case "queued":
+					task.Status = TaskQueued
+				case "completed":
+					task.Status = TaskCompleted
+				case "failed":
+					task.Status = TaskFailed
+				case "blocked":
+					task.Status = TaskBlocked
+				case "cancelled":
+					task.Status = TaskCancelled
+				default:
+					return State{}, fmt.Errorf(
+						"unsupported recovered task status for %s: %s",
+						taskID,
+						recoveredStatus,
+					)
+				}
+				task.LastSequence = event.Sequence
+				state.Tasks[taskID] = task
+			}
+			switch metadata.Status {
+			case "paused":
+				state.Status = RunPaused
+			case "failed":
+				state.Status = RunFailed
+			default:
+				return State{}, fmt.Errorf("unsupported recovered run status: %s", metadata.Status)
+			}
+			state.PauseRequested = false
+			state.CancelRequested = false
+			if metadata.CheckpointPhase != "" {
+				state.Pipeline.CheckpointPhase = metadata.CheckpointPhase
+				state.Pipeline.Proposal = "completed"
+				state.Pipeline.Stage = "completed"
+				state.Pipeline.Integration = "completed"
+				state.Quality = QualityState{}
+			}
 		case EventRunCompleted:
 			state.Status = RunCompleted
 		case EventRunFailed:
