@@ -18,7 +18,6 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/promotioncandidate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/proposal"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runcheckpoint"
-	"github.com/FernandoVillegas27/ai-engineering-os/core/runcontrol"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/staging"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/taskgraph"
@@ -148,13 +147,13 @@ func runCoordinatedMutation(
 		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return err
 	}
-	runCtx, stopWatcher, err := runcontrol.WithCancellationWatcher(ctx, controlStore, run.ID, 250*time.Millisecond)
+	active, err := startActiveRunContext(ctx, controlStore, run.ID)
 	if err != nil {
 		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return err
 	}
-	defer stopWatcher()
-	ctx = runCtx
+	defer active.Stop()
+	ctx = active.Context()
 
 	emit := func(kind controlplane.EventType, taskID, agentID, summary string) error {
 		event, eventErr := controlplane.NewEvent(controlplane.NewEventRequest{
