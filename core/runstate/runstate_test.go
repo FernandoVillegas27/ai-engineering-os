@@ -321,3 +321,71 @@ func TestValidateRejectsPartialRetryLineage(t *testing.T) {
 		t.Fatal("expected partial retry lineage rejection")
 	}
 }
+
+
+func TestBindMutationKindsUsesConfirmedTaskMutationAndRegistryCapability(t *testing.T) {
+	units := []execution.WorkUnit{
+		{
+			ID: "architect", AgentID: "architect", Task: "x",
+			Permissions: execution.PermissionEnvelope{SourceCode: "read", Tests: "read", GitCommit: "deny", GitPush: "deny", Secrets: "deny", Production: "deny"},
+			Mode: execution.ModeReadOnly,
+		},
+		{
+			ID: "backend", AgentID: "backend-engineer", Task: "x",
+			Permissions: execution.PermissionEnvelope{SourceCode: "read", Tests: "read", GitCommit: "deny", GitPush: "deny", Secrets: "deny", Production: "deny"},
+			Mutation: execution.MutationCapability{SourceCode: true, Tests: true},
+			Mode: execution.ModeReadOnly,
+		},
+		{
+			ID: "qa", AgentID: "qa-engineer", Task: "x",
+			Permissions: execution.PermissionEnvelope{SourceCode: "read", Tests: "read", GitCommit: "deny", GitPush: "deny", Secrets: "deny", Production: "deny"},
+			Mutation: execution.MutationCapability{Tests: true},
+			Mode: execution.ModeReadOnly,
+		},
+	}
+	run, err := New(NewRunRequest{
+		Task: "x", Intent: "feature", ProjectID: "project", WorkUnits: units,
+	}, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := BindTaskGraph(&run, []scheduler.Task{
+		{ID: "architect", AgentID: "architect"},
+		{ID: "backend", AgentID: "backend-engineer", DependsOn: []string{"architect"}, Mutating: true},
+		{ID: "qa", AgentID: "qa-engineer", DependsOn: []string{"backend"}, Mutating: true},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := BindMutationKinds(&run, units); err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[string]string{}
+	for _, unit := range run.WorkUnits {
+		kinds[unit.ID] = unit.MutationKind
+	}
+	if kinds["architect"] != "" || kinds["backend"] != "source" || kinds["qa"] != "tests-only" {
+		t.Fatalf("mutation kinds=%#v", kinds)
+	}
+}
+
+func TestBindMutationKindsRejectsMutatingUnitWithoutWriteCapability(t *testing.T) {
+	unit := execution.WorkUnit{
+		ID: "architect", AgentID: "architect", Task: "x",
+		Permissions: execution.PermissionEnvelope{SourceCode: "read", Tests: "read", GitCommit: "deny", GitPush: "deny", Secrets: "deny", Production: "deny"},
+		Mode: execution.ModeReadOnly,
+	}
+	run, err := New(NewRunRequest{
+		Task: "x", ProjectID: "project", WorkUnits: []execution.WorkUnit{unit},
+	}, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := BindTaskGraph(&run, []scheduler.Task{{
+		ID: "architect", AgentID: "architect", Mutating: true,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := BindMutationKinds(&run, []execution.WorkUnit{unit}); err == nil {
+		t.Fatal("expected missing write capability rejection")
+	}
+}
