@@ -43,7 +43,7 @@ func TestRunPausePersistsRequestAndProjectsPendingPause(t *testing.T) {
 	stateDir := base + "/runs"
 	eventsDir := base + "/events"
 	controlDir := base + "/control"
-	now := time.Now().UTC()
+	now := time.Now().UTC().Add(-time.Minute)
 
 	run, err := runstate.New(runstate.NewRunRequest{
 		Task:        "analyze",
@@ -127,7 +127,7 @@ func TestRunResumeContinuesSamePausedRunWithoutDuplicatingTasks(t *testing.T) {
 	artifactsDir := base + "/artifacts"
 	messagesDir := base + "/messages"
 	controlDir := base + "/control"
-	now := time.Now().UTC()
+	now := time.Now().UTC().Add(-time.Minute)
 
 	units := []execution.WorkUnit{
 		{
@@ -265,7 +265,7 @@ func TestRunResumeContinuesSamePausedRunWithoutDuplicatingTasks(t *testing.T) {
 func TestRunPauseAndResumeRejectMutatingRuns(t *testing.T) {
 	base := t.TempDir()
 	stateDir := base + "/runs"
-	now := time.Now().UTC()
+	now := time.Now().UTC().Add(-time.Minute)
 	makeRun := func(status runstate.Status) runstate.Run {
 		t.Helper()
 		run, err := runstate.New(runstate.NewRunRequest{
