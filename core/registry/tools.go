@@ -3,6 +3,7 @@ package registry
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -53,6 +54,57 @@ func LoadTools(path string) (ToolRegistry, error) {
 		if key != tool.ID {
 			return ToolRegistry{}, fmt.Errorf("tool key %q does not match id %q", key, tool.ID)
 		}
+		if err := validateTool(tool); err != nil {
+			return ToolRegistry{}, fmt.Errorf("tool %q: %w", key, err)
+		}
 	}
 	return registry, nil
+}
+
+func validateTool(tool Tool) error {
+	if strings.TrimSpace(tool.Description) == "" {
+		return fmt.Errorf("description is required")
+	}
+	switch strings.TrimSpace(tool.Interface.Type) {
+	case "native":
+		// Native tools may omit provider when the operation is implemented by core.
+	case "mcp", "connector":
+		if tool.Interface.Provider == nil || strings.TrimSpace(*tool.Interface.Provider) == "" {
+			return fmt.Errorf("%s interface requires provider", tool.Interface.Type)
+		}
+		if tool.AvailabilityCheck == nil || strings.TrimSpace(*tool.AvailabilityCheck) == "" {
+			return fmt.Errorf("%s interface requires availability_check", tool.Interface.Type)
+		}
+	default:
+		return fmt.Errorf("unsupported interface type %q", tool.Interface.Type)
+	}
+	if len(tool.Operations) == 0 {
+		return fmt.Errorf("at least one operation is required")
+	}
+	for _, operation := range tool.Operations {
+		if strings.TrimSpace(operation) == "" {
+			return fmt.Errorf("operations must not contain empty values")
+		}
+	}
+	if len(tool.Access) == 0 {
+		return fmt.Errorf("at least one access mode is required")
+	}
+	for _, access := range tool.Access {
+		switch strings.TrimSpace(access) {
+		case "read", "write", "execute", "network":
+		default:
+			return fmt.Errorf("unsupported access mode %q", access)
+		}
+	}
+	switch strings.TrimSpace(tool.Risk) {
+	case "low", "medium", "high":
+	default:
+		return fmt.Errorf("risk must be low, medium, or high")
+	}
+	switch strings.TrimSpace(tool.Status) {
+	case "enabled", "disabled":
+	default:
+		return fmt.Errorf("status must be enabled or disabled")
+	}
+	return nil
 }

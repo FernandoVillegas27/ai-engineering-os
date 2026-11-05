@@ -3,11 +3,12 @@ package context7
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/docprovider"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/toolhealth"
 )
 
 const (
@@ -33,9 +34,10 @@ func (OSRunner) Run(ctx context.Context, name string, args ...string) (string, e
 }
 
 type Client struct {
-	NPX     string
-	Package string
-	Runner  Runner
+	NPX          string
+	Package      string
+	Runner       Runner
+	ProbeTimeout time.Duration
 }
 
 type MCPConfig struct {
@@ -45,9 +47,10 @@ type MCPConfig struct {
 
 func New() Client {
 	return Client{
-		NPX:     "npx",
-		Package: DefaultPackage,
-		Runner:  OSRunner{},
+		NPX:          "npx",
+		Package:      DefaultPackage,
+		Runner:       OSRunner{},
+		ProbeTimeout: toolhealth.DefaultProbeTimeout,
 	}
 }
 
@@ -55,7 +58,7 @@ func (c Client) ID() string {
 	return ProviderID
 }
 
-func (c Client) Status(ctx context.Context) (docprovider.Status, error) {
+func (c Client) Health(ctx context.Context) toolhealth.Status {
 	npx := c.NPX
 	if npx == "" {
 		npx = "npx"
@@ -64,36 +67,47 @@ func (c Client) Status(ctx context.Context) (docprovider.Status, error) {
 	if runner == nil {
 		runner = OSRunner{}
 	}
-
 	path, err := runner.LookPath(npx)
 	if err != nil {
+		failure := toolhealth.Classify(err, "")
 		if errors.Is(err, exec.ErrNotFound) {
-			return docprovider.Status{
-				Provider:  ProviderID,
-				Available: false,
-				Ready:     false,
-				Details:   "npx not found in PATH",
-			}, nil
+			failure.Kind = toolhealth.FailureUnavailable
+			failure.Detail = "npx not found in PATH"
 		}
-		return docprovider.Status{}, fmt.Errorf("locate npx: %w", err)
+		return toolhealth.Status{
+			Provider: ProviderID, Available: false, Healthy: false,
+			Details: failure.Detail, Failure: failure,
+		}
 	}
-
-	version, versionErr := runner.Run(ctx, path, "--version")
-	if versionErr != nil {
-		return docprovider.Status{
-			Provider:  ProviderID,
-			Available: true,
-			Ready:     false,
-			Details:   fmt.Sprintf("npx is available but could not report a version: %v", versionErr),
-		}, nil
+	timeout := c.ProbeTimeout
+	if timeout <= 0 {
+		timeout = toolhealth.DefaultProbeTimeout
 	}
+	version, failure, duration := toolhealth.Run(ctx, timeout, func(runCtx context.Context) (string, error) {
+		return runner.Run(runCtx, path, "--version")
+	})
+	if failure.Kind != toolhealth.FailureNone {
+		return toolhealth.Status{
+			Provider: ProviderID, Available: true, Healthy: false,
+			Details: failure.Detail, Failure: failure, Duration: duration,
+		}
+	}
+	return toolhealth.Status{
+		Provider: ProviderID, Available: true, Healthy: true,
+		Version: strings.TrimSpace(version),
+		Details: "local MCP launcher is available; remote MCP connectivity remains host-verified",
+		Duration: duration,
+	}
+}
 
+func (c Client) Status(ctx context.Context) (docprovider.Status, error) {
+	health := c.Health(ctx)
 	return docprovider.Status{
-		Provider:  ProviderID,
-		Available: true,
-		Ready:     true,
-		Version:   strings.TrimSpace(version),
-		Details:   "local MCP launcher is available; server connectivity is verified by the MCP host",
+		Provider: health.Provider,
+		Available: health.Available,
+		Ready: health.Healthy,
+		Version: health.Version,
+		Details: health.Details,
 	}, nil
 }
 

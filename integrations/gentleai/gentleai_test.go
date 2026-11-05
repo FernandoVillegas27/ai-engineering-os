@@ -7,6 +7,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/FernandoVillegas27/ai-engineering-os/core/toolhealth"
 )
 
 type fakeRunner struct {
@@ -17,6 +20,7 @@ type fakeRunner struct {
 	doctorOutput  string
 	doctorErr     error
 	calls         [][]string
+	block         bool
 }
 
 func (f *fakeRunner) LookPath(file string) (string, error) {
@@ -26,7 +30,11 @@ func (f *fakeRunner) LookPath(file string) (string, error) {
 	return f.path, nil
 }
 
-func (f *fakeRunner) Run(_ context.Context, name string, args ...string) (string, error) {
+func (f *fakeRunner) Run(ctx context.Context, name string, args ...string) (string, error) {
+	if f.block {
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
 	call := append([]string{name}, args...)
 	f.calls = append(f.calls, call)
 
@@ -148,13 +156,32 @@ func TestWindowsInstallCommandPinned(t *testing.T) {
 	}
 }
 
-func TestMissingRunnerErrorIsPreserved(t *testing.T) {
+func TestLookupFailureIsNormalizedIntoHealth(t *testing.T) {
 	client := Client{
 		Binary: "gentle-ai",
 		Runner: &fakeRunner{lookPathErr: errors.New("permission denied")},
 	}
-	_, err := client.Status(context.Background())
-	if err == nil {
-		t.Fatal("expected lookup error")
+	health := client.Health(context.Background())
+	if health.Available || health.Healthy {
+		t.Fatalf("health=%#v", health)
+	}
+	if health.Failure.Kind != toolhealth.FailurePermission {
+		t.Fatalf("failure=%#v", health.Failure)
+	}
+}
+
+
+func TestHealthClassifiesProbeTimeout(t *testing.T) {
+	client := Client{
+		Binary: "gentle-ai",
+		Runner: &fakeRunner{path: "/usr/local/bin/gentle-ai", block: true},
+		ProbeTimeout: 20 * time.Millisecond,
+	}
+	health := client.Health(context.Background())
+	if health.Healthy || !health.Available {
+		t.Fatalf("health=%#v", health)
+	}
+	if health.Failure.Kind != toolhealth.FailureTimeout || !health.Failure.Retryable {
+		t.Fatalf("failure=%#v", health.Failure)
 	}
 }

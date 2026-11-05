@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/memory"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/toolhealth"
 )
 
 const ProviderID = "engram"
@@ -30,8 +32,10 @@ func (OSRunner) Run(ctx context.Context, name string, args ...string) (string, e
 }
 
 type Client struct {
-	Binary string
-	Runner Runner
+	Binary           string
+	Runner           Runner
+	ProbeTimeout     time.Duration
+	OperationTimeout time.Duration
 }
 
 type MCPConfig struct {
@@ -41,8 +45,10 @@ type MCPConfig struct {
 
 func New() Client {
 	return Client{
-		Binary: "engram",
-		Runner: OSRunner{},
+		Binary:           "engram",
+		Runner:           OSRunner{},
+		ProbeTimeout:     toolhealth.DefaultProbeTimeout,
+		OperationTimeout: toolhealth.DefaultOperationTimeout,
 	}
 }
 
@@ -50,7 +56,7 @@ func (c Client) ID() string {
 	return ProviderID
 }
 
-func (c Client) Status(ctx context.Context) (memory.Status, error) {
+func (c Client) Health(ctx context.Context) toolhealth.Status {
 	binary := c.Binary
 	if binary == "" {
 		binary = "engram"
@@ -59,38 +65,65 @@ func (c Client) Status(ctx context.Context) (memory.Status, error) {
 	if runner == nil {
 		runner = OSRunner{}
 	}
-
 	path, err := runner.LookPath(binary)
 	if err != nil {
+		failure := toolhealth.Classify(err, "")
 		if errors.Is(err, exec.ErrNotFound) {
-			return memory.Status{
-				Provider:  ProviderID,
-				Available: false,
-				Healthy:   false,
-				Details:   "engram binary not found in PATH",
-			}, nil
+			failure.Kind = toolhealth.FailureUnavailable
+			failure.Detail = "engram binary not found in PATH"
 		}
-		return memory.Status{}, fmt.Errorf("locate Engram binary: %w", err)
+		return toolhealth.Status{
+			Provider: ProviderID, Available: false, Healthy: false,
+			Details: failure.Detail, Failure: failure,
+		}
 	}
 
-	versionOutput, versionErr := runner.Run(ctx, path, "version")
+	probeTimeout := c.ProbeTimeout
+	if probeTimeout <= 0 {
+		probeTimeout = toolhealth.DefaultProbeTimeout
+	}
+	versionOutput, versionFailure, versionDuration := toolhealth.Run(
+		ctx, probeTimeout,
+		func(runCtx context.Context) (string, error) {
+			return runner.Run(runCtx, path, "version")
+		},
+	)
 	version := strings.TrimSpace(versionOutput)
-	if versionErr != nil {
-		version = ""
-	}
 
-	doctorOutput, doctorErr := runner.Run(ctx, path, "doctor", "--json")
+	doctorOutput, doctorFailure, doctorDuration := toolhealth.Run(
+		ctx, probeTimeout,
+		func(runCtx context.Context) (string, error) {
+			return runner.Run(runCtx, path, "doctor", "--json")
+		},
+	)
 	details := strings.TrimSpace(doctorOutput)
-	if details == "" && doctorErr != nil {
-		details = doctorErr.Error()
+	if doctorFailure.Kind != toolhealth.FailureNone && details == "" {
+		details = doctorFailure.Detail
 	}
-
-	return memory.Status{
-		Provider:  ProviderID,
+	failure := doctorFailure
+	if failure.Kind == toolhealth.FailureNone && versionFailure.Kind != toolhealth.FailureNone {
+		failure = versionFailure
+	}
+	healthy := doctorFailure.Kind == toolhealth.FailureNone
+	return toolhealth.Status{
+		Provider: ProviderID,
 		Available: true,
-		Healthy:   doctorErr == nil,
-		Version:   version,
-		Details:   details,
+		Healthy: healthy,
+		Version: version,
+		Details: details,
+		Failure: failure,
+		Duration: versionDuration + doctorDuration,
+	}
+}
+
+func (c Client) Status(ctx context.Context) (memory.Status, error) {
+	health := c.Health(ctx)
+	return memory.Status{
+		Provider:  health.Provider,
+		Available: health.Available,
+		Healthy:   health.Healthy,
+		Version:   health.Version,
+		Details:   health.Details,
 	}, nil
 }
 
@@ -114,9 +147,15 @@ func (c Client) Save(ctx context.Context, request memory.SaveRequest) (memory.Sa
 	if topic := strings.TrimSpace(request.TopicKey); topic != "" {
 		args = append(args, "--topic", topic)
 	}
-	output, err := runner.Run(ctx, path, args...)
-	if err != nil {
-		return memory.SaveResult{}, fmt.Errorf("save Engram memory: %w", err)
+	timeout := c.OperationTimeout
+	if timeout <= 0 {
+		timeout = toolhealth.DefaultOperationTimeout
+	}
+	output, failure, _ := toolhealth.Run(ctx, timeout, func(runCtx context.Context) (string, error) {
+		return runner.Run(runCtx, path, args...)
+	})
+	if failure.Kind != toolhealth.FailureNone {
+		return memory.SaveResult{}, fmt.Errorf("save Engram memory [%s]: %s", failure.Kind, failure.Detail)
 	}
 	return memory.SaveResult{
 		Provider: ProviderID,
@@ -138,16 +177,22 @@ func (c Client) Recall(ctx context.Context, request memory.RecallRequest) (memor
 	if limit == 0 {
 		limit = 5
 	}
-	output, err := runner.Run(
-		ctx,
-		path,
-		"search",
-		strings.TrimSpace(request.Query),
-		"--project", strings.TrimSpace(request.Project),
-		"--limit", fmt.Sprintf("%d", limit),
-	)
-	if err != nil {
-		return memory.RecallResult{}, fmt.Errorf("recall Engram memory: %w", err)
+	timeout := c.OperationTimeout
+	if timeout <= 0 {
+		timeout = toolhealth.DefaultOperationTimeout
+	}
+	output, failure, _ := toolhealth.Run(ctx, timeout, func(runCtx context.Context) (string, error) {
+		return runner.Run(
+			runCtx,
+			path,
+			"search",
+			strings.TrimSpace(request.Query),
+			"--project", strings.TrimSpace(request.Project),
+			"--limit", fmt.Sprintf("%d", limit),
+		)
+	})
+	if failure.Kind != toolhealth.FailureNone {
+		return memory.RecallResult{}, fmt.Errorf("recall Engram memory [%s]: %s", failure.Kind, failure.Detail)
 	}
 	return memory.RecallResult{
 		Provider: ProviderID,

@@ -4,7 +4,11 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/FernandoVillegas27/ai-engineering-os/core/toolhealth"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/memory"
 )
@@ -17,6 +21,7 @@ type fakeRunner struct {
 	doctorOutput  string
 	doctorErr     error
 	calls         [][]string
+	block         bool
 }
 
 func (f *fakeRunner) LookPath(file string) (string, error) {
@@ -26,7 +31,11 @@ func (f *fakeRunner) LookPath(file string) (string, error) {
 	return f.path, nil
 }
 
-func (f *fakeRunner) Run(_ context.Context, name string, args ...string) (string, error) {
+func (f *fakeRunner) Run(ctx context.Context, name string, args ...string) (string, error) {
+	if f.block {
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
 	call := append([]string{name}, args...)
 	f.calls = append(f.calls, call)
 
@@ -60,13 +69,16 @@ func TestStatusHealthy(t *testing.T) {
 	}
 }
 
-func TestStatusMissingBinary(t *testing.T) {
-	runner := &fakeRunner{lookPathErr: errors.New("missing")}
+func TestStatusLookupFailureBecomesUnavailableHealth(t *testing.T) {
+	runner := &fakeRunner{lookPathErr: errors.New("permission denied")}
 	client := Client{Binary: "engram", Runner: runner}
 
-	_, err := client.Status(context.Background())
-	if err == nil {
-		t.Fatal("expected lookup error")
+	status, err := client.Status(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Available || status.Healthy {
+		t.Fatalf("status=%#v", status)
 	}
 }
 
@@ -194,5 +206,36 @@ func TestProjectMemoryRejectsInvalidRequestsBeforeEngramCall(t *testing.T) {
 	}
 	if len(runner.calls) != 0 {
 		t.Fatalf("invalid requests reached Engram: %#v", runner.calls)
+	}
+}
+
+
+func TestHealthClassifiesProbeTimeout(t *testing.T) {
+	client := Client{
+		Binary: "engram",
+		Runner: &fakeRunner{path: "/usr/local/bin/engram", block: true},
+		ProbeTimeout: 20 * time.Millisecond,
+	}
+	health := client.Health(context.Background())
+	if health.Healthy || !health.Available {
+		t.Fatalf("health=%#v", health)
+	}
+	if health.Failure.Kind != toolhealth.FailureTimeout || !health.Failure.Retryable {
+		t.Fatalf("failure=%#v", health.Failure)
+	}
+}
+
+func TestRecallOperationTimeoutIsClassified(t *testing.T) {
+	client := Client{
+		Binary: "engram",
+		Runner: &fakeRunner{path: "/usr/local/bin/engram", block: true},
+		OperationTimeout: 20 * time.Millisecond,
+	}
+	_, err := client.Recall(context.Background(), memory.RecallRequest{
+		Project: "project",
+		Query: "architecture",
+	})
+	if err == nil || !strings.Contains(err.Error(), "[timeout]") {
+		t.Fatalf("err=%v", err)
 	}
 }

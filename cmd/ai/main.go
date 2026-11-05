@@ -603,120 +603,13 @@ func runDoctor(args []string) error {
 	)
 
 	engramClient := engramintegration.New()
-	engramStatus, engramErr := engramClient.Status(context.Background())
-	switch {
-	case engramErr != nil:
-		checks = append(checks, doctor.Check{
-			ID:      "engram",
-			Label:   "Engram",
-			Level:   doctor.LevelWarn,
-			Message: "No se pudo diagnosticar Engram.",
-			Hint:    engramErr.Error(),
-		})
-	case !engramStatus.Available:
-		checks = append(checks, doctor.Check{
-			ID:      "engram",
-			Label:   "Engram",
-			Level:   doctor.LevelWarn,
-			Message: "Engram no está instalado o no está en PATH.",
-			Hint:    "Instalá Engram para habilitar memoria persistente.",
-		})
-	case !engramStatus.Healthy:
-		checks = append(checks, doctor.Check{
-			ID:      "engram",
-			Label:   "Engram",
-			Level:   doctor.LevelWarn,
-			Message: "Engram está instalado pero requiere atención.",
-			Hint:    "Ejecutá ai memory status o engram doctor --json.",
-		})
-	default:
-		message := "Engram saludable."
-		if engramStatus.Version != "" {
-			message = engramStatus.Version
-		}
-		checks = append(checks, doctor.Check{
-			ID:      "engram",
-			Label:   "Engram",
-			Level:   doctor.LevelOK,
-			Message: message,
-		})
-	}
+	checks = append(checks, doctor.CheckExternalTool("engram", "Engram", engramClient.Health(context.Background())))
 
 	gentleClient := gentleaiintegration.New()
-	gentleStatus, gentleErr := gentleClient.Status(context.Background())
-	switch {
-	case gentleErr != nil:
-		checks = append(checks, doctor.Check{
-			ID:      "gentle-ai",
-			Label:   "Gentle-AI",
-			Level:   doctor.LevelWarn,
-			Message: "No se pudo diagnosticar Gentle-AI.",
-			Hint:    gentleErr.Error(),
-		})
-	case !gentleStatus.Available:
-		checks = append(checks, doctor.Check{
-			ID:      "gentle-ai",
-			Label:   "Gentle-AI",
-			Level:   doctor.LevelWarn,
-			Message: "Gentle-AI todavía no está instalado.",
-			Hint:    "Usá ai gentle status y ai gentle plan cursor antes de instalarlo.",
-		})
-	case !gentleStatus.Healthy:
-		checks = append(checks, doctor.Check{
-			ID:      "gentle-ai",
-			Label:   "Gentle-AI",
-			Level:   doctor.LevelWarn,
-			Message: "Gentle-AI está instalado pero requiere atención.",
-			Hint:    "Ejecutá gentle-ai doctor.",
-		})
-	default:
-		message := "Gentle-AI saludable."
-		if gentleStatus.Version != "" {
-			message = gentleStatus.Version
-		}
-		checks = append(checks, doctor.Check{
-			ID:      "gentle-ai",
-			Label:   "Gentle-AI",
-			Level:   doctor.LevelOK,
-			Message: message,
-		})
-	}
+	checks = append(checks, doctor.CheckExternalTool("gentle-ai", "Gentle-AI", gentleClient.Health(context.Background())))
 
 	context7Client := context7integration.New()
-	context7Status, context7Err := context7Client.Status(context.Background())
-	switch {
-	case context7Err != nil:
-		checks = append(checks, doctor.Check{
-			ID:      "context7",
-			Label:   "Context7",
-			Level:   doctor.LevelWarn,
-			Message: "No se pudo diagnosticar Context7.",
-			Hint:    context7Err.Error(),
-		})
-	case !context7Status.Available:
-		checks = append(checks, doctor.Check{
-			ID:      "context7",
-			Label:   "Context7",
-			Level:   doctor.LevelWarn,
-			Message: "npx no está disponible para iniciar Context7 MCP.",
-			Hint:    "Instalá Node.js/npm o corregí PATH.",
-		})
-	case !context7Status.Ready:
-		checks = append(checks, doctor.Check{
-			ID:      "context7",
-			Label:   "Context7",
-			Level:   doctor.LevelWarn,
-			Message: "Context7 requiere atención.",
-			Hint:    context7Status.Details,
-		})
-	default:
-		checks = append(checks, doctor.Check{
-			ID:      "context7",
-			Label:   "Context7",
-			Level:   doctor.LevelOK,
-			Message: fmt.Sprintf("npx %s · %s", context7Status.Version, context7integration.DefaultPackage),
-		})
-	}
+	checks = append(checks, doctor.CheckExternalTool("context7", "Context7", context7Client.Health(context.Background())))
 
 	printDoctorReport(doctor.Report{Checks: checks})
 	return nil
