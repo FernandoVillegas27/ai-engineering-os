@@ -49,6 +49,10 @@ func coordinatorEventType(value coordinator.EventType) (EventType, error) {
 	switch value {
 	case coordinator.EventRunStarted:
 		return EventRunStarted, nil
+	case coordinator.EventRunResumed:
+		return EventRunResumed, nil
+	case coordinator.EventRunPaused:
+		return EventRunPaused, nil
 	case coordinator.EventTaskStarted:
 		return EventTaskStarted, nil
 	case coordinator.EventTaskCompleted:
