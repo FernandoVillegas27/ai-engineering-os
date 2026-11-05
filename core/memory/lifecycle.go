@@ -129,7 +129,7 @@ func PersistCuratedArtifactsBestEffort(
 		return report
 	}
 
-	candidates := curatedArtifactCandidates(values)
+	candidates := curatedArtifactCandidates(report.Project, values)
 	if len(candidates) > MaxPersistCandidates {
 		report.Skipped += len(candidates) - MaxPersistCandidates
 		candidates = candidates[:MaxPersistCandidates]
@@ -184,7 +184,7 @@ func PersistRunLearningBestEffort(
 	return report
 }
 
-func curatedArtifactCandidates(values []artifact.Artifact) []SaveRequest {
+func curatedArtifactCandidates(project string, values []artifact.Artifact) []SaveRequest {
 	seen := map[string]bool{}
 	var out []SaveRequest
 	for _, value := range values {
@@ -203,7 +203,7 @@ func curatedArtifactCandidates(values []artifact.Artifact) []SaveRequest {
 		seen[topic] = true
 		content := curatedArtifactContent(value)
 		out = append(out, SaveRequest{
-			Project:  value.RunID, // replaced by caller project below
+			Project:  project
 			Title:    truncateRunes(summary, 200),
 			Content:  content,
 			Type:     memoryType,
