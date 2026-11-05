@@ -3,6 +3,7 @@ package coordinator
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
@@ -90,9 +91,10 @@ func TestExecutionWorkerInjectsCollaborationContextIntoUnitCopy(t *testing.T) {
 	executor := &fakeExecutionExecutor{}
 	provider := &fakeWorkContextProvider{value: "handoff context"}
 	unit := execution.WorkUnit{
-		ID:      "work-1",
-		AgentID: "backend-engineer",
-		Mode:    execution.ModeReadOnly,
+		ID:                   "work-1",
+		AgentID:              "backend-engineer",
+		Mode:                 execution.ModeReadOnly,
+		CollaborationContext: "durable memory",
 	}
 	worker := ExecutionWorker{
 		Executor:        executor,
@@ -105,10 +107,18 @@ func TestExecutionWorkerInjectsCollaborationContextIntoUnitCopy(t *testing.T) {
 	if provider.calls != 1 || len(executor.calls) != 1 {
 		t.Fatalf("provider calls=%d executor calls=%d", provider.calls, len(executor.calls))
 	}
-	if executor.calls[0].CollaborationContext != "handoff context" {
+	if executor.calls[0].CollaborationContext != "durable memory\n\nhandoff context" {
 		t.Fatalf("context = %q", executor.calls[0].CollaborationContext)
 	}
-	if unit.CollaborationContext != "" {
+	if unit.CollaborationContext != "durable memory" {
 		t.Fatalf("original unit was mutated: %#v", unit)
+	}
+}
+
+
+func TestMergeContextBoundsCombinedEvidence(t *testing.T) {
+	value := MergeContext(strings.Repeat("a", 100), strings.Repeat("b", 100), 80)
+	if len(value) != 80 || !strings.HasSuffix(value, "...") {
+		t.Fatalf("value len=%d value=%q", len(value), value)
 	}
 }
