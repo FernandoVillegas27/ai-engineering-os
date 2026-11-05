@@ -24,6 +24,11 @@ type PermissionEnvelope struct {
 	Production string
 }
 
+type MutationCapability struct {
+	SourceCode bool
+	Tests      bool
+}
+
 type WorkUnit struct {
 	ID           string
 	Task         string
@@ -32,9 +37,11 @@ type WorkUnit struct {
 	AgentID      string
 	Capabilities []string
 	Skills       []string
-	Tools        []string
-	Permissions  PermissionEnvelope
-	Mode         Mode
+	Tools                []string
+	CollaborationContext string
+	Permissions          PermissionEnvelope
+	Mutation             MutationCapability
+	Mode                 Mode
 }
 
 func BuildWorkUnits(
@@ -78,6 +85,7 @@ func BuildWorkUnits(
 			Skills:       uniqueSorted(agentPlan.Skills.Enabled),
 			Tools:        uniqueSorted(tools),
 			Permissions:  readOnlyEnvelope(agent.Permissions),
+			Mutation:     mutationCapability(agent.Permissions),
 			Mode:         ModeReadOnly,
 		})
 	}
@@ -117,4 +125,16 @@ func uniqueSorted(values []string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+
+func mutationCapability(source registry.AgentPermissions) MutationCapability {
+	return MutationCapability{
+		SourceCode: source.SourceCode == "write",
+		Tests:      source.Tests == "write",
+	}
+}
+
+func (u WorkUnit) CanMutate() bool {
+	return u.Mutation.SourceCode || u.Mutation.Tests
 }

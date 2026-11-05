@@ -2058,6 +2058,195 @@ Before beginning work, always verify that this checkpoint is still current.
 
 ---
 
+# 19.5 Active implementation stack — validation checkpoint
+
+This section records the current **unmerged** implementation stack so a future session can distinguish completed work on `master` from work that is implemented and awaiting human validation.
+
+At this checkpoint, `master` still has P2a as the latest functional merged milestone. The following PRs are intentionally stacked and remain open for ordered review.
+
+| PR | Phase / capability | Validation state |
+|---|---|---|
+| #66 | P2b — lazy baseline in Quality Loop | CI passed |
+| #67 | P2c — structured quality outcomes | CI passed |
+| #68 | P3a — promotion dry-run | CI passed |
+| #69 | P3b — approval-gated apply + rollback | CI passed |
+| #70 | P4 — durable run state | CI passed |
+| #71 | durable run CLI | CI passed |
+| #72 | P5 — Engram project save/recall | CI passed |
+| #73 | P6 — immutable agent artifacts | CI passed |
+| #74 | P7 — typed inter-agent message bus | CI passed |
+| #75 | P8 — dependency-aware DAG scheduler | CI passed |
+| #76 | P9 — concurrent execution coordinator | CI passed |
+| #77 | P9.5 — durable Control Plane event stream/projector | CI passed |
+| #78 | Control Plane CLI inspection | CI passed |
+| #79 | integrated durable coordinated read-only run | CI passed |
+| #80 | deterministic specialist collaboration DAG | CI passed |
+| #81 | automatic durable specialist handoffs | CI passed |
+| #82 | bounded receiver inbox context | CI passed |
+| #83 | loopback JSON/SSE live Control Plane API | CI passed |
+| #84 | projected task-graph edges and scopes | CI passed |
+| #85 | stale append-lock recovery | CI passed |
+| #86 | typed ArchitectureDecision/APIContract/VerificationReport payloads | CI passed |
+| #87 | isolated per-task mutating workspaces | CI passed |
+| #88 | deterministic multi-workspace integration plan | CI passed |
+| #89 | isolated integration workspace materialization + frozen-result TOCTOU protection | CI passed |
+| #90 | run-wide baseline-aware integration Quality Gate | CI passed |
+| #91 | bridge promotable integration to explicit promotion boundary | CI passed |
+| #92 | Proposal Freeze before mutating stage | CI passed |
+| #93 | frozen-proposal StageRuntime adapter + filesystem reinspection | CI passed |
+| #94 | explicit `ai run execute --multi-agent-write` safe mutation pipeline | CI passed |
+| #95 | persisted promotion candidates + `ai run promotion` inspection | CI passed |
+| #96 | explicit `ai run promote --approve` apply + audit | CI passed |
+| #97 | registry-derived source-writer role selection | CI passed |
+| #98 | collaboration context in Codex/Cursor proposal runtimes | CI passed |
+| #99 | Cursor read-only ExecutionRuntime + provider fallback | CI passed |
+| #100 | DAG-derived read-only pre-stage collaboration before mutation | CI passed |
+| #101 | projected Control Plane run index (`GET /runs`) | CI passed |
+| #102 | durable active-run cancellation (`ai run cancel`) | CI passed |
+| #103 | Control Plane run messages/artifacts endpoints | CI passed |
+| #104 | read-only promotion candidate status endpoint | CI passed |
+| #105 | cancellation event-stream binding hardening | CI pending |
+
+Review/merge order must remain:
+
+~~~text
+#66 -> #67 -> #68 -> #69 -> #70 -> #71 -> #72 -> #73 -> #74
+-> #75 -> #76 -> #77 -> #78 -> #79 -> #80 -> #81 -> #82
+-> #83 -> #84 -> #85 -> #86 -> #87 -> #88 -> #89 -> #90 -> #91
+-> #92 -> #93 -> #94 -> #95 -> #96 -> #97 -> #98 -> #99
+-> #100 -> #101 -> #102 -> #103 -> #104 -> #105
+~~~
+
+Do not merge later PRs before their stacked bases unless the branch is deliberately rebased and the resulting diff is revalidated.
+
+## Functional capability reached by the open stack
+
+If the stack through #104 is validated and merged, AI Engineering OS has the first complete read-only multi-agent collaboration path, an explicit approval-gated coordinated mutation path, durable cancellation, and a Control Plane backend ready for a visual client:
+
+~~~text
+user task
+  -> classification
+  -> deterministic specialist plan
+  -> durable run
+  -> role-aware DAG
+  -> bounded concurrent coordinator
+  -> agent execution
+  -> immutable handoff artifact
+  -> typed message to dependent agent
+  -> bounded receiver inbox
+  -> dependent agent execution
+  -> durable Control Plane events
+  -> CLI / JSON / SSE observation
+~~~
+
+The Control Plane can expose:
+
+- a recent run index;
+- real run state;
+- agents and their task state;
+- DAG edges;
+- task ownership;
+- dependency state;
+- mutating/file-scope metadata;
+- typed messages and immutable artifacts;
+- quality state;
+- pending approvals;
+- current promotion-candidate readiness;
+- runtime/model summaries;
+- ordered event history;
+- resumable SSE events;
+- durable cancellation-request state.
+
+This is the first functional foundation for the Promix-like experience described earlier. It is intentionally backend-first; no visual UI is required for the coordination semantics to work.
+
+The open stack now also contains the write-safety pipeline:
+
+~~~text
+per-task isolated writable workspace
+  -> immutable PreImage
+  -> inspected frozen ResultImage
+  -> deterministic disjoint integration plan
+  -> isolated integration workspace
+  -> source-hash TOCTOU validation
+  -> run-wide baseline-aware Quality Gate
+  -> Promotable=true
+  -> promotion candidate
+  -> promotion dry-run
+  -> explicit approval required
+  -> apply
+~~~
+
+## Current safety boundary
+
+The default coordinated command remains read-only.
+
+Write-capable coordination exists only behind the explicit flag:
+
+~~~text
+ai run execute <project> --task "..." --runtime auto|codex|cursor --multi-agent-write
+~~~
+
+That path:
+
+- freezes proposals before staging;
+- rejects exact ownership conflicts;
+- stages each source-writer agent in an isolated workspace;
+- reinspects the filesystem instead of trusting provider-reported changes;
+- freezes post-stage ResultImages;
+- integrates only disjoint validated changes;
+- runs run-wide baseline-aware Quality;
+- persists a promotion candidate;
+- requires a separate `ai run promote <run-id> --approve` command before touching the original project.
+
+#97 additionally restricts Stage to registry-derived `source_code: write` agents. QA's tests-only write permission is not broadened into source writes.
+
+### Mutation collaboration now active
+
+The write path now derives transitive read-only ancestors from the validated DAG before mutation.
+
+With the current specialist graph:
+
+~~~text
+Researcher
+   |
+Architect
+   |
+Backend / Frontend / Database
+~~~
+
+Researcher/Architect execute through provider-independent read-only runtimes, persist typed handoffs, and source-writer agents load their bounded inbox before Proposal Freeze.
+
+Cursor now implements the same read-only `execution.Runtime` contract as Codex. `runtime=auto` can use Codex first and fall back to Cursor only for provider-unavailable errors.
+
+Read-only ancestors never receive mutation permissions.
+
+### Human/control-plane functionality now active
+
+The stack also contains:
+
+- `GET /runs` for run discovery;
+- `GET /runs/<id>/messages`;
+- `GET /runs/<id>/artifacts`;
+- `GET /runs/<id>/promotion`;
+- `ai run cancel <run-id>`;
+- projected `cancel_requested`;
+- cancellation-aware read-only and mutating runners.
+
+#105 additionally ensures a cancel signal cannot be persisted when the caller points at a mismatched Control Plane event store.
+
+## Recommended next implementation after this stack
+
+After #105 is green and the stack is reviewed, the next high-value milestones are:
+
+1. add deterministic file-kind ownership so QA `tests: write` can be enforced without source-write escalation;
+2. persist richer proposal/stage/integration lifecycle events and artifact references in the Control Plane;
+3. add durable pause/resume checkpoints and targeted task retry;
+4. design integrity-preserving Control Plane snapshots for long histories without hiding event corruption;
+5. add dedicated typed schemas for remaining high-value artifacts/handoffs;
+6. add an optional local visual web/IDE client only after the control semantics are stable.
+
+---
+
 # 20. Living roadmap rule
 
 This file must evolve with the implementation.

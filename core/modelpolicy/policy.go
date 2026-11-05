@@ -14,6 +14,7 @@ const (
 	PolicyBalanced Policy = "balanced"
 	PolicyDeep     Policy = "deep"
 
+	RoleExecution  Role = "execution"
 	RoleProposal   Role = "proposal"
 	RoleStage      Role = "stage"
 	RoleReview     Role = "review"

@@ -91,19 +91,17 @@ func SnapshotWorkspace(root string, policy execution.SafeViewPolicy) (WorkspaceS
 }
 
 func DetectWorkspaceChanges(before WorkspaceSnapshot, root string, policy execution.SafeViewPolicy) ([]WorkspaceChange, error) {
-	after := WorkspaceSnapshot{}
-	err := walkWorkspace(root, policy, func(relative, absolute string) error {
-		hash, err := hashFile(absolute)
-		if err != nil {
-			return err
-		}
-		after[relative] = hash
-		return nil
-	})
+	after, err := SnapshotWorkspace(root, policy)
 	if err != nil {
 		return nil, err
 	}
+	return ChangesBetween(before, after), nil
+}
 
+// ChangesBetween derives create/modify/delete actions from two already-captured
+// immutable workspace snapshots. Callers that need both the change list and a
+// stable post-execution image should snapshot once and use this function.
+func ChangesBetween(before, after WorkspaceSnapshot) []WorkspaceChange {
 	var changes []WorkspaceChange
 	for relative, hash := range after {
 		old, existed := before[relative]
@@ -121,7 +119,7 @@ func DetectWorkspaceChanges(before WorkspaceSnapshot, root string, policy execut
 	}
 
 	sort.Slice(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
-	return changes, nil
+	return changes
 }
 
 func EnsureChangesMatchDeclared(actual, declared []WorkspaceChange) error {

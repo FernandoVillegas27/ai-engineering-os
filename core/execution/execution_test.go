@@ -89,6 +89,9 @@ func TestBuildWorkUnitsNarrowsWriteAgentToReadOnly(t *testing.T) {
 	if got.GitCommit != "deny" || got.GitPush != "deny" {
 		t.Fatalf("git permissions = %#v", got)
 	}
+	if !units[0].CanMutate() || !units[0].Mutation.SourceCode || !units[0].Mutation.Tests {
+		t.Fatalf("mutation capability = %#v", units[0].Mutation)
+	}
 }
 
 func TestBuildWorkUnitsRejectsUncoveredCapabilities(t *testing.T) {
@@ -145,5 +148,29 @@ func TestDryRunExecutorRejectsWritePermissions(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected permission envelope error")
+	}
+}
+
+
+func TestBuildWorkUnitsPreservesReadOnlyAgentAsNonMutating(t *testing.T) {
+	plan := orchestration.Plan{
+		Intent: orchestration.IntentReview,
+		Agents: []orchestration.AgentPlan{{
+			AgentID:      "reviewer",
+			Capabilities: []string{"code-review"},
+		}},
+	}
+	units, err := BuildWorkUnits("Review service", ".", plan, fixtureAgents())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(units) != 1 {
+		t.Fatalf("units = %#v", units)
+	}
+	if units[0].CanMutate() || units[0].Mutation.SourceCode || units[0].Mutation.Tests {
+		t.Fatalf("reviewer mutation capability = %#v", units[0].Mutation)
+	}
+	if units[0].Mode != ModeReadOnly || units[0].Permissions.SourceCode != "read" || units[0].Permissions.Tests != "read" {
+		t.Fatalf("effective unit = %#v", units[0])
 	}
 }
