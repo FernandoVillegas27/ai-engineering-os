@@ -24,6 +24,8 @@ type EventType string
 
 const (
 	EventRunStarted    EventType = "run.started"
+	EventRunResumed    EventType = "run.resumed"
+	EventRunPaused     EventType = "run.paused"
 	EventTaskStarted   EventType = "task.started"
 	EventTaskCompleted EventType = "task.completed"
 	EventTaskFailed    EventType = "task.failed"
@@ -57,6 +59,7 @@ type TaskResult struct {
 
 type Result struct {
 	Completed bool
+	Paused    bool
 	Cancelled bool
 	Progress  scheduler.Progress
 	Tasks     []TaskResult
@@ -64,6 +67,8 @@ type Result struct {
 
 type Config struct {
 	MaxConcurrency int
+	Resume         bool
+	PauseRequested func() (bool, error)
 }
 
 type Coordinator struct {
@@ -89,7 +94,11 @@ func (c Coordinator) Run(ctx context.Context, graph *scheduler.Scheduler) (Resul
 	if len(c.Workers) == 0 {
 		return Result{}, errors.New("at least one worker is required")
 	}
-	if err := c.emit(ctx, Event{Type: EventRunStarted}); err != nil {
+	startEvent := EventRunStarted
+	if c.Config.Resume {
+		startEvent = EventRunResumed
+	}
+	if err := c.emit(ctx, Event{Type: startEvent}); err != nil {
 		return Result{}, err
 	}
 
@@ -108,7 +117,34 @@ func (c Coordinator) Run(ctx context.Context, graph *scheduler.Scheduler) (Resul
 			}, fmt.Errorf("coordinator canceled: %w", err)
 		}
 
-		capacity := maxConcurrency - active
+		pauseRequested := false
+		if c.Config.PauseRequested != nil {
+			requested, err := c.Config.PauseRequested()
+			if err != nil {
+				_ = c.emit(ctx, Event{Type: EventRunFailed, Summary: "pause control check failed"})
+				return Result{
+					Progress: graph.Progress(),
+					Tasks:    sortedTaskResults(taskResults),
+				}, fmt.Errorf("check pause request: %w", err)
+			}
+			pauseRequested = requested
+		}
+		if pauseRequested && active == 0 {
+			result := Result{
+				Paused:   true,
+				Progress: graph.Progress(),
+				Tasks:    sortedTaskResults(taskResults),
+			}
+			if err := c.emit(ctx, Event{Type: EventRunPaused}); err != nil {
+				return result, err
+			}
+			return result, nil
+		}
+
+		capacity := 0
+		if !pauseRequested {
+			capacity = maxConcurrency - active
+		}
 		stateAdvanced := false
 		if capacity > 0 {
 			for _, task := range graph.AcquireReady(capacity) {
