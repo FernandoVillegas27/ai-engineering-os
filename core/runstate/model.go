@@ -159,8 +159,6 @@ func New(request NewRunRequest, now time.Time) (Run, error) {
 			Skills:       sortedUnique(unit.Skills),
 			Tools:        sortedUnique(unit.Tools),
 			Permissions:  unit.Permissions,
-			Mutating:     unit.CanMutate(),
-			MutationKind: mutationKind(unit.Mutation),
 		})
 	}
 	if err := Validate(run); err != nil {
@@ -280,16 +278,6 @@ func validStatus(status Status) bool {
 	default:
 		return false
 	}
-}
-
-func mutationKind(value execution.MutationCapability) string {
-	if value.SourceCode {
-		return "source"
-	}
-	if value.Tests {
-		return "tests-only"
-	}
-	return ""
 }
 
 func validWorkUnitStatus(status WorkUnitStatus) bool {
