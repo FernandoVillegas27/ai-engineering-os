@@ -163,13 +163,29 @@ func (s *EventStore) ensureRunDir(runID string) (string, error) {
 }
 
 func loadEvents(runDir string) ([]Event, error) {
+	archive, compacted, err := loadCompactedArchive(runDir)
+	if err != nil {
+		return nil, err
+	}
+
+	var events []Event
+	archivedThrough := uint64(0)
+	if compacted {
+		prefix, err := EventsFromArchive(archive)
+		if err != nil {
+			return nil, err
+		}
+		events = append(events, prefix...)
+		archivedThrough = archive.ThroughSequence
+	}
+
 	entries, err := os.ReadDir(runDir)
 	if err != nil {
 		return nil, err
 	}
-	var events []Event
 	for _, entry := range entries {
-		if entry.Name() == ".append.lock" || entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+		name := entry.Name()
+		if name == ".append.lock" || name == compactedHistoryFilename || entry.IsDir() || filepath.Ext(name) != ".json" {
 			continue
 		}
 		info, err := entry.Info()
@@ -177,23 +193,36 @@ func loadEvents(runDir string) ([]Event, error) {
 			return nil, err
 		}
 		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			return nil, fmt.Errorf("control-plane event entry is not regular: %s", entry.Name())
+			return nil, fmt.Errorf("control-plane event entry is not regular: %s", name)
 		}
-		data, err := os.ReadFile(filepath.Join(runDir, entry.Name()))
+		data, err := os.ReadFile(filepath.Join(runDir, name))
 		if err != nil {
 			return nil, err
+		}
+		sequence := filenameSequence(name)
+		if sequence == 0 {
+			return nil, fmt.Errorf("control-plane event filename has invalid sequence: %s", name)
+		}
+		if compacted && sequence <= archivedThrough {
+			if err := verifyLiveEventMatchesArchive(archive, sequence, name, data); err != nil {
+				return nil, err
+			}
+			continue
 		}
 		var value Event
 		decoder := json.NewDecoder(strings.NewReader(string(data)))
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&value); err != nil {
-			return nil, fmt.Errorf("decode control-plane event %s: %w", entry.Name(), err)
+			return nil, fmt.Errorf("decode control-plane event %s: %w", name, err)
 		}
 		if err := ValidateEvent(value); err != nil {
-			return nil, fmt.Errorf("validate control-plane event %s: %w", entry.Name(), err)
+			return nil, fmt.Errorf("validate control-plane event %s: %w", name, err)
 		}
-		if filenameSequence(entry.Name()) != value.Sequence {
-			return nil, fmt.Errorf("control-plane event filename sequence mismatch: %s", entry.Name())
+		if sequence != value.Sequence {
+			return nil, fmt.Errorf("control-plane event filename sequence mismatch: %s", name)
+		}
+		if compacted && value.RunID != archive.RunID {
+			return nil, fmt.Errorf("control-plane event run id mismatch after compacted history: %s", name)
 		}
 		events = append(events, value)
 	}
