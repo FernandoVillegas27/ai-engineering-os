@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestValidateLoopbackAddr(t *testing.T) {
 	valid := []string{
