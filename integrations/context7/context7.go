@@ -3,7 +3,6 @@ package context7
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os/exec"
 	"strings"
 	"time"
