@@ -14,7 +14,6 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/message"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/modelpolicy"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
-	"github.com/FernandoVillegas27/ai-engineering-os/core/runcontrol"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/scheduler"
 )
@@ -167,6 +166,12 @@ func runRunResume(args []string) error {
 	if err != nil {
 		return err
 	}
+	active, err := startActiveRunContext(context.Background(), controlStore, run.ID)
+	if err != nil {
+		return fmt.Errorf("acquire run lease before resume: %w", err)
+	}
+	defer active.Stop()
+
 	if _, err := controlStore.PauseRequested(run.ID); err != nil {
 		return err
 	}
@@ -181,16 +186,7 @@ func runRunResume(args []string) error {
 		return err
 	}
 
-	ctx, stopWatcher, err := runcontrol.WithCancellationWatcher(
-		context.Background(),
-		controlStore,
-		run.ID,
-		250*time.Millisecond,
-	)
-	if err != nil {
-		return err
-	}
-	defer stopWatcher()
+	ctx := active.Context()
 
 	sink := &controlplane.RunCoordinatorSink{
 		RunID:  run.ID,
