@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -341,67 +340,14 @@ func EventsFromArchive(record EventArchive) ([]Event, error) {
 }
 
 func collectArchivedEventPrefix(runDir, runID string, through uint64) ([]ArchivedEvent, error) {
-	entries, err := os.ReadDir(runDir)
+	values, err := rawHistoricalEventPrefix(runDir, through)
 	if err != nil {
 		return nil, err
 	}
-	type candidate struct {
-		sequence uint64
-		name     string
-	}
-	var values []candidate
-	seen := map[uint64]bool{}
-	for _, entry := range entries {
-		name := entry.Name()
-		if name == ".append.lock" || entry.IsDir() || filepath.Ext(name) != ".json" {
-			continue
-		}
-		sequence := filenameSequence(name)
-		if sequence == 0 {
-			return nil, fmt.Errorf("control-plane event filename has invalid sequence: %s", name)
-		}
-		if sequence > through {
-			continue
-		}
-		if seen[sequence] {
-			return nil, fmt.Errorf("control-plane event sequence duplicate in prefix: %d", sequence)
-		}
-		seen[sequence] = true
-		values = append(values, candidate{sequence: sequence, name: name})
-	}
-	sort.Slice(values, func(i, j int) bool { return values[i].sequence < values[j].sequence })
-	if uint64(len(values)) != through {
-		return nil, fmt.Errorf(
-			"control-plane event prefix is incomplete: got %d events want %d",
-			len(values),
-			through,
-		)
-	}
-
 	archived := make([]ArchivedEvent, 0, len(values))
-	for i, value := range values {
-		expected := uint64(i + 1)
-		if value.sequence != expected {
-			return nil, fmt.Errorf(
-				"control-plane event prefix sequence mismatch: got %d want %d",
-				value.sequence,
-				expected,
-			)
-		}
-		path := filepath.Join(runDir, value.name)
-		info, err := os.Lstat(path)
-		if err != nil {
-			return nil, err
-		}
-		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			return nil, fmt.Errorf("control-plane event entry is not regular: %s", value.name)
-		}
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
-		}
+	for _, value := range values {
 		var event Event
-		decoder := json.NewDecoder(strings.NewReader(string(raw)))
+		decoder := json.NewDecoder(strings.NewReader(string(value.data)))
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&event); err != nil {
 			return nil, fmt.Errorf("decode control-plane event %s: %w", value.name, err)
@@ -412,11 +358,11 @@ func collectArchivedEventPrefix(runDir, runID string, through uint64) ([]Archive
 		if event.RunID != runID || event.Sequence != value.sequence {
 			return nil, fmt.Errorf("control-plane event identity mismatch: %s", value.name)
 		}
-		sum := sha256.Sum256(raw)
+		sum := sha256.Sum256(value.data)
 		archived = append(archived, ArchivedEvent{
 			Sequence: value.sequence,
 			Filename: value.name,
-			Content:  base64.StdEncoding.EncodeToString(raw),
+			Content:  base64.StdEncoding.EncodeToString(value.data),
 			SHA256:   hex.EncodeToString(sum[:]),
 		})
 	}
