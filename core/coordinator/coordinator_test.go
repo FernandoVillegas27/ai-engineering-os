@@ -288,3 +288,87 @@ func TestCoordinatorEmitsRunFailedForTerminalFailure(t *testing.T) {
 		t.Fatalf("events=%#v", recorded)
 	}
 }
+
+
+func TestCoordinatorPausesGracefullyAfterActiveTaskCompletes(t *testing.T) {
+	graph, err := scheduler.New([]scheduler.Task{
+		{ID: "research", AgentID: "researcher"},
+		{ID: "architect", AgentID: "architect", DependsOn: []string{"research"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var pause atomic.Bool
+	var architectRan atomic.Bool
+	events := &MemoryEventSink{}
+	result, err := (Coordinator{
+		Config: Config{
+			MaxConcurrency: 1,
+			PauseRequested: func() (bool, error) {
+				return pause.Load(), nil
+			},
+		},
+		Workers: map[string]Worker{
+			"researcher": workerFunc(func(context.Context, scheduler.Task) (WorkResult, error) {
+				pause.Store(true)
+				return WorkResult{Summary: "research done"}, nil
+			}),
+			"architect": workerFunc(func(context.Context, scheduler.Task) (WorkResult, error) {
+				architectRan.Store(true)
+				return WorkResult{Summary: "architect done"}, nil
+			}),
+		},
+		Events: events,
+	}).Run(context.Background(), graph)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Paused || result.Completed || result.Cancelled {
+		t.Fatalf("result=%#v", result)
+	}
+	if result.Progress.Completed != 1 || result.Progress.Ready+result.Progress.Waiting != 1 {
+		t.Fatalf("progress=%#v", result.Progress)
+	}
+	if architectRan.Load() {
+		t.Fatal("dependent task started after pause request")
+	}
+	recorded := events.Snapshot()
+	if recorded[len(recorded)-1].Type != EventRunPaused {
+		t.Fatalf("events=%#v", recorded)
+	}
+}
+
+func TestCoordinatorResumeEmitsRunResumed(t *testing.T) {
+	graph, err := scheduler.New([]scheduler.Task{
+		{ID: "research", AgentID: "researcher", Status: scheduler.StatusCompleted},
+		{ID: "architect", AgentID: "architect", DependsOn: []string{"research"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := &MemoryEventSink{}
+	result, err := (Coordinator{
+		Config: Config{MaxConcurrency: 1, Resume: true},
+		Workers: map[string]Worker{
+			"researcher": workerFunc(func(context.Context, scheduler.Task) (WorkResult, error) {
+				t.Fatal("completed dependency must not rerun")
+				return WorkResult{}, nil
+			}),
+			"architect": workerFunc(func(context.Context, scheduler.Task) (WorkResult, error) {
+				return WorkResult{Summary: "done"}, nil
+			}),
+		},
+		Events: events,
+	}).Run(context.Background(), graph)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Completed || result.Progress.Completed != 2 {
+		t.Fatalf("result=%#v", result)
+	}
+	recorded := events.Snapshot()
+	if recorded[0].Type != EventRunResumed || recorded[len(recorded)-1].Type != EventRunCompleted {
+		t.Fatalf("events=%#v", recorded)
+	}
+}
