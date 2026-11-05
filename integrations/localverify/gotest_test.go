@@ -255,17 +255,18 @@ func TestVerifyKeepsInfrastructureClassificationWithJSONOutput(t *testing.T) {
 	}
 }
 
-func TestNonGoChecksKeepTheirCommandsAndReportNoStructuredFailures(t *testing.T) {
+func TestCrossLanguageChecksKeepCommandsAndSafeParseConfidence(t *testing.T) {
 	for _, tc := range []struct {
-		file    string
-		content string
-		args    string
-		command string
+		file       string
+		content    string
+		args       string
+		command    string
+		parse      verification.ParseConfidence
 	}{
-		{"pom.xml", "<project/>", "-q test", "mvn"},
-		{"build.gradle", "", "test --no-daemon", "gradle"},
-		{"pyproject.toml", "", "-m pytest", "python"},
-		{"package.json", `{"scripts":{"test":"jest"}}`, "test -- --runInBand", "npm"},
+		{"pom.xml", "<project/>", "-q test", "mvn", verification.ParseFailed},
+		{"build.gradle", "", "test --no-daemon --console=plain", "gradle", verification.ParseFailed},
+		{"pyproject.toml", "", "-m pytest", "python", verification.ParseNotAttempted},
+		{"package.json", `{"scripts":{"test":"jest"}}`, "test -- --runInBand --json", "npm", verification.ParseFailed},
 	} {
 		t.Run(tc.file, func(t *testing.T) {
 			root := t.TempDir()
@@ -282,7 +283,7 @@ func TestNonGoChecksKeepTheirCommandsAndReportNoStructuredFailures(t *testing.T)
 				t.Fatalf("invocation=%#v", invocation)
 			}
 			check := report.Checks[0]
-			if check.FailureParse != verification.ParseNotAttempted || check.Failures != nil {
+			if check.FailureParse != tc.parse || check.Failures != nil {
 				t.Fatalf("check=%#v", check)
 			}
 			if check.FailureKind != verification.FailureCode || !check.Correctable {
