@@ -74,3 +74,17 @@ func TestParseRunServeArgsPromotionStoreOverride(t *testing.T) {
 		t.Fatalf("options=%#v", options)
 	}
 }
+
+
+func TestParseRunServeArgsControlStateOverrides(t *testing.T) {
+	options, err := parseRunServeArgs([]string{
+		"--state-dir", "./runs",
+		"--checkpoint-dir", "./checkpoints",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.stateDir != "./runs" || options.checkpointDir != "./checkpoints" {
+		t.Fatalf("options=%#v", options)
+	}
+}
