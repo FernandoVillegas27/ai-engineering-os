@@ -95,6 +95,8 @@ type Progress struct {
 
 type State struct {
 	RunID            string                `json:"run_id"`
+	ParentRunID      string                `json:"parent_run_id,omitempty"`
+	RetryOfTaskID    string                `json:"retry_of_task_id,omitempty"`
 	Status           RunStatus             `json:"status"`
 	LastSequence     uint64                `json:"last_sequence"`
 	Tasks            map[string]TaskState  `json:"tasks"`
@@ -142,7 +144,18 @@ func Project(events []Event) (State, error) {
 		}
 
 		switch event.Type {
-		case EventRunStarted, EventRunResumed:
+		case EventRunStarted:
+			state.Status = RunRunning
+			var metadata struct {
+				ParentRunID   string `json:"parent_run_id"`
+				RetryOfTaskID string `json:"retry_of_task_id"`
+			}
+			if err := json.Unmarshal(event.Data, &metadata); err != nil {
+				return State{}, fmt.Errorf("decode run-start metadata: %w", err)
+			}
+			state.ParentRunID = metadata.ParentRunID
+			state.RetryOfTaskID = metadata.RetryOfTaskID
+		case EventRunResumed:
 			state.Status = RunRunning
 		case EventRunPaused:
 			state.Status = RunPaused
