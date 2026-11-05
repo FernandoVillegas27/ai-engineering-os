@@ -139,3 +139,56 @@ func TestMutationParticipantsContainOnlyExecutedPreStageAndSourceWriters(t *test
 		}
 	}
 }
+
+
+func TestMutationParticipantTasksPreservesDependencies(t *testing.T) {
+	full := []scheduler.Task{
+		{ID: "research", AgentID: "researcher"},
+		{ID: "architect", AgentID: "architect", DependsOn: []string{"research"}},
+		{ID: "backend", AgentID: "backend-engineer", DependsOn: []string{"architect"}},
+		{ID: "qa", AgentID: "qa-engineer", DependsOn: []string{"backend"}},
+		{ID: "review", AgentID: "reviewer", DependsOn: []string{"qa"}},
+	}
+	participants := []execution.WorkUnit{
+		{ID: "research", AgentID: "researcher"},
+		{ID: "architect", AgentID: "architect"},
+		{ID: "backend", AgentID: "backend-engineer"},
+		{ID: "qa", AgentID: "qa-engineer"},
+	}
+	tasks, err := mutationParticipantTasks(full, participants)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 4 {
+		t.Fatalf("tasks = %#v", tasks)
+	}
+	got := map[string][]string{}
+	for _, task := range tasks {
+		got[task.ID] = task.DependsOn
+		if task.Status != scheduler.StatusQueued {
+			t.Fatalf("task %s status=%s", task.ID, task.Status)
+		}
+	}
+	if len(got["architect"]) != 1 || got["architect"][0] != "research" {
+		t.Fatalf("architect deps=%#v", got["architect"])
+	}
+	if len(got["backend"]) != 1 || got["backend"][0] != "architect" {
+		t.Fatalf("backend deps=%#v", got["backend"])
+	}
+	if len(got["qa"]) != 1 || got["qa"][0] != "backend" {
+		t.Fatalf("qa deps=%#v", got["qa"])
+	}
+}
+
+func TestMutationParticipantTasksRejectsExcludedDependency(t *testing.T) {
+	full := []scheduler.Task{
+		{ID: "architect", AgentID: "architect"},
+		{ID: "backend", AgentID: "backend-engineer", DependsOn: []string{"architect"}},
+	}
+	_, err := mutationParticipantTasks(full, []execution.WorkUnit{
+		{ID: "backend", AgentID: "backend-engineer"},
+	})
+	if err == nil {
+		t.Fatal("expected excluded dependency rejection")
+	}
+}
