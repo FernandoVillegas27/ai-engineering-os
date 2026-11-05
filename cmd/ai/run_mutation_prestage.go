@@ -162,7 +162,7 @@ func executeMutationPreStage(
 		if err != nil {
 			return nil, fmt.Errorf("load pre-stage inbox for %s: %w", unit.ID, err)
 		}
-		unit.CollaborationContext = contextValue
+		unit.CollaborationContext = coordinator.MergeContext(unit.CollaborationContext, contextValue, coordinator.DefaultCombinedContextMax)
 		out[i] = unit
 	}
 	return out, nil

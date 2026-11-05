@@ -35,7 +35,7 @@ func (w ExecutionWorker) Execute(ctx context.Context, task scheduler.Task) (Work
 		if err != nil {
 			return WorkResult{}, fmt.Errorf("load collaboration context for %s: %w", task.ID, err)
 		}
-		unit.CollaborationContext = contextValue
+		unit.CollaborationContext = MergeContext(unit.CollaborationContext, contextValue, DefaultCombinedContextMax)
 	}
 	result, err := w.Executor.Execute(ctx, unit)
 	if err != nil {

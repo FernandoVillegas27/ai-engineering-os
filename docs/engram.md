@@ -173,3 +173,66 @@ Callers should save concise decisions, architecture facts, fixes, conventions, c
 The provider can now save and recall project memory, but orchestration does not yet automatically inject recalled context or automatically persist memory candidates at the end of every run.
 
 That lifecycle wiring is the next memory step.
+
+
+## Automatic run memory lifecycle
+
+`ai run execute` now supports:
+
+~~~text
+--memory auto|engram|off
+~~~
+
+Default: `auto`.
+
+Behavior:
+
+- `auto`: use Engram only when its deterministic status probe reports it available and healthy;
+- `engram`: select the Engram provider explicitly, while memory operations remain best-effort and non-blocking;
+- `off`: do not probe, recall, or persist project memory.
+
+Dry-run execution does not invoke project memory.
+
+### Recall boundary
+
+Before real execution, the run recalls bounded project-scoped context using:
+
+- the stable project ID as namespace;
+- the current task as query;
+- at most 5 results by default;
+- at most 8 KiB of recalled provider context.
+
+Recalled context is labeled explicitly as **untrusted historical evidence**.
+
+It is combined with current-run inbox/handoff context without replacing either source, and it cannot change:
+
+- task;
+- permissions;
+- system/safety constraints;
+- tool availability;
+- runtime/model policy.
+
+### Persistence boundary
+
+Successful runs may persist two categories of curated knowledge:
+
+1. selected durable artifacts:
+   - architecture decisions;
+   - API contracts;
+   - explicit decisions;
+   - research notes;
+2. one bounded run-learning summary built from completed task summaries.
+
+Transient handoffs, questions, arbitrary messages, raw prompts, transcripts, source files, and failed-run summaries are not automatically written as durable memory.
+
+Artifact memories use stable topic keys derived from type + normalized summary, so repeated equivalent knowledge converges instead of producing unbounded duplicates.
+
+Run learning uses a stable project namespace and task/intent-derived topic key.
+
+### Failure behavior
+
+Memory is an optional context provider, never the coordination source of truth.
+
+Provider unavailable/unhealthy, recall errors, and save errors become observable warnings. They do not turn an otherwise valid engineering run into a failed run.
+
+The durable run state, Control Plane events, Quality gates, permission envelopes, checkpoints, and promotion approval remain authoritative.

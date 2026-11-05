@@ -43,6 +43,7 @@ type runExecuteOptions struct {
 	maxConcurrency int
 	modelPolicy    modelpolicy.Policy
 	model          string
+	memoryMode     string
 	multiAgentWrite bool
 	json           bool
 }
@@ -123,6 +124,21 @@ func runRunExecute(args []string) error {
 		return err
 	}
 
+	memoryProvider, err := runMemoryProvider(options.memoryMode)
+	if err != nil {
+		return err
+	}
+	if options.dryRun {
+		memoryProvider = nil
+	}
+	units, memoryRecall := injectRunMemory(
+		context.Background(),
+		memoryProvider,
+		options.projectID,
+		options.task,
+		units,
+	)
+
 	if options.multiAgentWrite {
 		return runCoordinatedMutation(
 			context.Background(),
@@ -131,6 +147,8 @@ func runRunExecute(args []string) error {
 			plan.RequestedCapabilities,
 			string(plan.Intent),
 			units,
+			memoryProvider,
+			memoryRecall,
 		)
 	}
 
@@ -276,11 +294,28 @@ func runRunExecute(args []string) error {
 		return saveErr
 	}
 
+	memoryReport := runMemoryReport{Recall: memoryRecall}
+	if finalStatus == runstate.StatusCompleted {
+		persisted := persistReadOnlyRunMemory(
+			context.Background(),
+			memoryProvider,
+			options.projectID,
+			run.ID,
+			options.task,
+			string(plan.Intent),
+			artifactStore,
+			result,
+		)
+		persisted.Recall = memoryRecall
+		memoryReport = persisted
+	}
+
 	if options.json {
 		payload := struct {
-			Run    runstate.Run      `json:"run"`
+			Run    runstate.Run       `json:"run"`
 			Result coordinator.Result `json:"result"`
-		}{Run: run, Result: result}
+			Memory runMemoryReport     `json:"memory"`
+		}{Run: run, Result: result, Memory: memoryReport}
 		if err := printJSON(payload); err != nil {
 			return err
 		}
@@ -300,6 +335,7 @@ func runRunExecute(args []string) error {
 			result.Progress.Cancelled,
 			result.Progress.Total,
 		)
+		printMemorySummary(memoryRecall, memoryReport)
 		fmt.Println()
 		fmt.Printf("Inspect: ai run control %s\n", run.ID)
 		fmt.Printf("Events:  ai run events %s\n", run.ID)
@@ -396,6 +432,7 @@ func parseRunExecuteArgs(args []string) (runExecuteOptions, error) {
 		root:           ".",
 		maxConcurrency: 2,
 		modelPolicy:    modelpolicy.PolicyAuto,
+		memoryMode:     "auto",
 	}
 	var positional []string
 	for i := 0; i < len(args); i++ {
@@ -438,6 +475,15 @@ func parseRunExecuteArgs(args []string) (runExecuteOptions, error) {
 			}
 			i++
 			options.model = strings.TrimSpace(args[i])
+		case "--memory":
+			if i+1 >= len(args) {
+				return runExecuteOptions{}, fmt.Errorf("--memory requiere auto|engram|off")
+			}
+			i++
+			options.memoryMode = strings.ToLower(strings.TrimSpace(args[i]))
+			if _, err := runMemoryProvider(options.memoryMode); err != nil {
+				return runExecuteOptions{}, err
+			}
 		case "--multi-agent-write":
 			options.multiAgentWrite = true
 		case "--state-dir":
@@ -495,7 +541,7 @@ func parseRunExecuteArgs(args []string) (runExecuteOptions, error) {
 		case "--json":
 			options.json = true
 		case "-h", "--help":
-			return runExecuteOptions{}, fmt.Errorf("uso: ai run execute [ruta] --task <tarea> (--dry-run | --runtime auto|codex|cursor) [--multi-agent-write] [--project id] [--max-concurrency N] [--model-policy auto|economy|balanced|deep] [--model id] [--ai]")
+			return runExecuteOptions{}, fmt.Errorf("uso: ai run execute [ruta] --task <tarea> (--dry-run | --runtime auto|codex|cursor) [--multi-agent-write] [--project id] [--max-concurrency N] [--model-policy auto|economy|balanced|deep] [--model id] [--memory auto|engram|off] [--ai]")
 		default:
 			if strings.HasPrefix(args[i], "-") {
 				return runExecuteOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
