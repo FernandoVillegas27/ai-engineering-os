@@ -23,6 +23,7 @@ type HTTPServer struct {
 	Artifacts    *artifact.Store
 	Messages     *message.Bus
 	Promotions   *promotioncandidate.Store
+	Controls     func(context.Context, string) (RunControls, error)
 	PollInterval time.Duration
 }
 
@@ -140,9 +141,24 @@ func (s HTTPServer) handleRuns(w http.ResponseWriter, r *http.Request) {
 		s.handleArtifacts(w, r, runID)
 	case "promotion":
 		s.handlePromotion(w, r, runID)
+	case "controls":
+		s.handleControls(w, r, runID)
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 	}
+}
+
+func (s HTTPServer) handleControls(w http.ResponseWriter, r *http.Request, runID string) {
+	if s.Controls == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "run controls provider is not configured"})
+		return
+	}
+	value, err := s.Controls(r.Context(), runID)
+	if err != nil {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, value)
 }
 
 func (s HTTPServer) handleState(w http.ResponseWriter, _ *http.Request, runID string) {
