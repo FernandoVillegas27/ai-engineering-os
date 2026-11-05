@@ -14,6 +14,7 @@ const (
 	RunRunning   RunStatus = "running"
 	RunPaused    RunStatus = "paused"
 	RunCompleted RunStatus = "completed"
+	RunFailed    RunStatus = "failed"
 	RunCancelled RunStatus = "cancelled"
 )
 
@@ -147,6 +148,8 @@ func Project(events []Event) (State, error) {
 			state.Status = RunPaused
 		case EventRunCompleted:
 			state.Status = RunCompleted
+		case EventRunFailed:
+			state.Status = RunFailed
 		case EventRunCancelRequested:
 			state.CancelRequested = true
 		case EventRunCancelled:
@@ -396,7 +399,7 @@ func agentRank(status AgentStatus) int {
 }
 
 func terminalRun(status RunStatus) bool {
-	return status == RunCompleted || status == RunCancelled
+	return status == RunCompleted || status == RunFailed || status == RunCancelled
 }
 
 
