@@ -15,6 +15,7 @@ type RunCoordinatorSink struct {
 	Store *EventStore
 	Tasks   []scheduler.Task
 	RunData map[string]any
+	Resume  bool
 	Now     func() time.Time
 
 	mu          sync.Mutex
@@ -35,6 +36,16 @@ func (s *RunCoordinatorSink) Record(ctx context.Context, input coordinator.Event
 	}
 
 	if !s.initialized {
+		if s.Resume {
+			if input.Type != coordinator.EventRunResumed {
+				return fmt.Errorf("control-plane resumed run sink must initialize from run.resumed")
+			}
+			if err := s.append(ctx, EventRunResumed, "", "", input.Summary, input.ArtifactRefs, input.MessageRefs, now); err != nil {
+				return err
+			}
+			s.initialized = true
+			return nil
+		}
 		if input.Type != coordinator.EventRunStarted {
 			return fmt.Errorf("control-plane run sink must initialize from run.started")
 		}
