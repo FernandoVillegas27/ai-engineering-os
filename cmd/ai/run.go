@@ -56,6 +56,8 @@ func runRun(args []string) error {
 		return runRunRecover(args[1:])
 	case "snapshot":
 		return runRunSnapshot(args[1:])
+	case "archive":
+		return runRunArchive(args[1:])
 	default:
 		return fmt.Errorf("subcomando run desconocido: %s", args[0])
 	}
@@ -537,6 +539,7 @@ func printRunUsage() {
 	fmt.Println("  ai run resume <run-id> [--state-dir ruta] [--events-dir ruta] [--artifacts-dir ruta] [--messages-dir ruta] [--control-dir ruta] [--checkpoint-dir ruta] [--promotion-dir ruta] [--max-concurrency N] [--json]")
 	fmt.Println("  ai run recover <run-id> [--stale-after 30s] [--state-dir ruta] [--events-dir ruta] [--control-dir ruta] [--checkpoint-dir ruta] [--json]")
 	fmt.Println("  ai run snapshot <run-id> [--events-dir ruta] [--snapshot-dir ruta] [--json]")
+	fmt.Println("  ai run archive <run-id> [--events-dir ruta] [--snapshot-dir ruta] [--archive-dir ruta] [--json]")
 	fmt.Println()
 	fmt.Println("Sin --state-dir usa AI_ENGINEERING_OS_STATE_DIR o el directorio de configuración del usuario.")
 	fmt.Println("Sin --events-dir usa AI_ENGINEERING_OS_EVENTS_DIR o el directorio de configuración del usuario.")
