@@ -162,3 +162,58 @@ Snapshot-assisted projection reduces historical **decode/projection** work, but 
 No destructive compaction is enabled yet.
 
 Deleting historical event files would remove the evidence required to recompute the snapshot prefix digest, so any future compaction format must preserve independently verifiable historical integrity before deletion is permitted.
+
+
+## Integrity-preserving event archives
+
+Before historical event files can ever be compacted, the exact bytes covered by a verified snapshot can be copied into an immutable event archive:
+
+~~~text
+ai run archive <run-id>
+~~~
+
+Optional overrides:
+
+~~~text
+--events-dir <path>
+--snapshot-dir <path>
+--archive-dir <path>
+--json
+~~~
+
+Archive storage resolution is:
+
+1. explicit `--archive-dir`;
+2. `AI_ENGINEERING_OS_ARCHIVE_DIR`;
+3. user config `ai-engineering-os/control-plane-archives`.
+
+An archive is created only from the prefix covered by the latest valid snapshot. Creation holds the event append lock and verifies the live historical prefix digest against the snapshot before writing anything.
+
+Each archive contains:
+
+- the exact original event filename;
+- the exact original event bytes encoded losslessly;
+- the event sequence;
+- a SHA-256 digest for every raw event;
+- the original snapshot prefix digest;
+- the snapshot record digest;
+- an archive record digest.
+
+Archive loading validates every raw event again, including schema, run identity, sequence continuity, filename identity, raw-event SHA-256, the reconstructed prefix digest, and the archive record digest.
+
+`EventsFromArchive` can reconstruct the original typed event prefix from the archived bytes.
+
+### Current safety boundary
+
+Creating an archive **does not delete live event files**.
+
+This is intentional. Destructive compaction is permitted only after the archive path has proven that:
+
+1. the archived bytes reproduce the snapshot prefix digest exactly;
+2. audit/event reconstruction works from archived history plus live suffix events;
+3. append sequencing continues correctly after the live prefix is removed;
+4. HTTP event and SSE semantics remain reconstructable;
+5. restore/recovery from an archive is tested;
+6. deletion is explicit, atomic enough to fail closed, and independently auditable.
+
+The archive is therefore the independent historical evidence required by the next compaction step; it is not itself authorization to delete history.
