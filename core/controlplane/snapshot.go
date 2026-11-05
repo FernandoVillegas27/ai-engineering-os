@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"strings"
 	"time"
 
@@ -390,69 +389,14 @@ func validateSnapshotDerivedState(state State) error {
 }
 
 func rawEventPrefixDigest(runDir string, through uint64) (string, error) {
-	if through == 0 {
-		return "", errors.New("event prefix sequence is required")
-	}
-	entries, err := os.ReadDir(runDir)
+	values, err := rawHistoricalEventPrefix(runDir, through)
 	if err != nil {
 		return "", err
 	}
-	type rawEntry struct {
-		sequence uint64
-		name     string
-	}
-	var values []rawEntry
-	seen := map[uint64]bool{}
-	for _, entry := range entries {
-		name := entry.Name()
-		if name == ".append.lock" || entry.IsDir() || filepath.Ext(name) != ".json" {
-			continue
-		}
-		sequence := filenameSequence(name)
-		if sequence == 0 {
-			return "", fmt.Errorf("control-plane event filename has invalid sequence: %s", name)
-		}
-		if sequence > through {
-			continue
-		}
-		if seen[sequence] {
-			return "", fmt.Errorf("control-plane event sequence duplicate in prefix: %d", sequence)
-		}
-		seen[sequence] = true
-		values = append(values, rawEntry{sequence: sequence, name: name})
-	}
-	sort.Slice(values, func(i, j int) bool { return values[i].sequence < values[j].sequence })
-	if uint64(len(values)) != through {
-		return "", fmt.Errorf(
-			"control-plane event prefix is incomplete: got %d events want %d",
-			len(values),
-			through,
-		)
-	}
 	digest := sha256.New()
-	for i, value := range values {
-		expected := uint64(i + 1)
-		if value.sequence != expected {
-			return "", fmt.Errorf(
-				"control-plane event prefix sequence mismatch: got %d want %d",
-				value.sequence,
-				expected,
-			)
-		}
-		path := filepath.Join(runDir, value.name)
-		info, err := os.Lstat(path)
-		if err != nil {
-			return "", err
-		}
-		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			return "", fmt.Errorf("control-plane event entry is not regular: %s", value.name)
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return "", err
-		}
+	for _, value := range values {
 		writeDigestPart(digest, value.name)
-		writeDigestPart(digest, string(data))
+		writeDigestPart(digest, string(value.data))
 	}
 	return hex.EncodeToString(digest.Sum(nil)), nil
 }
