@@ -233,7 +233,7 @@ func TestBindTaskGraphPersistsDependenciesAndStatuses(t *testing.T) {
 	}
 	tasks := []scheduler.Task{
 		{ID: "architect", AgentID: "architect", Status: scheduler.StatusCompleted},
-		{ID: "backend", AgentID: "backend-engineer", DependsOn: []string{"architect"}, Status: scheduler.StatusQueued},
+		{ID: "backend", AgentID: "backend-engineer", DependsOn: []string{"architect"}, Mutating: true, Scopes: []string{"backend"}, Status: scheduler.StatusQueued},
 	}
 	if err := BindTaskGraph(&run, tasks); err != nil {
 		t.Fatal(err)
@@ -243,6 +243,12 @@ func TestBindTaskGraphPersistsDependenciesAndStatuses(t *testing.T) {
 	}
 	if run.WorkUnits[0].Status != WorkUnitCompleted || run.WorkUnits[1].Status != WorkUnitQueued {
 		t.Fatalf("statuses = %#v", run.WorkUnits)
+	}
+	if run.WorkUnits[0].Mutating || !run.WorkUnits[1].Mutating {
+		t.Fatalf("mutating metadata = %#v", run.WorkUnits)
+	}
+	if len(run.WorkUnits[1].Scopes) != 1 || run.WorkUnits[1].Scopes[0] != "backend" {
+		t.Fatalf("backend scopes = %#v", run.WorkUnits[1].Scopes)
 	}
 }
 
