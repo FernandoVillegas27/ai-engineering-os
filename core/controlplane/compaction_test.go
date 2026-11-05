@@ -123,3 +123,48 @@ func TestCompactedHistoryRejectsTamperedMarker(t *testing.T) {
 		t.Fatal("expected tampered compacted history rejection")
 	}
 }
+
+
+func TestCompactEventHistorySupportsIncrementalGenerations(t *testing.T) {
+	events, _ := NewEventStore(t.TempDir())
+	snapshots, _ := NewSnapshotStore(t.TempDir())
+	archives, _ := NewEventArchiveStore(t.TempDir())
+	runID := "run-compact-generations"
+
+	appendEvent(t, events, runID, EventRunStarted, "", "")
+	firstSnapshot, err := snapshots.Create(context.Background(), events, runID, time.Now().UTC())
+	if err != nil { t.Fatal(err) }
+	if _, err := archives.Create(context.Background(), events, snapshots, runID, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	first, err := CompactEventHistory(context.Background(), events, snapshots, archives, runID, time.Now().UTC())
+	if err != nil { t.Fatal(err) }
+	if first.ThroughSequence != 1 || first.DeletedFiles != 1 {
+		t.Fatalf("first=%#v", first)
+	}
+	if err := snapshots.Verify(context.Background(), events, firstSnapshot); err != nil {
+		t.Fatal(err)
+	}
+
+	appendEvent(t, events, runID, EventTaskStarted, "task-1", "architect")
+	secondSnapshot, err := snapshots.Create(context.Background(), events, runID, time.Now().UTC())
+	if err != nil { t.Fatal(err) }
+	secondArchive, err := archives.Create(context.Background(), events, snapshots, runID, time.Now().UTC())
+	if err != nil { t.Fatal(err) }
+	if secondArchive.ThroughSequence != 2 {
+		t.Fatalf("archive=%#v", secondArchive)
+	}
+	second, err := CompactEventHistory(context.Background(), events, snapshots, archives, runID, time.Now().UTC())
+	if err != nil { t.Fatal(err) }
+	if second.ThroughSequence != 2 || second.DeletedFiles != 1 || second.AlreadyPresent {
+		t.Fatalf("second=%#v", second)
+	}
+	if err := snapshots.Verify(context.Background(), events, secondSnapshot); err != nil {
+		t.Fatal(err)
+	}
+	history, err := events.List(runID)
+	if err != nil { t.Fatal(err) }
+	if len(history) != 2 || history[0].Sequence != 1 || history[1].Sequence != 2 {
+		t.Fatalf("history=%#v", history)
+	}
+}
