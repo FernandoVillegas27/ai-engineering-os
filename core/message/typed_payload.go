@@ -50,6 +50,18 @@ type StatusPayload struct {
 	Detail        string `json:"detail,omitempty"`
 }
 
+func PayloadSchemaID(kind Kind, payload json.RawMessage) string {
+	if !payloadHasSchemaVersion(payload) {
+		return "message/" + string(kind) + "/legacy-v1"
+	}
+	switch kind {
+	case KindHandoff, KindQuestion, KindAnswer, KindBlocker, KindDecision, KindStatus:
+		return "message/" + string(kind) + "/v1"
+	default:
+		return "message/" + string(kind) + "/generic-v1"
+	}
+}
+
 func validateTypedPayload(kind Kind, payload json.RawMessage) error {
 	if !payloadHasSchemaVersion(payload) {
 		return nil // persisted schema-v1 messages predate typed payload contracts.
