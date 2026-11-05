@@ -53,12 +53,13 @@ func (w HandoffWorker) Execute(ctx context.Context, task scheduler.Task) (coordi
 		Type:          artifact.TypeHandoff,
 		Status:        artifact.StatusActive,
 		Summary:       handoffSummary(task, result),
-		Payload: map[string]any{
-			"task_id":       task.ID,
-			"agent_id":      task.AgentID,
-			"summary":       result.Summary,
-			"artifact_refs": result.ArtifactRefs,
-			"message_refs":  result.MessageRefs,
+		Payload: artifact.HandoffPayload{
+			SchemaVersion: artifact.LifecyclePayloadSchemaVersion,
+			TaskID:        task.ID,
+			AgentID:       task.AgentID,
+			Summary:       handoffPayloadSummary(result),
+			ArtifactRefs:  result.ArtifactRefs,
+			MessageRefs:   result.MessageRefs,
 		},
 		Related: result.ArtifactRefs,
 	}, now)
@@ -93,10 +94,11 @@ func (w HandoffWorker) Execute(ctx context.Context, task scheduler.Task) (coordi
 			Kind:         message.KindHandoff,
 			Priority:     message.PriorityNormal,
 			ArtifactRefs: []string{artifactValue.ID},
-			Payload: map[string]any{
-				"from_task": task.ID,
-				"to_task":   dependent.ID,
-				"summary":   artifactValue.Summary,
+			Payload: message.HandoffPayload{
+				SchemaVersion: message.PayloadSchemaVersion,
+				FromTask:      task.ID,
+				ToTask:        dependent.ID,
+				Summary:       artifactValue.Summary,
 			},
 			Hop: 1,
 		}, now)
@@ -131,6 +133,14 @@ func BuildDependents(tasks []scheduler.Task) map[string][]scheduler.Task {
 		})
 	}
 	return out
+}
+
+func handoffPayloadSummary(result coordinator.WorkResult) string {
+	summary := strings.TrimSpace(result.Summary)
+	if summary == "" {
+		return "Task completed without an additional summary."
+	}
+	return summary
 }
 
 func handoffSummary(task scheduler.Task, result coordinator.WorkResult) string {

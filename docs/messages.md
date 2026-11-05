@@ -222,3 +222,40 @@ The lock:
 - releases a lock only when the ownership token still matches.
 
 This prevents a crashed process from blocking a run's message bus indefinitely while avoiding deletion of a lock that has already been replaced by another owner.
+
+
+## Versioned coordination payloads
+
+The message envelope remains schema v1, while high-value coordination payloads can now carry their own versioned contracts.
+
+Typed message payloads are available for:
+
+- `handoff`;
+- `question`;
+- `answer`;
+- `blocker`;
+- `decision`;
+- `status`.
+
+Each current typed payload uses:
+
+~~~json
+{
+  "schema_version": 1
+}
+~~~
+
+When `schema_version` is present, validation is strict:
+
+- unknown fields fail closed;
+- unsupported versions fail closed;
+- required coordination fields are enforced;
+- payload sizes remain bounded by the message envelope.
+
+Stable identities are exposed by `message.PayloadSchemaID`, such as `message/handoff/v1`.
+
+Historical unversioned messages remain readable and identify as `message/<kind>/legacy-v1`.
+
+Automatic specialist handoffs now write only the typed `message/handoff/v1` shape.
+
+This keeps durable run replay backward-compatible while allowing future clients and agents to negotiate message payload evolution explicitly.

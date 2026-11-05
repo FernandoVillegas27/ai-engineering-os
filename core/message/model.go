@@ -170,6 +170,9 @@ func Validate(value Message) error {
 	if len(value.Payload) > 64*1024 {
 		return errors.New("message payload exceeds 64 KiB")
 	}
+	if err := validateTypedPayload(value.Kind, value.Payload); err != nil {
+		return err
+	}
 	if value.Hop < 0 || value.Hop > 8 {
 		return errors.New("message hop must be between 0 and 8")
 	}
