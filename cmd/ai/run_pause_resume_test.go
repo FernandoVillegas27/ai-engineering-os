@@ -263,17 +263,60 @@ func TestRunResumeContinuesSamePausedRunWithoutDuplicatingTasks(t *testing.T) {
 }
 
 func TestRunPauseAndResumeRejectMutatingRuns(t *testing.T) {
-	run := runstate.Run{
-		ID:     "run-mutating",
-		Status: runstate.StatusRunning,
-		WorkUnits: []runstate.WorkUnit{{
-			ID: "backend", AgentID: "backend-engineer", Mutating: true,
-		}},
-	}
-	for _, unit := range run.WorkUnits {
-		if !unit.Mutating {
-			t.Fatal("fixture must be mutating")
+	base := t.TempDir()
+	stateDir := base + "/runs"
+	now := time.Now().UTC()
+	makeRun := func(status runstate.Status) runstate.Run {
+		t.Helper()
+		run, err := runstate.New(runstate.NewRunRequest{
+			Task: "implement", Intent: "feature", ProjectID: "project", ProjectRoot: base,
+			Runtime: runstate.RuntimeSelection{Provider: "dry-run", ModelPolicy: "auto"},
+			WorkUnits: []execution.WorkUnit{{
+				ID: "backend", AgentID: "backend-engineer", Task: "implement",
+				Permissions: execution.PermissionEnvelope{
+					SourceCode: "read", Tests: "read", GitCommit: "deny",
+					GitPush: "deny", Secrets: "deny", Production: "deny",
+				},
+				Mutation: execution.MutationCapability{SourceCode: true, Tests: true},
+				Mode: execution.ModeReadOnly,
+			}},
+		}, now)
+		if err != nil {
+			t.Fatal(err)
 		}
+		if err := runstate.BindTaskGraph(&run, []scheduler.Task{{
+			ID: "backend", AgentID: "backend-engineer", Mutating: true, Status: scheduler.StatusQueued,
+		}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := runstate.Transition(&run, runstate.StatusRunning, now.Add(time.Second)); err != nil {
+			t.Fatal(err)
+		}
+		if status == runstate.StatusPaused {
+			if err := runstate.Transition(&run, runstate.StatusPaused, now.Add(2*time.Second)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return run
+	}
+	store, err := runstate.NewStore(stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	running := makeRun(runstate.StatusRunning)
+	if err := store.Save(running); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRunPause([]string{running.ID, "--state-dir", stateDir}); err == nil {
+		t.Fatal("expected mutating pause rejection")
+	}
+
+	paused := makeRun(runstate.StatusPaused)
+	if err := store.Save(paused); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRunResume([]string{paused.ID, "--state-dir", stateDir}); err == nil {
+		t.Fatal("expected mutating resume rejection")
 	}
 }
 
