@@ -130,6 +130,9 @@ func runCoordinatedMutation(
 	if err := runstate.BindTaskGraph(&run, participantTasks); err != nil {
 		return err
 	}
+	if err := runstate.BindMutationKinds(&run, participants); err != nil {
+		return err
+	}
 	if err := runStore.Save(run); err != nil {
 		return err
 	}
