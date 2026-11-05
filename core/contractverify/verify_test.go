@@ -68,8 +68,13 @@ func TestVerifyOpenAPIAddingOptionalParameterPasses(t *testing.T) {
 	writeFile(t, original, "contracts/openapi.yaml", openAPIBase)
 	writeFile(t, staged, "contracts/openapi.yaml", strings.Replace(
 		openAPIBase,
-		"responses:",
-		`parameters:
+		`      responses:`,
+		`      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
         - name: trace
           in: query
           required: false
