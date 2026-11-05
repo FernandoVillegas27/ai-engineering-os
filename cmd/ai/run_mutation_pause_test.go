@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -180,5 +183,70 @@ func TestReconstructMutationUnitsRejectsLegacyMutatingUnitWithoutKind(t *testing
 	}
 	if _, err := reconstructMutationUnits(run, "tests-only"); err == nil {
 		t.Fatal("expected missing mutation kind rejection")
+	}
+}
+
+
+func TestRunResumeRoutesMutatingPausedRunThroughCheckpointRestore(t *testing.T) {
+	base := t.TempDir()
+	stateDir := base + "/runs"
+	eventsDir := base + "/events"
+	checkpointDir := base + "/checkpoints"
+	now := time.Now().UTC().Add(-time.Minute)
+
+	run := mutationCheckpointFixtureRun(t)
+	run.ProjectRoot = base + "/project"
+	if err := os.MkdirAll(run.ProjectRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(run.ProjectRoot, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runstate.Transition(&run, runstate.StatusPaused, now.Add(2*time.Second)); err != nil {
+		// fixture timestamps may be newer than this local now; use current durable time.
+		at := time.Now().UTC()
+		if at.Before(run.UpdatedAt) {
+			at = run.UpdatedAt
+		}
+		if retryErr := runstate.Transition(&run, runstate.StatusPaused, at); retryErr != nil {
+			t.Fatal(retryErr)
+		}
+	}
+	runStore, err := runstate.NewStore(stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runStore.Save(run); err != nil {
+		t.Fatal(err)
+	}
+
+	eventStore, err := controlplane.NewEventStore(eventsDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	append := func(typ controlplane.EventType, data any) {
+		t.Helper()
+		event, err := controlplane.NewEvent(controlplane.NewEventRequest{
+			RunID: run.ID, Type: typ, Data: data,
+		}, time.Now().UTC())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := eventStore.Append(context.Background(), event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	append(controlplane.EventRunStarted, map[string]any{"source": "test"})
+	append(controlplane.EventCheckpointCreated, map[string]any{"phase": "final-integrated"})
+	append(controlplane.EventRunPaused, map[string]any{"phase": "final-integrated"})
+
+	err = runRunResume([]string{
+		run.ID,
+		"--state-dir", stateDir,
+		"--events-dir", eventsDir,
+		"--checkpoint-dir", checkpointDir,
+	})
+	if err == nil || !strings.Contains(err.Error(), "restore mutation checkpoint") {
+		t.Fatalf("err=%#v", err)
 	}
 }
