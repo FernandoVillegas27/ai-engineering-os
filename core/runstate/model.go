@@ -203,9 +203,9 @@ func Validate(run Run) error {
 		}
 		switch unit.MutationKind {
 		case "":
-			if unit.Mutating {
-				return fmt.Errorf("mutating work unit %s requires mutation_kind", unit.ID)
-			}
+			// Empty remains valid for backward-compatible durable records.
+			// Mutation-aware resume/retry must reject mutating units that have
+			// not been enriched with a concrete kind.
 		case "source", "tests-only":
 			if !unit.Mutating {
 				return fmt.Errorf("mutation_kind on non-mutating work unit %s", unit.ID)
