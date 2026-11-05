@@ -159,6 +159,11 @@ func runRunExecute(args []string) error {
 		return err
 	}
 
+	tasks, err := taskgraph.Build(units)
+	if err != nil {
+		return err
+	}
+
 	runtimeSelection := runstate.RuntimeSelection{
 		Provider: options.runtime,
 	}
@@ -176,12 +181,10 @@ func runRunExecute(args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := runStore.Save(run); err != nil {
+	if err := runstate.BindTaskGraph(&run, tasks); err != nil {
 		return err
 	}
-
-	tasks, err := taskgraph.Build(units)
-	if err != nil {
+	if err := runStore.Save(run); err != nil {
 		return err
 	}
 	unitByID := make(map[string]execution.WorkUnit, len(units))
