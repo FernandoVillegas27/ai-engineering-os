@@ -89,6 +89,7 @@ func runRunPause(args []string) error {
 			return err
 		}
 		if _, err := eventStore.Append(context.Background(), event); err != nil {
+			_ = controlStore.ClearPause(run.ID)
 			return err
 		}
 	}
