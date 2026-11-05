@@ -248,64 +248,64 @@ The repository already has the foundation for:
 
 ### Latest completed milestone
 
-PR #120 — integrated multi-agent engineering OS stack — merged to `master`.
+PR #123 — verified Control Plane snapshot projection — merged to `master`.
 
 Merge commit:
 
 ~~~text
-15cc2bed75a48f7aa63ecb920577d75bb61b4ca0
+7ca50f506a710097c7d8f1025ea19693e74c303a
 ~~~
 
 Validation:
 
-- integration PR #120: `go test ./...` passed;
-- push-to-`master` workflow on merge commit `15cc2bed...`: `go test ./...` passed;
-- the integration branch was a direct descendant of the prior master with no divergence;
-- obsolete stacked PRs #66–#119 were closed after integration;
-- PR #54 remains excluded because role-specific model pinning conflicts with provider-independent model policy.
+- PR #122 introduced immutable integrity-verified snapshots and passed CI;
+- PR #122 merge commit `05c576c30898fd148d1de964ae8d3271cbfadf3a` passed push-to-`master` CI;
+- PR #123 added snapshot+suffix projection and passed CI;
+- PR #123 merge commit `7ca50f506a710097c7d8f1025ea19693e74c303a` passed push-to-`master` CI.
 
-The merged system now includes:
+Snapshot functionality now on master:
 
-- production-active baseline-aware Quality;
-- structured Quality outcomes;
-- promotion dry-run and explicit approval-gated apply;
-- durable run/session state;
-- project memory integration;
-- immutable artifacts and typed persistent inter-agent messages;
-- dependency-aware DAG scheduler and concurrent coordinator;
-- automatic Researcher/Architect specialist handoffs;
-- bounded receiver inbox context;
-- live Control Plane JSON/SSE API;
-- isolated mutating workspaces and deterministic multi-workspace integration;
-- run-wide baseline-aware Quality Gate;
-- persisted promotion candidates;
-- tests-only QA after source integration;
-- durable cancellation;
-- targeted read-only retry;
-- graceful read-only pause/resume;
-- integrity-safe mutation checkpoints;
-- checkpoint-based mutation pause/resume;
-- deterministic Control Plane human controls;
-- durable execution lease/heartbeat;
-- explicit stale-run recovery;
-- recovery readiness exposed through the Control Plane.
+- immutable per-run/per-sequence snapshot records;
+- exact SHA-256 digest of historical event-file bytes;
+- snapshot-record digest and derived-state consistency validation;
+- fail-closed detection of missing/modified historical events;
+- full replay fallback when no snapshot exists;
+- snapshot+suffix projection using the same event-application semantics as full replay;
+- deep-cloned snapshot state before suffix application;
+- prefix digest verification before and after suffix projection;
+- explicit `ai run snapshot <run-id>`;
+- snapshot-assisted `GET /runs/<run-id>/state`;
+- snapshot-assisted run-control derivation;
+- event/audit endpoints remain backed by the original event log.
 
 ### Immediate next milestone
 
-Continue from the merged Control Plane/recovery foundation instead of redesigning earlier phases.
+**Integrity-preserving event-history compaction design and implementation.**
 
-Highest-value next work:
+The next phase may reduce the number of live historical event files only if historical evidence remains independently verifiable.
 
-1. integrity-preserving Control Plane snapshots/compaction for long event histories;
-2. richer typed schemas for remaining handoffs and lifecycle artifacts;
-3. broader cross-language structured Quality providers;
-4. contract/architecture verification beyond Go;
-5. memory lifecycle hardening and team-learning evidence;
-6. optional visual/IDE Control Plane client only after backend semantics remain stable under longer runs.
+Required boundary:
+
+1. never delete history merely because a snapshot exists;
+2. preserve the exact historical bytes or an independently verifiable archive representation;
+3. keep sequence continuity and run identity provable;
+4. keep `GET /events` and SSE audit semantics reconstructable;
+5. require archive verification before removing individual prefix files;
+6. fail closed if archive/snapshot/event digests disagree;
+7. keep compaction explicit and auditable, not an invisible side effect of reads.
+
+After that:
+
+- richer typed lifecycle artifact schemas;
+- cross-language Quality providers;
+- contract/architecture verification;
+- long-run recovery/observability soak tests;
+- memory/team-learning hardening;
+- optional visual/IDE Control Plane client.
 
 Do not hard-code a model per agent role.
 
-Do not weaken promotion, workspace-integrity, permission or stale-run recovery boundaries.
+Do not weaken promotion, workspace-integrity, permission, snapshot-integrity or stale-run recovery boundaries.
 
 ---
 
@@ -2214,13 +2214,17 @@ Still incomplete for the full product vision:
 
 Proceed in this order unless a new explicit architecture decision changes it:
 
-1. integrity-preserving Control Plane snapshots/compaction;
+1. integrity-preserving archived event-history compaction;
 2. dedicated typed schemas for remaining high-value lifecycle artifacts;
 3. cross-language Quality providers and normalized failure identity;
 4. contract/architecture verification;
 5. long-run recovery/observability soak tests;
 6. memory/team-learning hardening;
 7. optional visual Control Plane client.
+
+Snapshot creation and snapshot-assisted state projection are now implemented on master and are no longer pending work.
+
+Compaction must preserve independently verifiable historical evidence; a snapshot alone is not authorization to delete event files.
 
 Keep the current invariants:
 
@@ -2231,6 +2235,7 @@ Keep the current invariants:
 - no automatic promotion;
 - no automatic stale-lease takeover;
 - original repository protected by PreImage/integrity checks;
+- event history remains auditable across snapshots/archives;
 - independent Quality/review before promotion.
 
 # 20. Living roadmap rule
