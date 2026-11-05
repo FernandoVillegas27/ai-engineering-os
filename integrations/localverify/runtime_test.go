@@ -72,7 +72,7 @@ func TestPlanNodeVitest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(checks) != 1 || strings.Join(checks[0].args, " ") != "test -- --run" {
+	if len(checks) != 1 || strings.Join(checks[0].args, " ") != "test -- --run --reporter=json" || checks[0].parser != parserNodeJSON {
 		t.Fatalf("checks=%#v", checks)
 	}
 }
