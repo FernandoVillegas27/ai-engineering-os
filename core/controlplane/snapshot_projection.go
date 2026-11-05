@@ -2,12 +2,10 @@ package controlplane
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/fslock"
@@ -158,73 +156,17 @@ func projectFullLocked(
 }
 
 func loadEventsAfter(runDir string, after uint64) ([]Event, error) {
-	entries, err := os.ReadDir(runDir)
+	values, err := loadEvents(runDir)
 	if err != nil {
 		return nil, err
 	}
-	type candidate struct {
-		sequence uint64
-		name     string
+	suffix := make([]Event, 0, len(values))
+	for _, value := range values {
+		if value.Sequence > after {
+			suffix = append(suffix, value)
+		}
 	}
-	var suffix []candidate
-	for _, entry := range entries {
-		name := entry.Name()
-		if name == ".append.lock" || entry.IsDir() || filepath.Ext(name) != ".json" {
-			continue
-		}
-		sequence := filenameSequence(name)
-		if sequence == 0 {
-			return nil, fmt.Errorf("control-plane event filename has invalid sequence: %s", name)
-		}
-		if sequence <= after {
-			continue
-		}
-		suffix = append(suffix, candidate{sequence: sequence, name: name})
-	}
-	sort.Slice(suffix, func(i, j int) bool {
-		if suffix[i].sequence != suffix[j].sequence {
-			return suffix[i].sequence < suffix[j].sequence
-		}
-		return suffix[i].name < suffix[j].name
-	})
-
-	values := make([]Event, 0, len(suffix))
-	for i, candidate := range suffix {
-		expected := after + uint64(i) + 1
-		if candidate.sequence != expected {
-			return nil, fmt.Errorf(
-				"control-plane event suffix sequence gap or duplicate: got %d want %d",
-				candidate.sequence,
-				expected,
-			)
-		}
-		path := filepath.Join(runDir, candidate.name)
-		info, err := os.Lstat(path)
-		if err != nil {
-			return nil, err
-		}
-		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			return nil, fmt.Errorf("control-plane event entry is not regular: %s", candidate.name)
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
-		}
-		var value Event
-		decoder := json.NewDecoder(strings.NewReader(string(data)))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&value); err != nil {
-			return nil, fmt.Errorf("decode control-plane event %s: %w", candidate.name, err)
-		}
-		if err := ValidateEvent(value); err != nil {
-			return nil, fmt.Errorf("validate control-plane event %s: %w", candidate.name, err)
-		}
-		if value.Sequence != candidate.sequence {
-			return nil, fmt.Errorf("control-plane event filename sequence mismatch: %s", candidate.name)
-		}
-		values = append(values, value)
-	}
-	return values, nil
+	return suffix, nil
 }
 
 func cloneProjectionState(state State) State {
