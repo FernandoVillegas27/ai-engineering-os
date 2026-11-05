@@ -349,17 +349,15 @@ func (s *LeaseSession) heartbeatLoop(interval time.Duration) {
 		case <-s.ctx.Done():
 			return
 		case <-ticker.C:
-			lease, err := s.store.HeartbeatLease(
+			if _, err := s.store.HeartbeatLease(
 				s.lease.RunID,
 				s.lease.OwnerID,
 				time.Now().UTC(),
-			)
-			if err != nil {
+			); err != nil {
 				s.setErr(fmt.Errorf("renew run lease: %w", err))
 				s.cancel()
 				return
 			}
-			s.lease = lease
 		}
 	}
 }
