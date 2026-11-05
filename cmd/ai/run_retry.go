@@ -14,7 +14,6 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/message"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/modelpolicy"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
-	"github.com/FernandoVillegas27/ai-engineering-os/core/runcontrol"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/scheduler"
 )
@@ -171,16 +170,12 @@ func runRunRetry(args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx, stopWatcher, err := runcontrol.WithCancellationWatcher(
-		context.Background(),
-		controlStore,
-		child.ID,
-		250*time.Millisecond,
-	)
+	active, err := startActiveRunContext(context.Background(), controlStore, child.ID)
 	if err != nil {
 		return err
 	}
-	defer stopWatcher()
+	defer active.Stop()
+	ctx := active.Context()
 
 	graph, err := scheduler.New([]scheduler.Task{task})
 	if err != nil {
