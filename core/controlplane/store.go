@@ -185,7 +185,7 @@ func loadEvents(runDir string) ([]Event, error) {
 	}
 	for _, entry := range entries {
 		name := entry.Name()
-		if name == ".append.lock" || name == compactedHistoryFilename || entry.IsDir() || filepath.Ext(name) != ".json" {
+		if name == ".append.lock" || isCompactedHistoryFilename(name) || entry.IsDir() || filepath.Ext(name) != ".json" {
 			continue
 		}
 		info, err := entry.Info()
