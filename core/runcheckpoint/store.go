@@ -230,6 +230,49 @@ func (s *Store) Load(runID string, phase Phase) (Record, error) {
 	return record, nil
 }
 
+func (s *Store) Check(
+	ctx context.Context,
+	runID string,
+	phase Phase,
+) error {
+	record, err := s.Load(runID, phase)
+	if err != nil {
+		return err
+	}
+	preImageSnapshot, err := decodeSnapshot(record.PreImageEntries)
+	if err != nil {
+		return err
+	}
+	preImage := staging.NewPreImage(preImageSnapshot)
+	if err := verifyOriginalMatchesPreImage(ctx, record.OriginalRoot, preImage, s.policy, s.root); err != nil {
+		return err
+	}
+	phaseDir, err := s.phaseDir(runID, phase)
+	if err != nil {
+		return err
+	}
+	source := filepath.Join(phaseDir, "workspace")
+	info, err := os.Lstat(source)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return errors.New("checkpoint workspace must be a regular directory")
+	}
+	current, err := staging.SnapshotWorkspace(source, s.policy)
+	if err != nil {
+		return err
+	}
+	if current.Digest() != record.WorkspaceDigest {
+		return errors.New("checkpoint workspace digest mismatch")
+	}
+	actualChanges := staging.ChangesBetween(preImageSnapshot, current)
+	if err := equalChanges(actualChanges, record.Changes); err != nil {
+		return fmt.Errorf("checkpoint change-set mismatch: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) Restore(
 	ctx context.Context,
 	runID string,
