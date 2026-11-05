@@ -274,3 +274,30 @@ func TestRestoreRejectsParentInsideOriginalProject(t *testing.T) {
 		t.Fatalf("err=%#v", err)
 	}
 }
+
+
+func TestCheckValidatesCheckpointWithoutRestoring(t *testing.T) {
+	original, workspace, checkpointRoot := checkpointFixture(t)
+	store, err := NewStore(Config{Root: checkpointRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Save(
+		context.Background(), "run-check", PhaseFinalIntegrated,
+		original, workspace, time.Now().UTC(),
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Check(context.Background(), "run-check", PhaseFinalIntegrated); err != nil {
+		t.Fatal(err)
+	}
+	checkpointFile := filepath.Join(
+		checkpointRoot, "run-check", string(PhaseFinalIntegrated), "workspace", "main.go",
+	)
+	if err := os.WriteFile(checkpointFile, []byte("tampered\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Check(context.Background(), "run-check", PhaseFinalIntegrated); err == nil {
+		t.Fatal("expected tampered checkpoint readiness rejection")
+	}
+}
