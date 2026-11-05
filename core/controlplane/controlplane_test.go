@@ -461,3 +461,40 @@ func TestProjectorTracksFailedMutationPipelinePhase(t *testing.T) {
 		t.Fatalf("unexpected downstream phase state=%#v", state.Pipeline)
 	}
 }
+
+
+func TestProjectorRepresentsFailedTerminalRun(t *testing.T) {
+	now := time.Now().UTC()
+	started, err := NewEvent(NewEventRequest{
+		RunID: "run-failed", Type: EventRunStarted, Data: map[string]bool{"ok": true},
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failed, err := NewEvent(NewEventRequest{
+		RunID: "run-failed", Type: EventRunFailed, Data: map[string]bool{"ok": false},
+	}, now.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	started.Sequence = 1
+	failed.Sequence = 2
+	state, err := Project([]Event{started, failed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Status != RunFailed {
+		t.Fatalf("state=%#v", state)
+	}
+	late, err := NewEvent(NewEventRequest{
+		RunID: "run-failed", Type: EventTaskStarted, TaskID: "late", AgentID: "backend-engineer",
+		Data: map[string]bool{"ok": true},
+	}, now.Add(2*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	late.Sequence = 3
+	if _, err := Project([]Event{started, failed, late}); err == nil {
+		t.Fatal("expected post-failure task event rejection")
+	}
+}
