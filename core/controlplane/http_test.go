@@ -385,3 +385,99 @@ func TestHTTPRunControlsRequiresProvider(t *testing.T) {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
+
+
+func TestHTTPStateUsesVerifiedSnapshotAndSuffix(t *testing.T) {
+	store, runID := testHTTPStore(t)
+	snapshots, err := NewSnapshotStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Snapshot the initial three events.
+	if _, err := snapshots.Create(context.Background(), store, runID, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	// Add a suffix event after the snapshot.
+	value, err := NewEvent(NewEventRequest{
+		RunID: runID,
+		Type:  EventArtifactCreated,
+		Data:  map[string]bool{"ok": true},
+	}, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Append(context.Background(), value); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/runs/"+runID+"/state", nil)
+	rec := httptest.NewRecorder()
+	(HTTPServer{Store: store, Snapshots: snapshots}).Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var state State
+	if err := json.Unmarshal(rec.Body.Bytes(), &state); err != nil {
+		t.Fatal(err)
+	}
+	if state.LastSequence != 4 || state.ArtifactCount != 1 || state.Progress.Completed != 1 {
+		t.Fatalf("state=%#v", state)
+	}
+}
+
+func TestHTTPStateFailsClosedWhenSnapshotPrefixChanged(t *testing.T) {
+	eventRoot := t.TempDir()
+	store, err := NewEventStore(eventRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runID := "run-http-snapshot-corrupt"
+	for _, typ := range []EventType{EventRunStarted, EventTaskStarted} {
+		req := NewEventRequest{RunID: runID, Type: typ, Data: map[string]bool{"ok": true}}
+		if typ == EventTaskStarted {
+			req.TaskID = "task-1"
+			req.AgentID = "architect"
+		}
+		value, err := NewEvent(req, time.Now().UTC())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.Append(context.Background(), value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	snapshots, err := NewSnapshotStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := snapshots.Create(context.Background(), store, runID, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := os.ReadDir(filepath.Join(eventRoot, runID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "00000000000000000001-") {
+			data, err := os.ReadFile(filepath.Join(eventRoot, runID, entry.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(eventRoot, runID, entry.Name()), append(data, ' '), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			break
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/runs/"+runID+"/state", nil)
+	rec := httptest.NewRecorder()
+	(HTTPServer{Store: store, Snapshots: snapshots}).Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "prefix digest mismatch") {
+		t.Fatalf("body=%s", rec.Body.String())
+	}
+}
