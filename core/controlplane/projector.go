@@ -145,232 +145,239 @@ func Project(events []Event) (State, error) {
 			return State{}, fmt.Errorf("event %s appears after terminal run state", event.Type)
 		}
 
-		switch event.Type {
-		case EventRunStarted:
-			state.Status = RunRunning
-			var metadata struct {
-				ParentRunID   string `json:"parent_run_id"`
-				RetryOfTaskID string `json:"retry_of_task_id"`
-			}
-			if err := json.Unmarshal(event.Data, &metadata); err != nil {
-				return State{}, fmt.Errorf("decode run-start metadata: %w", err)
-			}
-			state.ParentRunID = metadata.ParentRunID
-			state.RetryOfTaskID = metadata.RetryOfTaskID
-		case EventRunPauseRequested:
-			state.PauseRequested = true
-		case EventRunResumed:
-			state.Status = RunRunning
-			state.PauseRequested = false
-		case EventRunPaused:
-			state.Status = RunPaused
-			state.PauseRequested = false
-		case EventRunRecovered:
-			var metadata struct {
-				Status          string            `json:"status"`
-				CheckpointPhase string            `json:"checkpoint_phase"`
-				Tasks           map[string]string `json:"tasks"`
-			}
-			if err := json.Unmarshal(event.Data, &metadata); err != nil {
-				return State{}, fmt.Errorf("decode run recovery metadata: %w", err)
-			}
-			for taskID, recoveredStatus := range metadata.Tasks {
-				task := state.task(taskID)
-				if task.ID == "" {
-					return State{}, fmt.Errorf("recovery references unknown task %s", taskID)
-				}
-				switch recoveredStatus {
-				case "queued":
-					task.Status = TaskQueued
-				case "completed":
-					task.Status = TaskCompleted
-				case "failed":
-					task.Status = TaskFailed
-				case "blocked":
-					task.Status = TaskBlocked
-				case "cancelled":
-					task.Status = TaskCancelled
-				default:
-					return State{}, fmt.Errorf(
-						"unsupported recovered task status for %s: %s",
-						taskID,
-						recoveredStatus,
-					)
-				}
-				task.LastSequence = event.Sequence
-				state.Tasks[taskID] = task
-			}
-			switch metadata.Status {
-			case "paused":
-				state.Status = RunPaused
-			case "failed":
-				state.Status = RunFailed
-			default:
-				return State{}, fmt.Errorf("unsupported recovered run status: %s", metadata.Status)
-			}
-			state.PauseRequested = false
-			state.CancelRequested = false
-			if metadata.CheckpointPhase != "" {
-				state.Pipeline.CheckpointPhase = metadata.CheckpointPhase
-				state.Pipeline.Proposal = "completed"
-				state.Pipeline.Stage = "completed"
-				state.Pipeline.Integration = "completed"
-				state.Quality = QualityState{}
-			}
-		case EventRunCompleted:
-			state.Status = RunCompleted
-		case EventRunFailed:
-			state.Status = RunFailed
-		case EventRunCancelRequested:
-			state.CancelRequested = true
-		case EventRunCancelled:
-			state.Status = RunCancelled
-			state.CancelRequested = false
-		case EventTaskCreated:
-			if _, exists := state.Tasks[event.TaskID]; exists {
-				return State{}, fmt.Errorf("task %s already exists", event.TaskID)
-			}
-			var metadata struct {
-				DependsOn []string `json:"depends_on"`
-				Mutating  bool     `json:"mutating"`
-				Scopes    []string `json:"scopes"`
-			}
-			if err := json.Unmarshal(event.Data, &metadata); err != nil {
-				return State{}, fmt.Errorf("decode task metadata for %s: %w", event.TaskID, err)
-			}
-			state.Tasks[event.TaskID] = TaskState{
-				ID:           event.TaskID,
-				AgentID:      event.AgentID,
-				Status:       TaskQueued,
-				Summary:      event.Summary,
-				DependsOn:    sortedStrings(metadata.DependsOn),
-				Mutating:     metadata.Mutating,
-				Scopes:       sortedStrings(metadata.Scopes),
-				LastSequence: event.Sequence,
-			}
-		case EventTaskAssigned:
-			task := state.task(event.TaskID)
-			task.AgentID = event.AgentID
-			task.Status = TaskAssigned
-			task.Summary = event.Summary
-			task.LastSequence = event.Sequence
-			state.Tasks[event.TaskID] = task
-		case EventTaskStarted:
-			task := state.task(event.TaskID)
-			if task.ID == "" {
-				task.ID = event.TaskID
-			}
-			task.AgentID = event.AgentID
-			task.Status = TaskRunning
-			task.Summary = event.Summary
-			task.LastSequence = event.Sequence
-			state.Tasks[event.TaskID] = task
-		case EventTaskWaiting:
-			task := state.task(event.TaskID)
-			task.ID = event.TaskID
-			if event.AgentID != "" {
-				task.AgentID = event.AgentID
-			}
-			task.Status = TaskWaiting
-			task.Summary = event.Summary
-			task.LastSequence = event.Sequence
-			state.Tasks[event.TaskID] = task
-		case EventTaskBlocked:
-			task := state.task(event.TaskID)
-			task.ID = event.TaskID
-			if event.AgentID != "" {
-				task.AgentID = event.AgentID
-			}
-			task.Status = TaskBlocked
-			task.Summary = event.Summary
-			task.LastSequence = event.Sequence
-			state.Tasks[event.TaskID] = task
-		case EventTaskCompleted:
-			task := state.task(event.TaskID)
-			task.ID = event.TaskID
-			task.AgentID = event.AgentID
-			task.Status = TaskCompleted
-			task.Summary = event.Summary
-			task.LastSequence = event.Sequence
-			state.Tasks[event.TaskID] = task
-		case EventTaskFailed:
-			task := state.task(event.TaskID)
-			task.ID = event.TaskID
-			task.AgentID = event.AgentID
-			task.Status = TaskFailed
-			task.Summary = event.Summary
-			task.LastSequence = event.Sequence
-			state.Tasks[event.TaskID] = task
-		case EventTaskCancelled:
-			task := state.task(event.TaskID)
-			task.ID = event.TaskID
-			task.Status = TaskCancelled
-			task.Summary = event.Summary
-			task.LastSequence = event.Sequence
-			state.Tasks[event.TaskID] = task
-		case EventProposalStarted:
-			state.Pipeline.Proposal = "running"
-		case EventProposalCompleted:
-			state.Pipeline.Proposal = "completed"
-		case EventProposalFailed:
-			state.Pipeline.Proposal = "failed"
-		case EventStageStarted:
-			state.Pipeline.Stage = "running"
-		case EventStageCompleted:
-			state.Pipeline.Stage = "completed"
-		case EventStageFailed:
-			state.Pipeline.Stage = "failed"
-		case EventIntegrationStarted:
-			state.Pipeline.Integration = "running"
-		case EventIntegrationCompleted:
-			state.Pipeline.Integration = "completed"
-		case EventIntegrationFailed:
-			state.Pipeline.Integration = "failed"
-		case EventAgentMessageSent:
-			state.MessageCount++
-		case EventArtifactCreated:
-			state.ArtifactCount++
-		case EventCheckpointCreated:
-			var metadata struct {
-				Phase string `json:"phase"`
-			}
-			if err := json.Unmarshal(event.Data, &metadata); err != nil {
-				return State{}, fmt.Errorf("decode checkpoint metadata: %w", err)
-			}
-			state.Pipeline.CheckpointPhase = metadata.Phase
-		case EventVerificationStarted:
-			state.Quality.Verification = "running"
-		case EventVerificationPassed:
-			state.Quality.Verification = "passed"
-		case EventVerificationFailed:
-			state.Quality.Verification = "failed"
-		case EventBaselineCompared:
-			state.Quality.BaselineComparisons++
-		case EventCorrectionStarted:
-			state.Quality.Corrections++
-		case EventCorrectionFailed:
-			state.Quality.Verification = "failed"
-		case EventReviewStarted:
-			state.Quality.Review = "running"
-		case EventReviewApproved:
-			state.Quality.Review = "approved"
-		case EventReviewRejected:
-			state.Quality.Review = "rejected"
-		case EventApprovalRequested:
-			state.PendingApprovals++
-		case EventApprovalGranted, EventApprovalRejected:
-			if state.PendingApprovals > 0 {
-				state.PendingApprovals--
-			}
-		case EventRuntimeSelected:
-			state.Runtime = event.Summary
-		case EventModelEscalated:
-			state.Model = event.Summary
+		if err := applyProjectionEvent(&state, event); err != nil {
+			return State{}, err
 		}
 		state.LastSequence = event.Sequence
 	}
 	state.recompute()
 	return state, nil
+}
+
+func applyProjectionEvent(state *State, event Event) error {
+	switch event.Type {
+	case EventRunStarted:
+		state.Status = RunRunning
+		var metadata struct {
+		ParentRunID   string `json:"parent_run_id"`
+		RetryOfTaskID string `json:"retry_of_task_id"`
+		}
+		if err := json.Unmarshal(event.Data, &metadata); err != nil {
+		return fmt.Errorf("decode run-start metadata: %w", err)
+		}
+		state.ParentRunID = metadata.ParentRunID
+		state.RetryOfTaskID = metadata.RetryOfTaskID
+	case EventRunPauseRequested:
+		state.PauseRequested = true
+	case EventRunResumed:
+		state.Status = RunRunning
+		state.PauseRequested = false
+	case EventRunPaused:
+		state.Status = RunPaused
+		state.PauseRequested = false
+	case EventRunRecovered:
+		var metadata struct {
+		Status          string            `json:"status"`
+		CheckpointPhase string            `json:"checkpoint_phase"`
+		Tasks           map[string]string `json:"tasks"`
+		}
+		if err := json.Unmarshal(event.Data, &metadata); err != nil {
+		return fmt.Errorf("decode run recovery metadata: %w", err)
+		}
+		for taskID, recoveredStatus := range metadata.Tasks {
+		task := state.task(taskID)
+		if task.ID == "" {
+			return fmt.Errorf("recovery references unknown task %s", taskID)
+		}
+		switch recoveredStatus {
+		case "queued":
+			task.Status = TaskQueued
+		case "completed":
+			task.Status = TaskCompleted
+		case "failed":
+			task.Status = TaskFailed
+		case "blocked":
+			task.Status = TaskBlocked
+		case "cancelled":
+			task.Status = TaskCancelled
+		default:
+			return fmt.Errorf(
+			"unsupported recovered task status for %s: %s",
+			taskID,
+			recoveredStatus,
+			)
+		}
+		task.LastSequence = event.Sequence
+		state.Tasks[taskID] = task
+		}
+		switch metadata.Status {
+		case "paused":
+		state.Status = RunPaused
+		case "failed":
+		state.Status = RunFailed
+		default:
+		return fmt.Errorf("unsupported recovered run status: %s", metadata.Status)
+		}
+		state.PauseRequested = false
+		state.CancelRequested = false
+		if metadata.CheckpointPhase != "" {
+		state.Pipeline.CheckpointPhase = metadata.CheckpointPhase
+		state.Pipeline.Proposal = "completed"
+		state.Pipeline.Stage = "completed"
+		state.Pipeline.Integration = "completed"
+		state.Quality = QualityState{}
+		}
+	case EventRunCompleted:
+		state.Status = RunCompleted
+	case EventRunFailed:
+		state.Status = RunFailed
+	case EventRunCancelRequested:
+		state.CancelRequested = true
+	case EventRunCancelled:
+		state.Status = RunCancelled
+		state.CancelRequested = false
+	case EventTaskCreated:
+		if _, exists := state.Tasks[event.TaskID]; exists {
+		return fmt.Errorf("task %s already exists", event.TaskID)
+		}
+		var metadata struct {
+		DependsOn []string `json:"depends_on"`
+		Mutating  bool     `json:"mutating"`
+		Scopes    []string `json:"scopes"`
+		}
+		if err := json.Unmarshal(event.Data, &metadata); err != nil {
+		return fmt.Errorf("decode task metadata for %s: %w", event.TaskID, err)
+		}
+		state.Tasks[event.TaskID] = TaskState{
+		ID:           event.TaskID,
+		AgentID:      event.AgentID,
+		Status:       TaskQueued,
+		Summary:      event.Summary,
+		DependsOn:    sortedStrings(metadata.DependsOn),
+		Mutating:     metadata.Mutating,
+		Scopes:       sortedStrings(metadata.Scopes),
+		LastSequence: event.Sequence,
+		}
+	case EventTaskAssigned:
+		task := state.task(event.TaskID)
+		task.AgentID = event.AgentID
+		task.Status = TaskAssigned
+		task.Summary = event.Summary
+		task.LastSequence = event.Sequence
+		state.Tasks[event.TaskID] = task
+	case EventTaskStarted:
+		task := state.task(event.TaskID)
+		if task.ID == "" {
+		task.ID = event.TaskID
+		}
+		task.AgentID = event.AgentID
+		task.Status = TaskRunning
+		task.Summary = event.Summary
+		task.LastSequence = event.Sequence
+		state.Tasks[event.TaskID] = task
+	case EventTaskWaiting:
+		task := state.task(event.TaskID)
+		task.ID = event.TaskID
+		if event.AgentID != "" {
+		task.AgentID = event.AgentID
+		}
+		task.Status = TaskWaiting
+		task.Summary = event.Summary
+		task.LastSequence = event.Sequence
+		state.Tasks[event.TaskID] = task
+	case EventTaskBlocked:
+		task := state.task(event.TaskID)
+		task.ID = event.TaskID
+		if event.AgentID != "" {
+		task.AgentID = event.AgentID
+		}
+		task.Status = TaskBlocked
+		task.Summary = event.Summary
+		task.LastSequence = event.Sequence
+		state.Tasks[event.TaskID] = task
+	case EventTaskCompleted:
+		task := state.task(event.TaskID)
+		task.ID = event.TaskID
+		task.AgentID = event.AgentID
+		task.Status = TaskCompleted
+		task.Summary = event.Summary
+		task.LastSequence = event.Sequence
+		state.Tasks[event.TaskID] = task
+	case EventTaskFailed:
+		task := state.task(event.TaskID)
+		task.ID = event.TaskID
+		task.AgentID = event.AgentID
+		task.Status = TaskFailed
+		task.Summary = event.Summary
+		task.LastSequence = event.Sequence
+		state.Tasks[event.TaskID] = task
+	case EventTaskCancelled:
+		task := state.task(event.TaskID)
+		task.ID = event.TaskID
+		task.Status = TaskCancelled
+		task.Summary = event.Summary
+		task.LastSequence = event.Sequence
+		state.Tasks[event.TaskID] = task
+	case EventProposalStarted:
+		state.Pipeline.Proposal = "running"
+	case EventProposalCompleted:
+		state.Pipeline.Proposal = "completed"
+	case EventProposalFailed:
+		state.Pipeline.Proposal = "failed"
+	case EventStageStarted:
+		state.Pipeline.Stage = "running"
+	case EventStageCompleted:
+		state.Pipeline.Stage = "completed"
+	case EventStageFailed:
+		state.Pipeline.Stage = "failed"
+	case EventIntegrationStarted:
+		state.Pipeline.Integration = "running"
+	case EventIntegrationCompleted:
+		state.Pipeline.Integration = "completed"
+	case EventIntegrationFailed:
+		state.Pipeline.Integration = "failed"
+	case EventAgentMessageSent:
+		state.MessageCount++
+	case EventArtifactCreated:
+		state.ArtifactCount++
+	case EventCheckpointCreated:
+		var metadata struct {
+		Phase string `json:"phase"`
+		}
+		if err := json.Unmarshal(event.Data, &metadata); err != nil {
+		return fmt.Errorf("decode checkpoint metadata: %w", err)
+		}
+		state.Pipeline.CheckpointPhase = metadata.Phase
+	case EventVerificationStarted:
+		state.Quality.Verification = "running"
+	case EventVerificationPassed:
+		state.Quality.Verification = "passed"
+	case EventVerificationFailed:
+		state.Quality.Verification = "failed"
+	case EventBaselineCompared:
+		state.Quality.BaselineComparisons++
+	case EventCorrectionStarted:
+		state.Quality.Corrections++
+	case EventCorrectionFailed:
+		state.Quality.Verification = "failed"
+	case EventReviewStarted:
+		state.Quality.Review = "running"
+	case EventReviewApproved:
+		state.Quality.Review = "approved"
+	case EventReviewRejected:
+		state.Quality.Review = "rejected"
+	case EventApprovalRequested:
+		state.PendingApprovals++
+	case EventApprovalGranted, EventApprovalRejected:
+		if state.PendingApprovals > 0 {
+		state.PendingApprovals--
+		}
+	case EventRuntimeSelected:
+		state.Runtime = event.Summary
+	case EventModelEscalated:
+		state.Model = event.Summary
+	}
+	return nil
 }
 
 func (s State) task(id string) TaskState {
