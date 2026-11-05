@@ -154,6 +154,44 @@ type HandoffPayload struct {
 	MessageRefs   []string `json:"message_refs,omitempty"`
 }
 
+func PayloadSchemaID(kind Type, payload json.RawMessage) string {
+	switch kind {
+	case TypeArchitectureDecision:
+		return "artifact/architecture-decision/v1"
+	case TypeAPIContract:
+		return "artifact/api-contract/v1"
+	case TypeVerificationReport:
+		return "artifact/verification-report/v1"
+	case TypeTaskBrief:
+		return "artifact/task-brief/v1"
+	case TypeResearchNote:
+		return "artifact/research-note/v1"
+	case TypeImplementationPlan:
+		return "artifact/implementation-plan/v1"
+	case TypeChangeProposal:
+		return "artifact/change-proposal/v1"
+	case TypeCodePatchReference:
+		return "artifact/code-patch-reference/v1"
+	case TypeTestPlan:
+		return "artifact/test-plan/v1"
+	case TypeReviewReport:
+		return "artifact/review-report/v1"
+	case TypeRiskAssessment:
+		return "artifact/risk-assessment/v1"
+	case TypeQuestion:
+		return "artifact/question/v1"
+	case TypeDecision:
+		return "artifact/decision/v1"
+	case TypeHandoff:
+		if payloadHasSchemaVersion(payload) {
+			return "artifact/handoff/v1"
+		}
+		return "artifact/handoff/legacy-v1"
+	default:
+		return "artifact/generic/v1"
+	}
+}
+
 func validateTypedPayload(kind Type, payload json.RawMessage) error {
 	switch kind {
 	case TypeArchitectureDecision:
