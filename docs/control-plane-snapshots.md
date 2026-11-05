@@ -217,3 +217,44 @@ This is intentional. Destructive compaction is permitted only after the archive 
 6. deletion is explicit, atomic enough to fail closed, and independently auditable.
 
 The archive is therefore the independent historical evidence required by the next compaction step; it is not itself authorization to delete history.
+
+
+## Verified destructive compaction
+
+Once a snapshot-matched immutable archive exists, the live prefix can be compacted explicitly:
+
+~~~text
+ai run compact <run-id>
+~~~
+
+The command requires the event, snapshot, and archive stores and performs the following sequence under the append lock:
+
+1. loads the latest snapshot;
+2. loads the archive for that exact snapshot boundary;
+3. verifies archive ↔ snapshot identity and digests;
+4. recomputes the live/previously-compacted historical prefix digest;
+5. installs an immutable, versioned `.compacted-history-<sequence>.json` record inside the run directory;
+6. verifies that the installed compacted history reproduces the snapshot prefix exactly;
+7. removes only individual event files whose bytes exactly match the archive;
+8. recomputes the prefix digest after cleanup;
+9. reconstructs the complete event history before returning success.
+
+The compacted history file is self-contained and carries the exact original raw event bytes. EventStore reads automatically reconstruct:
+
+~~~text
+compacted historical prefix + live suffix
+~~~
+
+This keeps normal event listing, append sequencing, snapshot verification, and snapshot-assisted projection valid after individual prefix files are removed.
+
+Compaction generations are immutable and versioned. A long run can therefore compact repeatedly as history grows:
+
+~~~text
+1..100    -> .compacted-history-00000000000000000100.json
+1..500    -> .compacted-history-00000000000000000500.json
+1..2000   -> .compacted-history-00000000000000002000.json
+~~~
+
+A newer generation must preserve every archived raw byte from the previous generation exactly. Older compacted generations remain evidence and are validated when history is loaded.
+
+If cleanup is interrupted after the compacted history record is installed, the operation is safely resumable: matching live prefix files may coexist temporarily with the archive and are verified byte-for-byte before being ignored or removed.
