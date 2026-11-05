@@ -498,3 +498,56 @@ func TestProjectorRepresentsFailedTerminalRun(t *testing.T) {
 		t.Fatal("expected post-failure task event rejection")
 	}
 }
+
+
+func TestProjectorTracksPauseRequestPauseAndResume(t *testing.T) {
+	now := time.Now().UTC()
+	types := []EventType{
+		EventRunStarted,
+		EventRunPauseRequested,
+		EventRunPaused,
+		EventRunResumed,
+		EventRunCompleted,
+	}
+	events := make([]Event, 0, len(types))
+	for i, typ := range types {
+		value, err := NewEvent(NewEventRequest{
+			RunID: "run-pause-resume",
+			Type:  typ,
+			Data:  map[string]bool{"ok": true},
+		}, now.Add(time.Duration(i)*time.Second))
+		if err != nil {
+			t.Fatal(err)
+		}
+		value.Sequence = uint64(i + 1)
+		events = append(events, value)
+	}
+	pending, err := Project(events[:2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pending.Status != RunRunning || !pending.PauseRequested {
+		t.Fatalf("pending=%#v", pending)
+	}
+	paused, err := Project(events[:3])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if paused.Status != RunPaused || paused.PauseRequested {
+		t.Fatalf("paused=%#v", paused)
+	}
+	resumed, err := Project(events[:4])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resumed.Status != RunRunning || resumed.PauseRequested {
+		t.Fatalf("resumed=%#v", resumed)
+	}
+	final, err := Project(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if final.Status != RunCompleted {
+		t.Fatalf("final=%#v", final)
+	}
+}
