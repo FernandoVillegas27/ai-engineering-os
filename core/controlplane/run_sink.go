@@ -13,8 +13,9 @@ import (
 type RunCoordinatorSink struct {
 	RunID string
 	Store *EventStore
-	Tasks []scheduler.Task
-	Now   func() time.Time
+	Tasks   []scheduler.Task
+	RunData map[string]any
+	Now     func() time.Time
 
 	mu          sync.Mutex
 	initialized bool
@@ -37,7 +38,7 @@ func (s *RunCoordinatorSink) Record(ctx context.Context, input coordinator.Event
 		if input.Type != coordinator.EventRunStarted {
 			return fmt.Errorf("control-plane run sink must initialize from run.started")
 		}
-		if err := s.append(ctx, EventRunStarted, "", "", input.Summary, input.ArtifactRefs, input.MessageRefs, now); err != nil {
+		if err := s.appendRunStarted(ctx, input, now); err != nil {
 			return err
 		}
 		for _, task := range s.Tasks {
@@ -72,6 +73,35 @@ func (s *RunCoordinatorSink) Record(ctx context.Context, input coordinator.Event
 		}
 	}
 	return nil
+}
+
+func (s *RunCoordinatorSink) appendRunStarted(
+	ctx context.Context,
+	input coordinator.Event,
+	now time.Time,
+) error {
+	data := map[string]any{
+		"source": "coordinator",
+	}
+	for key, value := range s.RunData {
+		if key == "source" {
+			continue
+		}
+		data[key] = value
+	}
+	event, err := NewEvent(NewEventRequest{
+		RunID:        s.RunID,
+		Type:         EventRunStarted,
+		Summary:      input.Summary,
+		ArtifactRefs: input.ArtifactRefs,
+		MessageRefs:  input.MessageRefs,
+		Data:         data,
+	}, now)
+	if err != nil {
+		return err
+	}
+	_, err = s.Store.Append(ctx, event)
+	return err
 }
 
 func (s *RunCoordinatorSink) append(
