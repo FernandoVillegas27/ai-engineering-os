@@ -551,3 +551,38 @@ func TestProjectorTracksPauseRequestPauseAndResume(t *testing.T) {
 		t.Fatalf("final=%#v", final)
 	}
 }
+
+
+func TestProjectorTracksLatestMutationCheckpointPhase(t *testing.T) {
+	now := time.Now().UTC()
+	started, err := NewEvent(NewEventRequest{
+		RunID: "run-checkpoint", Type: EventRunStarted, Data: map[string]any{"source": "test"},
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := NewEvent(NewEventRequest{
+		RunID: "run-checkpoint", Type: EventCheckpointCreated,
+		Data: map[string]any{"phase": "source-integrated"},
+	}, now.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	final, err := NewEvent(NewEventRequest{
+		RunID: "run-checkpoint", Type: EventCheckpointCreated,
+		Data: map[string]any{"phase": "final-integrated"},
+	}, now.Add(2*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	started.Sequence = 1
+	source.Sequence = 2
+	final.Sequence = 3
+	state, err := Project([]Event{started, source, final})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Pipeline.CheckpointPhase != "final-integrated" {
+		t.Fatalf("state=%#v", state)
+	}
+}
