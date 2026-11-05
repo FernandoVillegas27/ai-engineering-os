@@ -109,6 +109,7 @@ type State struct {
 	ArtifactCount    int                   `json:"artifact_count"`
 	PendingApprovals int                   `json:"pending_approvals"`
 	CancelRequested  bool                  `json:"cancel_requested"`
+	PauseRequested   bool                  `json:"pause_requested"`
 	Runtime          string                `json:"runtime,omitempty"`
 	Model            string                `json:"model,omitempty"`
 }
@@ -155,10 +156,14 @@ func Project(events []Event) (State, error) {
 			}
 			state.ParentRunID = metadata.ParentRunID
 			state.RetryOfTaskID = metadata.RetryOfTaskID
+		case EventRunPauseRequested:
+			state.PauseRequested = true
 		case EventRunResumed:
 			state.Status = RunRunning
+			state.PauseRequested = false
 		case EventRunPaused:
 			state.Status = RunPaused
+			state.PauseRequested = false
 		case EventRunCompleted:
 			state.Status = RunCompleted
 		case EventRunFailed:
