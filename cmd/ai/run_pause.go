@@ -39,7 +39,12 @@ func runRunPause(args []string) error {
 	for _, unit := range run.WorkUnits {
 		if unit.Mutating {
 			mutating = true
-			break
+			if unit.MutationKind == "" {
+				return fmt.Errorf(
+					"run %s contains legacy mutating work without mutation_kind; checkpoint pause is unsafe",
+					run.ID,
+				)
+			}
 		}
 	}
 
