@@ -502,7 +502,24 @@ func abortMutationRun(ctx context.Context, store *runstate.Store, eventStore *co
 		}
 		return nil
 	}
-	return failMutationRun(store, run)
+	if err := failMutationRun(store, run); err != nil {
+		return err
+	}
+	if eventStore != nil && run != nil {
+		event, err := controlplane.NewEvent(controlplane.NewEventRequest{
+			RunID:   run.ID,
+			Type:    controlplane.EventRunFailed,
+			Summary: "coordinated mutating run failed",
+			Data:    map[string]any{"source": "mutation-pipeline"},
+		}, time.Now().UTC())
+		if err != nil {
+			return err
+		}
+		if _, err := eventStore.Append(context.Background(), event); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func failMutationRun(store *runstate.Store, run *runstate.Run) error {
