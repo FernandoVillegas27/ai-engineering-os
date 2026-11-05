@@ -68,6 +68,10 @@ func runCoordinatedMutation(
 		return err
 	}
 	participants := mutationParticipants(preStagePlan.Units, mutatingUnits, testsOnlyUnits)
+	participantTasks, err := mutationParticipantTasks(fullTasks, participants)
+	if err != nil {
+		return err
+	}
 
 	runStore, err := openRunStore(options.stateDir)
 	if err != nil {
@@ -106,6 +110,9 @@ func runCoordinatedMutation(
 		WorkUnits: participants,
 	}, time.Now().UTC())
 	if err != nil {
+		return err
+	}
+	if err := runstate.BindTaskGraph(&run, participantTasks); err != nil {
 		return err
 	}
 	if err := runStore.Save(run); err != nil {
