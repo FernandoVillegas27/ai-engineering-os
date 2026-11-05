@@ -23,6 +23,7 @@ type HTTPServer struct {
 	Artifacts    *artifact.Store
 	Messages     *message.Bus
 	Promotions   *promotioncandidate.Store
+	Snapshots    *SnapshotStore
 	Controls     func(context.Context, string) (RunControls, error)
 	PollInterval time.Duration
 }
@@ -161,22 +162,32 @@ func (s HTTPServer) handleControls(w http.ResponseWriter, r *http.Request, runID
 	writeJSON(w, http.StatusOK, value)
 }
 
-func (s HTTPServer) handleState(w http.ResponseWriter, _ *http.Request, runID string) {
-	events, err := s.Store.List(runID)
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
-	}
-	if len(events) == 0 {
+func (s HTTPServer) handleState(w http.ResponseWriter, r *http.Request, runID string) {
+	state, _, err := s.projectState(r.Context(), runID)
+	if os.IsNotExist(err) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "run not found"})
 		return
 	}
-	state, err := Project(events)
 	if err != nil {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusOK, state)
+}
+
+func (s HTTPServer) projectState(ctx context.Context, runID string) (State, bool, error) {
+	if s.Snapshots != nil {
+		return s.Snapshots.ProjectVerified(ctx, s.Store, runID)
+	}
+	events, err := s.Store.List(runID)
+	if err != nil {
+		return State{}, false, err
+	}
+	if len(events) == 0 {
+		return State{}, false, os.ErrNotExist
+	}
+	state, err := Project(events)
+	return state, false, err
 }
 
 func (s HTTPServer) handleEvents(w http.ResponseWriter, _ *http.Request, runID string) {
