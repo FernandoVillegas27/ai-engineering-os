@@ -2,6 +2,7 @@ package collaboration
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -59,6 +60,19 @@ func TestHandoffWorkerPersistsArtifactAndMessagesToDependents(t *testing.T) {
 	if stored.ProducerAgent != "architect" || stored.Type != artifact.TypeHandoff {
 		t.Fatalf("artifact = %#v", stored)
 	}
+	var handoff artifact.HandoffPayload
+	if err := json.Unmarshal(stored.Payload, &handoff); err != nil {
+		t.Fatal(err)
+	}
+	if handoff.SchemaVersion != artifact.LifecyclePayloadSchemaVersion ||
+		handoff.TaskID != "architect" ||
+		handoff.AgentID != "architect" ||
+		handoff.Summary != "API boundaries defined" {
+		t.Fatalf("handoff payload = %#v", handoff)
+	}
+	if artifact.PayloadSchemaID(stored.Type, stored.Payload) != "artifact/handoff/v1" {
+		t.Fatalf("artifact schema = %s", artifact.PayloadSchemaID(stored.Type, stored.Payload))
+	}
 
 	messages, err := messageBus.List("run-1", true, time.Time{})
 	if err != nil {
@@ -75,6 +89,18 @@ func TestHandoffWorkerPersistsArtifactAndMessagesToDependents(t *testing.T) {
 		targets[msg.To.ID] = true
 		if len(msg.ArtifactRefs) != 1 || msg.ArtifactRefs[0] != stored.ID {
 			t.Fatalf("message refs = %#v", msg.ArtifactRefs)
+		}
+		var payload message.HandoffPayload
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload.SchemaVersion != message.PayloadSchemaVersion ||
+			payload.FromTask != "architect" ||
+			payload.Summary != stored.Summary {
+			t.Fatalf("message handoff payload = %#v", payload)
+		}
+		if message.PayloadSchemaID(msg.Kind, msg.Payload) != "message/handoff/v1" {
+			t.Fatalf("message schema = %s", message.PayloadSchemaID(msg.Kind, msg.Payload))
 		}
 	}
 	if !targets["backend-engineer"] || !targets["frontend-engineer"] {
