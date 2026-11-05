@@ -28,6 +28,7 @@ type runServeOptions struct {
 	promotionDir string
 	stateDir     string
 	checkpointDir      string
+	snapshotDir        string
 	controlDir         string
 	recoveryStaleAfter time.Duration
 }
@@ -84,6 +85,18 @@ func runRunServe(args []string) error {
 	if err != nil {
 		return err
 	}
+	snapshotRoot, err := resolveRunAuxDir(
+		options.snapshotDir,
+		"AI_ENGINEERING_OS_SNAPSHOT_DIR",
+		"control-plane-snapshots",
+	)
+	if err != nil {
+		return err
+	}
+	snapshotStore, err := controlplane.NewSnapshotStore(snapshotRoot)
+	if err != nil {
+		return err
+	}
 	controlStore, err := openRunControlStore(options.controlDir)
 	if err != nil {
 		return err
@@ -93,14 +106,7 @@ func runRunServe(args []string) error {
 		if err != nil {
 			return controlplane.RunControls{}, err
 		}
-		events, err := store.List(runID)
-		if err != nil {
-			return controlplane.RunControls{}, err
-		}
-		if len(events) == 0 {
-			return controlplane.RunControls{}, fmt.Errorf("run %s has no Control Plane event stream", runID)
-		}
-		state, err := controlplane.Project(events)
+		state, _, err := snapshotStore.ProjectVerified(ctx, store, runID)
 		if err != nil {
 			return controlplane.RunControls{}, err
 		}
@@ -139,6 +145,7 @@ func runRunServe(args []string) error {
 			Artifacts: artifactStore,
 			Messages:   messageBus,
 			Promotions: promotionStore,
+			Snapshots:  snapshotStore,
 			Controls:   controlsProvider,
 		}).Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
@@ -209,6 +216,12 @@ func parseRunServeArgs(args []string) (runServeOptions, error) {
 			}
 			i++
 			options.checkpointDir = args[i]
+		case "--snapshot-dir":
+			if i+1 >= len(args) {
+				return runServeOptions{}, fmt.Errorf("--snapshot-dir requiere una ruta")
+			}
+			i++
+			options.snapshotDir = args[i]
 		case "--control-dir":
 			if i+1 >= len(args) {
 				return runServeOptions{}, fmt.Errorf("--control-dir requiere una ruta")
@@ -226,7 +239,7 @@ func parseRunServeArgs(args []string) (runServeOptions, error) {
 			}
 			options.recoveryStaleAfter = value
 		case "-h", "--help":
-			return runServeOptions{}, fmt.Errorf("uso: ai run serve [--addr 127.0.0.1:8765] [--events-dir ruta] [--artifacts-dir ruta] [--messages-dir ruta] [--promotion-dir ruta] [--state-dir ruta] [--checkpoint-dir ruta] [--control-dir ruta] [--recovery-stale-after 30s]")
+			return runServeOptions{}, fmt.Errorf("uso: ai run serve [--addr 127.0.0.1:8765] [--events-dir ruta] [--artifacts-dir ruta] [--messages-dir ruta] [--promotion-dir ruta] [--state-dir ruta] [--checkpoint-dir ruta] [--snapshot-dir ruta] [--control-dir ruta] [--recovery-stale-after 30s]")
 		default:
 			return runServeOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
 		}
