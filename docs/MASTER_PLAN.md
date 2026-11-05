@@ -248,60 +248,59 @@ The repository already has the foundation for:
 
 ### Latest completed milestone
 
-PR #123 — verified Control Plane snapshot projection — merged to `master`.
+PR #126 — verified archive-backed Control Plane event compaction — merged to `master`.
 
 Merge commit:
 
 ~~~text
-7ca50f506a710097c7d8f1025ea19693e74c303a
+c9ebd899d80cd89c8012e0993fc753a2c655cab4
 ~~~
 
 Validation:
 
-- PR #122 introduced immutable integrity-verified snapshots and passed CI;
-- PR #122 merge commit `05c576c30898fd148d1de964ae8d3271cbfadf3a` passed push-to-`master` CI;
-- PR #123 added snapshot+suffix projection and passed CI;
-- PR #123 merge commit `7ca50f506a710097c7d8f1025ea19693e74c303a` passed push-to-`master` CI.
+- PR #125 introduced immutable independently verifiable event archives and passed CI;
+- PR #125 merged to `master` as `2ee786e2d0a603bff3bd123748a25552dae3ae5a`;
+- PR #126 introduced archive-backed reconstruction and explicit verified compaction and passed CI;
+- PR #126 merged to `master` as `c9ebd899d80cd89c8012e0993fc753a2c655cab4`.
 
-Snapshot functionality now on master:
+Long-history functionality now on master:
 
-- immutable per-run/per-sequence snapshot records;
-- exact SHA-256 digest of historical event-file bytes;
-- snapshot-record digest and derived-state consistency validation;
-- fail-closed detection of missing/modified historical events;
-- full replay fallback when no snapshot exists;
-- snapshot+suffix projection using the same event-application semantics as full replay;
-- deep-cloned snapshot state before suffix application;
-- prefix digest verification before and after suffix projection;
-- explicit `ai run snapshot <run-id>`;
-- snapshot-assisted `GET /runs/<run-id>/state`;
-- snapshot-assisted run-control derivation;
-- event/audit endpoints remain backed by the original event log.
+- immutable integrity-verified snapshots;
+- snapshot+suffix projection;
+- immutable external event archives containing exact original event bytes;
+- per-event SHA-256 and archive-record digests;
+- cryptographic archive ↔ snapshot linkage;
+- self-contained immutable versioned compacted-history generations inside each run;
+- explicit `ai run archive <run-id>`;
+- explicit `ai run compact <run-id>`;
+- archive-backed `EventStore.List` reconstruction;
+- append sequence continuity after individual historical files are removed;
+- snapshot verification and new snapshot/archive creation across prior compaction generations;
+- fail-closed detection of tampered compacted history;
+- resumable cleanup when compaction is interrupted after the archive is installed;
+- repeatable incremental compaction as long runs grow.
 
 ### Immediate next milestone
 
-**Integrity-preserving event-history compaction design and implementation.**
+**Dedicated typed schemas for remaining high-value lifecycle artifacts and handoffs.**
 
-The next phase may reduce the number of live historical event files only if historical evidence remains independently verifiable.
+Highest-value targets:
 
-Required boundary:
-
-1. never delete history merely because a snapshot exists;
-2. preserve the exact historical bytes or an independently verifiable archive representation;
-3. keep sequence continuity and run identity provable;
-4. keep `GET /events` and SSE audit semantics reconstructable;
-5. require archive verification before removing individual prefix files;
-6. fail closed if archive/snapshot/event digests disagree;
-7. keep compaction explicit and auditable, not an invisible side effect of reads.
+1. replace remaining loosely structured lifecycle payloads with explicit versioned schemas;
+2. validate producer/consumer compatibility at persistence boundaries;
+3. make artifact/message schema evolution backward-aware;
+4. expose schema identity in Control Plane/audit surfaces where useful;
+5. preserve provider independence and deterministic validation.
 
 After that:
 
-- richer typed lifecycle artifact schemas;
-- cross-language Quality providers;
+- cross-language Quality providers and normalized failure identity;
 - contract/architecture verification;
 - long-run recovery/observability soak tests;
 - memory/team-learning hardening;
-- optional visual/IDE Control Plane client.
+- external tool/MCP mesh hardening;
+- optional visual/IDE Control Plane client;
+- final production release/threat-model closure.
 
 Do not hard-code a model per agent role.
 
@@ -2202,9 +2201,10 @@ The project has crossed these earlier completion levels:
 
 Still incomplete for the full product vision:
 
-- event-history compaction/snapshots for very long runs;
+- dedicated typed schemas for remaining high-value lifecycle artifacts and handoffs;
 - broader language/toolchain Quality normalization;
 - stronger contract/architecture verification;
+- long-run recovery/observability soak coverage;
 - deeper durable memory lifecycle/team learning;
 - broader external tool/MCP mesh hardening;
 - polished human visual/IDE client;
@@ -2214,17 +2214,18 @@ Still incomplete for the full product vision:
 
 Proceed in this order unless a new explicit architecture decision changes it:
 
-1. integrity-preserving archived event-history compaction;
-2. dedicated typed schemas for remaining high-value lifecycle artifacts;
-3. cross-language Quality providers and normalized failure identity;
-4. contract/architecture verification;
-5. long-run recovery/observability soak tests;
-6. memory/team-learning hardening;
-7. optional visual Control Plane client.
+1. dedicated typed schemas for remaining high-value lifecycle artifacts;
+2. cross-language Quality providers and normalized failure identity;
+3. contract/architecture verification;
+4. long-run recovery/observability soak tests;
+5. memory/team-learning hardening;
+6. external tool/MCP mesh hardening;
+7. optional visual Control Plane client;
+8. final production release matrix and threat-model closure.
 
-Snapshot creation and snapshot-assisted state projection are now implemented on master and are no longer pending work.
+Snapshot creation, snapshot-assisted state projection, independently verifiable event archives, and explicit archive-backed event compaction are now implemented on master and are no longer pending work.
 
-Compaction must preserve independently verifiable historical evidence; a snapshot alone is not authorization to delete event files.
+Compaction remains explicit and fail-closed. Historical bytes remain reconstructable from immutable compacted-history generations after individual event files are removed.
 
 Keep the current invariants:
 
