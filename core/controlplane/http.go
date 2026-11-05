@@ -40,6 +40,8 @@ func (s HTTPServer) handleHealth(w http.ResponseWriter, _ *http.Request) {
 
 type RunSummary struct {
 	RunID            string    `json:"run_id"`
+	ParentRunID      string    `json:"parent_run_id,omitempty"`
+	RetryOfTaskID    string    `json:"retry_of_task_id,omitempty"`
 	Status           RunStatus `json:"status"`
 	LastSequence     uint64    `json:"last_sequence"`
 	Progress         Progress  `json:"progress"`
@@ -82,6 +84,8 @@ func (s HTTPServer) handleRunIndex(w http.ResponseWriter, r *http.Request) {
 		}
 		summaries = append(summaries, RunSummary{
 			RunID:            runID,
+			ParentRunID:      state.ParentRunID,
+			RetryOfTaskID:    state.RetryOfTaskID,
 			Status:           state.Status,
 			LastSequence:     state.LastSequence,
 			Progress:         state.Progress,
