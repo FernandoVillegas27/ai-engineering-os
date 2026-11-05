@@ -46,6 +46,8 @@ func runRun(args []string) error {
 		return runRunPromote(args[1:])
 	case "cancel":
 		return runRunCancel(args[1:])
+	case "retry":
+		return runRunRetry(args[1:])
 	default:
 		return fmt.Errorf("subcomando run desconocido: %s", args[0])
 	}
@@ -522,6 +524,7 @@ func printRunUsage() {
 	fmt.Println("  ai run promotion <run-id> [--promotion-dir ruta] [--json]")
 	fmt.Println("  ai run promote <run-id> --approve [--promotion-dir ruta] [--state-dir ruta] [--events-dir ruta] [--json]")
 	fmt.Println("  ai run cancel <run-id> [--control-dir ruta] [--state-dir ruta] [--events-dir ruta] [--json]")
+	fmt.Println("  ai run retry <run-id> <task-id> [--state-dir ruta] [--events-dir ruta] [--artifacts-dir ruta] [--messages-dir ruta] [--control-dir ruta] [--json]")
 	fmt.Println()
 	fmt.Println("Sin --state-dir usa AI_ENGINEERING_OS_STATE_DIR o el directorio de configuración del usuario.")
 	fmt.Println("Sin --events-dir usa AI_ENGINEERING_OS_EVENTS_DIR o el directorio de configuración del usuario.")
