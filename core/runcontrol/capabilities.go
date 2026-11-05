@@ -124,7 +124,9 @@ func resumableCheckpoint(value string) bool {
 func statusesAgree(runStatus runstate.Status, cpStatus controlplane.RunStatus) bool {
 	switch runStatus {
 	case runstate.StatusPlanned:
-		return cpStatus == controlplane.RunPlanned
+		// Control Plane event streams start at run.started, so a durable planned
+		// run has no equivalent projected state and cannot expose live controls.
+		return false
 	case runstate.StatusRunning:
 		return cpStatus == controlplane.RunRunning
 	case runstate.StatusPaused:
