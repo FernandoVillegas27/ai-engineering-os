@@ -346,3 +346,42 @@ func TestHTTPPromotionStatusReturns404WithoutCandidate(t *testing.T) {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
+
+
+func TestHTTPRunControlsUsesInjectedDeterministicProvider(t *testing.T) {
+	store, runID := testHTTPStore(t)
+	handler := (HTTPServer{
+		Store: store,
+		Controls: func(context.Context, string) (RunControls, error) {
+			return RunControls{
+				Consistent: true,
+				CanPause: true,
+				CanCancel: true,
+				PauseBoundary: "task-boundary",
+			}, nil
+		},
+	}).Handler()
+	req := httptest.NewRequest(http.MethodGet, "/runs/"+runID+"/controls", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var controls RunControls
+	if err := json.Unmarshal(rec.Body.Bytes(), &controls); err != nil {
+		t.Fatal(err)
+	}
+	if !controls.Consistent || !controls.CanPause || !controls.CanCancel || controls.PauseBoundary != "task-boundary" {
+		t.Fatalf("controls=%#v", controls)
+	}
+}
+
+func TestHTTPRunControlsRequiresProvider(t *testing.T) {
+	store, runID := testHTTPStore(t)
+	req := httptest.NewRequest(http.MethodGet, "/runs/"+runID+"/controls", nil)
+	rec := httptest.NewRecorder()
+	(HTTPServer{Store: store}).Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
