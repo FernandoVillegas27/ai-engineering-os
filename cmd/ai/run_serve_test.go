@@ -88,3 +88,20 @@ func TestParseRunServeArgsControlStateOverrides(t *testing.T) {
 		t.Fatalf("options=%#v", options)
 	}
 }
+
+
+func TestParseRunServeArgsRecoveryControls(t *testing.T) {
+	options, err := parseRunServeArgs([]string{
+		"--control-dir", "./control",
+		"--recovery-stale-after", "45s",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.controlDir != "./control" || options.recoveryStaleAfter != 45*time.Second {
+		t.Fatalf("options=%#v", options)
+	}
+	if _, err := parseRunServeArgs([]string{"--recovery-stale-after", "1s"}); err == nil {
+		t.Fatal("expected too-small recovery stale threshold rejection")
+	}
+}
