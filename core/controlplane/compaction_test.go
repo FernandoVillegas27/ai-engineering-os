@@ -64,7 +64,7 @@ func TestCompactEventHistoryReconstructsHistoryAndAppendSequence(t *testing.T) {
 	}
 
 	runDir := filepath.Join(eventRoot, runID)
-	if _, err := os.Stat(filepath.Join(runDir, compactedHistoryFilename)); err != nil {
+	if _, err := os.Stat(filepath.Join(runDir, compactedHistoryFilename(result.ThroughSequence))); err != nil {
 		t.Fatal(err)
 	}
 	for _, entry := range archive.Entries {
@@ -113,7 +113,7 @@ func TestCompactedHistoryRejectsTamperedMarker(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	path := filepath.Join(eventRoot, runID, compactedHistoryFilename)
+	path := filepath.Join(eventRoot, runID, compactedHistoryFilename(1))
 	data, err := os.ReadFile(path)
 	if err != nil { t.Fatal(err) }
 	if len(data) < 32 { t.Fatal("unexpected compacted history length") }
