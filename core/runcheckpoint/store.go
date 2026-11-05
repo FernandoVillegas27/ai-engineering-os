@@ -104,6 +104,9 @@ func (s *Store) Save(
 	if info, err := os.Lstat(originalRoot); err != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 		return Record{}, errors.New("original root must be a regular directory")
 	}
+	if pathWithin(originalRoot, s.root) {
+		return Record{}, errors.New("run checkpoint store must be outside original project")
+	}
 
 	workspaceSnapshot, err := staging.SnapshotWorkspace(workspace.Root, s.policy)
 	if err != nil {
@@ -175,7 +178,7 @@ func (s *Store) Save(
 		return Record{}, err
 	}
 	manifest = append(manifest, '\n')
-	if err := os.WriteFile(filepath.Join(temp, "manifest.json"), manifest, 0o600); err != nil {
+	if err := writeSyncedFile(filepath.Join(temp, "manifest.json"), manifest, 0o600); err != nil {
 		return Record{}, fmt.Errorf("write checkpoint manifest: %w", err)
 	}
 	if err := os.Rename(temp, target); err != nil {
@@ -278,6 +281,9 @@ func (s *Store) Restore(
 	info, err = os.Lstat(parent)
 	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 		return integration.IntegratedWorkspace{}, errors.New("checkpoint restore parent must be a regular directory")
+	}
+	if pathWithin(record.OriginalRoot, parent) {
+		return integration.IntegratedWorkspace{}, errors.New("checkpoint restore parent must be outside original project")
 	}
 
 	dir, err := os.MkdirTemp(parent, ".ai-engineering-os-integration-resume-*")
@@ -484,4 +490,38 @@ func safeToken(value string) bool {
 		}
 	}
 	return true
+}
+
+
+func writeSyncedFile(path string, data []byte, mode os.FileMode) error {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode)
+	if err != nil {
+		return err
+	}
+	cleanup := true
+	defer func() {
+		_ = file.Close()
+		if cleanup {
+			_ = os.Remove(path)
+		}
+	}()
+	if _, err := file.Write(data); err != nil {
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	cleanup = false
+	return nil
+}
+
+func pathWithin(root, candidate string) bool {
+	rel, err := filepath.Rel(root, candidate)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
