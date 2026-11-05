@@ -34,6 +34,7 @@ const (
 	EventTaskCancelled         EventType = "task.cancelled"
 	EventAgentMessageSent      EventType = "agent.message.sent"
 	EventArtifactCreated       EventType = "artifact.created"
+	EventCheckpointCreated     EventType = "checkpoint.created"
 	EventProposalStarted       EventType = "proposal.started"
 	EventProposalCompleted     EventType = "proposal.completed"
 	EventProposalFailed        EventType = "proposal.failed"
@@ -189,7 +190,7 @@ func validEventType(value EventType) bool {
 	case EventRunStarted, EventRunPauseRequested, EventRunPaused, EventRunResumed, EventRunCompleted, EventRunFailed, EventRunCancelled, EventRunCancelRequested,
 		EventTaskCreated, EventTaskAssigned, EventTaskStarted, EventTaskWaiting, EventTaskBlocked,
 		EventTaskCompleted, EventTaskFailed, EventTaskCancelled, EventAgentMessageSent,
-		EventArtifactCreated, EventProposalStarted, EventProposalCompleted, EventProposalFailed,
+		EventArtifactCreated, EventCheckpointCreated, EventProposalStarted, EventProposalCompleted, EventProposalFailed,
 		EventStageStarted, EventStageCompleted, EventStageFailed,
 		EventIntegrationStarted, EventIntegrationCompleted, EventIntegrationFailed,
 		EventVerificationStarted, EventVerificationPassed, EventVerificationFailed,
