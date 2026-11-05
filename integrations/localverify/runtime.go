@@ -20,12 +20,20 @@ type Runtime struct {
 	Timeout time.Duration
 }
 
+type parserKind int
+
+const (
+	parserNone parserKind = iota
+	parserGoJSON
+	parserJava
+	parserNodeJSON
+)
+
 type plannedCheck struct {
 	name    string
 	command string
 	args    []string
-	// goJSON marks checks whose stdout is a go test -json event stream.
-	goJSON bool
+	parser  parserKind
 }
 
 func New() Runtime {
@@ -101,10 +109,22 @@ func (r Runtime) Verify(ctx context.Context, workspace string) (verification.Rep
 		cancel()
 
 		// Parse the complete stream before truncating anything for presentation.
-		var parsed goTestParse
-		if planned.goJSON {
-			parsed = parseGoTestJSONWithStderr(stdout, stderr, runErr != nil, root, cacheRootFromEnv(env))
+		var failures []verification.Failure
+		parseConfidence := verification.ParseNotAttempted
+		switch planned.parser {
+		case parserGoJSON:
+			parsed := parseGoTestJSONWithStderr(stdout, stderr, runErr != nil, root, cacheRootFromEnv(env))
 			stdout = parsed.Rendered
+			failures = parsed.Failures
+			parseConfidence = parsed.Confidence
+		case parserJava:
+			parsed := parseJavaTestOutput(stdout, stderr, runErr != nil, root, cacheRootFromEnv(env))
+			failures = parsed.Failures
+			parseConfidence = parsed.Confidence
+		case parserNodeJSON:
+			parsed := parseNodeTestJSON(stdout, stderr, runErr != nil, root, cacheRootFromEnv(env))
+			failures = parsed.Failures
+			parseConfidence = parsed.Confidence
 		}
 
 		check := verification.Check{
@@ -115,9 +135,9 @@ func (r Runtime) Verify(ctx context.Context, workspace string) (verification.Rep
 			Duration: duration,
 			Passed:   runErr == nil,
 		}
-		if planned.goJSON {
-			check.Failures = parsed.Failures
-			check.FailureParse = parsed.Confidence
+		if planned.parser != parserNone {
+			check.Failures = failures
+			check.FailureParse = parseConfidence
 		}
 		if runErr != nil {
 			check.ExitCode = 1
@@ -144,7 +164,7 @@ func planChecks(root string) ([]plannedCheck, error) {
 			name:    "go-test",
 			command: "go",
 			args:    []string{"test", "-json", "./..."},
-			goJSON:  true,
+			parser:  parserGoJSON,
 		})
 	}
 
@@ -153,12 +173,14 @@ func planChecks(root string) ([]plannedCheck, error) {
 			name:    "maven-test",
 			command: "mvn",
 			args:    []string{"-q", "test"},
+			parser:  parserJava,
 		})
 	} else if fileExists(filepath.Join(root, "build.gradle")) || fileExists(filepath.Join(root, "build.gradle.kts")) {
 		checks = append(checks, plannedCheck{
 			name:    "gradle-test",
 			command: "gradle",
-			args:    []string{"test", "--no-daemon"},
+			args:    []string{"test", "--no-daemon", "--console=plain"},
+			parser:  parserJava,
 		})
 	}
 
@@ -201,16 +223,22 @@ func nodeTestCheck(packagePath string) (*plannedCheck, error) {
 	}
 
 	args := []string{"test"}
+	parser := parserNone
 	lower := strings.ToLower(script)
 	switch {
 	case strings.Contains(lower, "vitest"):
-		args = append(args, "--", "--run")
+		args = append(args, "--", "--run", "--reporter=json")
+		parser = parserNodeJSON
 	case strings.Contains(lower, "jest"):
-		args = append(args, "--", "--runInBand")
+		args = append(args, "--", "--runInBand", "--json")
+		parser = parserNodeJSON
 	case strings.Contains(lower, "ng test"):
+		// Angular test runners vary by project generation (Karma/Vitest/etc.).
+		// Keep deterministic execution but do not claim structured completeness
+		// until the configured builder can be identified safely.
 		args = append(args, "--", "--watch=false")
 	}
-	return &plannedCheck{name: "npm-test", command: "npm", args: args}, nil
+	return &plannedCheck{name: "npm-test", command: "npm", args: args, parser: parser}, nil
 }
 
 func safeVerificationEnvironment() []string {
