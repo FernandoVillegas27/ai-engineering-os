@@ -183,3 +183,43 @@ func mutationParticipants(groups ...[]execution.WorkUnit) []execution.WorkUnit {
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
 }
+
+
+func mutationParticipantTasks(
+	full []scheduler.Task,
+	participants []execution.WorkUnit,
+) ([]scheduler.Task, error) {
+	ids := map[string]bool{}
+	for _, unit := range participants {
+		if unit.ID == "" {
+			return nil, fmt.Errorf("mutation participant id is required")
+		}
+		ids[unit.ID] = true
+	}
+	var out []scheduler.Task
+	for _, task := range full {
+		if !ids[task.ID] {
+			continue
+		}
+		for _, dep := range task.DependsOn {
+			if !ids[dep] {
+				return nil, fmt.Errorf(
+					"mutation participant %s depends on excluded task %s",
+					task.ID,
+					dep,
+				)
+			}
+		}
+		task.Status = scheduler.StatusQueued
+		out = append(out, task)
+	}
+	if len(out) != len(ids) {
+		return nil, fmt.Errorf(
+			"mutation participant graph mismatch: tasks=%d participants=%d",
+			len(out),
+			len(ids),
+		)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
