@@ -154,3 +154,74 @@ func TestRunCoordinatorSinkProjectsTaskDependenciesAndScopes(t *testing.T) {
 		t.Fatalf("edges = %#v", state.Edges)
 	}
 }
+
+
+func TestRunCoordinatorSinkResumeDoesNotRecreateTasks(t *testing.T) {
+	store, err := NewEventStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	started, err := NewEvent(NewEventRequest{
+		RunID: "run-resume", Type: EventRunStarted, Data: map[string]bool{"ok": true},
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Append(context.Background(), started); err != nil {
+		t.Fatal(err)
+	}
+	created, err := NewEvent(NewEventRequest{
+		RunID: "run-resume", Type: EventTaskCreated, TaskID: "task-1",
+		Data: map[string]any{"depends_on": []string{}, "mutating": false, "scopes": []string{}},
+	}, now.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Append(context.Background(), created); err != nil {
+		t.Fatal(err)
+	}
+	paused, err := NewEvent(NewEventRequest{
+		RunID: "run-resume", Type: EventRunPaused, Data: map[string]bool{"ok": true},
+	}, now.Add(2*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Append(context.Background(), paused); err != nil {
+		t.Fatal(err)
+	}
+
+	sink := &RunCoordinatorSink{
+		RunID: "run-resume",
+		Store:  store,
+		Tasks:  []scheduler.Task{{ID: "task-1", AgentID: "researcher"}},
+		Resume: true,
+	}
+	if err := sink.Record(context.Background(), coordinator.Event{Type: coordinator.EventRunResumed}); err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.Record(context.Background(), coordinator.Event{
+		Type: coordinator.EventTaskCompleted, TaskID: "task-1", AgentID: "researcher",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.Record(context.Background(), coordinator.Event{Type: coordinator.EventRunCompleted}); err != nil {
+		t.Fatal(err)
+	}
+	events, err := store.List("run-resume")
+	if err != nil {
+		t.Fatal(err)
+	}
+	createdCount := 0
+	for _, event := range events {
+		if event.Type == EventTaskCreated {
+			createdCount++
+		}
+	}
+	if createdCount != 1 {
+		t.Fatalf("task.created count=%d events=%#v", createdCount, events)
+	}
+	if events[3].Type != EventRunResumed {
+		t.Fatalf("events=%#v", events)
+	}
+}
