@@ -2,6 +2,7 @@ package runcontrol
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -166,11 +167,7 @@ func TestLeaseSessionHeartbeatsAndReleasesOnStop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(180 * time.Millisecond)
-	second, err := store.LoadLease("run-session")
-	if err != nil {
-		t.Fatal(err)
-	}
+	second := waitForHeartbeatAdvance(t, store, "run-session", first.HeartbeatAt, 2*time.Second)
 	if !second.HeartbeatAt.After(first.HeartbeatAt) {
 		t.Fatalf("heartbeat did not advance: first=%#v second=%#v", first, second)
 	}
@@ -295,5 +292,65 @@ func TestOldLeaseOwnerCannotHeartbeatAfterStaleClaim(t *testing.T) {
 	defer store.ReleaseLease("run-fenced", recovery.OwnerID)
 	if _, err := store.HeartbeatLease("run-fenced", old.OwnerID, now.Add(time.Second)); err == nil {
 		t.Fatal("expected old owner heartbeat rejection after recovery claim")
+	}
+}
+
+func waitForHeartbeatAdvance(
+	t *testing.T,
+	store *Store,
+	runID string,
+	after time.Time,
+	timeout time.Duration,
+) Lease {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		lease, err := store.LoadLease(runID)
+		if err == nil && lease.HeartbeatAt.After(after) {
+			return lease
+		}
+		if err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	lease, err := store.LoadLease(runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Fatalf("heartbeat did not advance within %s: %#v", timeout, lease)
+	return Lease{}
+}
+
+func TestLeaseSessionRepeatedHeartbeatStopSoak(t *testing.T) {
+	if testing.Short() {
+		t.Skip("soak-style lease lifecycle test")
+	}
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 8; i++ {
+		runID := fmt.Sprintf("run-session-soak-%d", i)
+		session, err := StartLeaseSession(context.Background(), store, runID, 100*time.Millisecond)
+		if err != nil {
+			t.Fatal(err)
+		}
+		first, err := store.LoadLease(runID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		second := waitForHeartbeatAdvance(t, store, runID, first.HeartbeatAt, 2*time.Second)
+		third := waitForHeartbeatAdvance(t, store, runID, second.HeartbeatAt, 2*time.Second)
+		if !third.HeartbeatAt.After(second.HeartbeatAt) {
+			t.Fatalf("heartbeat stopped advancing: second=%#v third=%#v", second, third)
+		}
+		if err := session.Stop(); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.LoadLease(runID); !os.IsNotExist(err) {
+			t.Fatalf("lease %s not released: %v", runID, err)
+		}
 	}
 }
