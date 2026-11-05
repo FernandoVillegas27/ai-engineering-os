@@ -57,6 +57,8 @@ func coordinatorEventType(value coordinator.EventType) (EventType, error) {
 		return EventTaskFailed, nil
 	case coordinator.EventRunCompleted:
 		return EventRunCompleted, nil
+	case coordinator.EventRunFailed:
+		return EventRunFailed, nil
 	case coordinator.EventRunCancelled:
 		return EventRunCancelled, nil
 	default:
