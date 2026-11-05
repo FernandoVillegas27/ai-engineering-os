@@ -249,14 +249,21 @@ func runRunExecute(args []string) error {
 	defer stopWatcher()
 
 	result, runErr := (coordinator.Coordinator{
-		Config: coordinator.Config{MaxConcurrency: options.maxConcurrency},
+		Config: coordinator.Config{
+			MaxConcurrency: options.maxConcurrency,
+			PauseRequested: func() (bool, error) {
+				return controlStore.PauseRequested(run.ID)
+			},
+		},
 		Workers: workers,
 		Events:  sink,
 	}).Run(ctx, graph)
 
 	syncRunWorkUnits(&run, graph.Snapshot())
 	finalStatus := runstate.StatusCompleted
-	if result.Cancelled {
+	if result.Paused {
+		finalStatus = runstate.StatusPaused
+	} else if result.Cancelled {
 		finalStatus = runstate.StatusCancelled
 	} else if runErr != nil || result.Progress.Failed > 0 || result.Progress.Blocked > 0 || result.Progress.Cancelled > 0 {
 		finalStatus = runstate.StatusFailed
@@ -299,6 +306,9 @@ func runRunExecute(args []string) error {
 
 	if runErr != nil {
 		return runErr
+	}
+	if finalStatus == runstate.StatusPaused {
+		return nil
 	}
 	if finalStatus != runstate.StatusCompleted {
 		return fmt.Errorf("coordinated run finished with status %s", finalStatus)
