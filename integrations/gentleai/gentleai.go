@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/projection"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/toolhealth"
 )
 
 const (
@@ -33,14 +35,16 @@ func (OSRunner) Run(ctx context.Context, name string, args ...string) (string, e
 }
 
 type Client struct {
-	Binary string
-	Runner Runner
+	Binary       string
+	Runner       Runner
+	ProbeTimeout time.Duration
 }
 
 func New() Client {
 	return Client{
-		Binary: "gentle-ai",
-		Runner: OSRunner{},
+		Binary:       "gentle-ai",
+		Runner:       OSRunner{},
+		ProbeTimeout: toolhealth.DefaultProbeTimeout,
 	}
 }
 
@@ -48,7 +52,7 @@ func (c Client) ID() string {
 	return ProviderID
 }
 
-func (c Client) Status(ctx context.Context) (projection.Status, error) {
+func (c Client) Health(ctx context.Context) toolhealth.Status {
 	binary := c.Binary
 	if binary == "" {
 		binary = "gentle-ai"
@@ -57,45 +61,69 @@ func (c Client) Status(ctx context.Context) (projection.Status, error) {
 	if runner == nil {
 		runner = OSRunner{}
 	}
-
 	path, err := runner.LookPath(binary)
 	if err != nil {
+		failure := toolhealth.Classify(err, "")
 		if errors.Is(err, exec.ErrNotFound) {
-			return projection.Status{
-				Provider:  ProviderID,
-				Available: false,
-				Healthy:   false,
-				Details:   "gentle-ai binary not found in PATH",
-			}, nil
+			failure.Kind = toolhealth.FailureUnavailable
+			failure.Detail = "gentle-ai binary not found in PATH"
 		}
-		return projection.Status{}, fmt.Errorf("locate Gentle-AI binary: %w", err)
+		return toolhealth.Status{
+			Provider: ProviderID, Available: false, Healthy: false,
+			Details: failure.Detail, Failure: failure,
+		}
 	}
-
-	versionOutput, versionErr := runner.Run(ctx, path, "version")
+	timeout := c.ProbeTimeout
+	if timeout <= 0 {
+		timeout = toolhealth.DefaultProbeTimeout
+	}
+	versionOutput, versionFailure, versionDuration := toolhealth.Run(ctx, timeout, func(runCtx context.Context) (string, error) {
+		return runner.Run(runCtx, path, "version")
+	})
 	version := strings.TrimSpace(versionOutput)
-	if versionErr != nil {
-		return projection.Status{
-			Provider:  ProviderID,
-			Available: true,
-			Healthy:   false,
-			Details:   fmt.Sprintf("gentle-ai version probe failed: %v", versionErr),
-		}, nil
+	if versionFailure.Kind != toolhealth.FailureNone {
+		return toolhealth.Status{
+			Provider: ProviderID, Available: true, Healthy: false,
+			Details: versionFailure.Detail, Failure: versionFailure, Duration: versionDuration,
+		}
 	}
-
-	doctorOutput, doctorErr := runner.Run(ctx, path, "doctor")
+	doctorOutput, doctorFailure, doctorDuration := toolhealth.Run(ctx, timeout, func(runCtx context.Context) (string, error) {
+		return runner.Run(runCtx, path, "doctor")
+	})
 	details := strings.TrimSpace(doctorOutput)
-	if doctorErr != nil && details == "" {
-		details = doctorErr.Error()
+	if doctorFailure.Kind != toolhealth.FailureNone {
+		if details == "" {
+			details = doctorFailure.Detail
+		}
+		return toolhealth.Status{
+			Provider: ProviderID, Available: true, Healthy: false,
+			Version: version, Details: details, Failure: doctorFailure,
+			Duration: versionDuration + doctorDuration,
+		}
 	}
+	if !doctorReportsHealthy(details) {
+		failure := toolhealth.Unhealthy(details)
+		return toolhealth.Status{
+			Provider: ProviderID, Available: true, Healthy: false,
+			Version: version, Details: details, Failure: failure,
+			Duration: versionDuration + doctorDuration,
+		}
+	}
+	return toolhealth.Status{
+		Provider: ProviderID, Available: true, Healthy: true,
+		Version: version, Details: details,
+		Duration: versionDuration + doctorDuration,
+	}
+}
 
-	healthy := doctorErr == nil && doctorReportsHealthy(details)
-
+func (c Client) Status(ctx context.Context) (projection.Status, error) {
+	health := c.Health(ctx)
 	return projection.Status{
-		Provider:  ProviderID,
-		Available: true,
-		Healthy:   healthy,
-		Version:   version,
-		Details:   details,
+		Provider: health.Provider,
+		Available: health.Available,
+		Healthy: health.Healthy,
+		Version: health.Version,
+		Details: health.Details,
 	}, nil
 }
 
