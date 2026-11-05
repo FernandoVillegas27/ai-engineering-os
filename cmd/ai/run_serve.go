@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -13,6 +14,8 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/controlplane"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/message"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/promotioncandidate"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/runcheckpoint"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/runcontrol"
 )
 
 type runServeOptions struct {
@@ -21,6 +24,8 @@ type runServeOptions struct {
 	artifactsDir string
 	messagesDir  string
 	promotionDir string
+	stateDir     string
+	checkpointDir string
 }
 
 func runRunServe(args []string) error {
@@ -59,6 +64,51 @@ func runRunServe(args []string) error {
 	if err != nil {
 		return err
 	}
+	runStore, err := openRunStore(options.stateDir)
+	if err != nil {
+		return err
+	}
+	checkpointRoot, err := resolveRunAuxDir(
+		options.checkpointDir,
+		"AI_ENGINEERING_OS_CHECKPOINT_DIR",
+		"run-checkpoints",
+	)
+	if err != nil {
+		return err
+	}
+	checkpointStore, err := runcheckpoint.NewStore(runcheckpoint.Config{Root: checkpointRoot})
+	if err != nil {
+		return err
+	}
+	controlsProvider := func(ctx context.Context, runID string) (controlplane.RunControls, error) {
+		run, err := runStore.Load(runID)
+		if err != nil {
+			return controlplane.RunControls{}, err
+		}
+		events, err := store.List(runID)
+		if err != nil {
+			return controlplane.RunControls{}, err
+		}
+		if len(events) == 0 {
+			return controlplane.RunControls{}, fmt.Errorf("run %s has no Control Plane event stream", runID)
+		}
+		state, err := controlplane.Project(events)
+		if err != nil {
+			return controlplane.RunControls{}, err
+		}
+		checkpointAvailable := false
+		if state.Pipeline.CheckpointPhase != "" {
+			phase := runcheckpoint.Phase(state.Pipeline.CheckpointPhase)
+			if err := checkpointStore.Check(ctx, runID, phase); err == nil {
+				checkpointAvailable = true
+			}
+		}
+		return runcontrol.DeriveCapabilities(runcontrol.CapabilityInput{
+			Run:                 run,
+			ControlPlane:        state,
+			CheckpointAvailable: checkpointAvailable,
+		}), nil
+	}
 
 	server := &http.Server{
 		Addr: options.addr,
@@ -67,6 +117,7 @@ func runRunServe(args []string) error {
 			Artifacts: artifactStore,
 			Messages:   messageBus,
 			Promotions: promotionStore,
+			Controls:   controlsProvider,
 		}).Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -80,6 +131,7 @@ func runRunServe(args []string) error {
 	fmt.Println("  GET /runs/<run-id>/messages")
 	fmt.Println("  GET /runs/<run-id>/artifacts")
 	fmt.Println("  GET /runs/<run-id>/promotion")
+	fmt.Println("  GET /runs/<run-id>/controls")
 	fmt.Println("Binding is restricted to loopback in this version.")
 
 	err = server.ListenAndServe()
@@ -123,8 +175,20 @@ func parseRunServeArgs(args []string) (runServeOptions, error) {
 			}
 			i++
 			options.promotionDir = args[i]
+		case "--state-dir":
+			if i+1 >= len(args) {
+				return runServeOptions{}, fmt.Errorf("--state-dir requiere una ruta")
+			}
+			i++
+			options.stateDir = args[i]
+		case "--checkpoint-dir":
+			if i+1 >= len(args) {
+				return runServeOptions{}, fmt.Errorf("--checkpoint-dir requiere una ruta")
+			}
+			i++
+			options.checkpointDir = args[i]
 		case "-h", "--help":
-			return runServeOptions{}, fmt.Errorf("uso: ai run serve [--addr 127.0.0.1:8765] [--events-dir ruta] [--artifacts-dir ruta] [--messages-dir ruta] [--promotion-dir ruta]")
+			return runServeOptions{}, fmt.Errorf("uso: ai run serve [--addr 127.0.0.1:8765] [--events-dir ruta] [--artifacts-dir ruta] [--messages-dir ruta] [--promotion-dir ruta] [--state-dir ruta] [--checkpoint-dir ruta]")
 		default:
 			return runServeOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
 		}
