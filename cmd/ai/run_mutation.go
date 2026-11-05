@@ -100,12 +100,14 @@ func runCoordinatedMutation(
 
 	run, err := runstate.New(runstate.NewRunRequest{
 		Task:         options.task,
+		Intent:       intent,
 		ProjectID:    options.projectID,
 		ProjectRoot:  root,
 		Capabilities: capabilities,
 		Runtime: runstate.RuntimeSelection{
-			Provider: options.runtime,
-			Model:    options.model,
+			Provider:    options.runtime,
+			ModelPolicy: string(options.modelPolicy),
+			Model:       options.model,
 		},
 		WorkUnits: participants,
 	}, time.Now().UTC())
