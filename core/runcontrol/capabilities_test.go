@@ -95,3 +95,18 @@ func TestDeriveCapabilitiesDisablesControlsOnStateMismatch(t *testing.T) {
 		t.Fatalf("controls=%#v", value)
 	}
 }
+
+
+func TestDeriveCapabilitiesKeepsPlannedRunFailClosed(t *testing.T) {
+	value := DeriveCapabilities(CapabilityInput{
+		Run: runstate.Run{
+			ID: "run-planned", Status: runstate.StatusPlanned,
+		},
+		ControlPlane: controlplane.State{
+			RunID: "run-planned", Status: controlplane.RunRunning,
+		},
+	})
+	if value.Consistent || value.CanPause || value.CanResume || value.CanCancel || value.CanRetry {
+		t.Fatalf("controls=%#v", value)
+	}
+}
