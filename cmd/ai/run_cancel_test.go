@@ -41,7 +41,7 @@ func TestRunCancelPersistsRequestAndControlPlaneEvent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now().UTC()
+	now := time.Now().UTC().Add(-time.Minute)
 	run, err := runstate.New(runstate.NewRunRequest{
 		Task:        "long task",
 		ProjectID:   "project",
@@ -130,7 +130,7 @@ func TestRunCancelRejectsTerminalRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now().UTC()
+	now := time.Now().UTC().Add(-time.Minute)
 	run, err := runstate.New(runstate.NewRunRequest{
 		Task: "done", ProjectID: "project", ProjectRoot: base,
 	}, now)
@@ -159,7 +159,7 @@ func TestRunCancelRejectsMismatchedEventsDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now().UTC()
+	now := time.Now().UTC().Add(-time.Minute)
 	run, err := runstate.New(runstate.NewRunRequest{
 		Task: "running", ProjectID: "project", ProjectRoot: base,
 	}, now)
@@ -213,7 +213,7 @@ func TestRunCancelCancelsPausedRunSynchronously(t *testing.T) {
 	stateDir := base + "/runs"
 	eventsDir := base + "/events"
 	controlDir := base + "/control"
-	now := time.Now().UTC()
+	now := time.Now().UTC().Add(-time.Minute)
 
 	run, err := runstate.New(runstate.NewRunRequest{
 		Task: "paused work", Intent: "research", ProjectID: "project", ProjectRoot: base,
