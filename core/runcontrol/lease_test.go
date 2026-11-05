@@ -221,3 +221,79 @@ func TestLeaseSessionRejectsSecondActiveOwner(t *testing.T) {
 		t.Fatal("expected second active lease rejection")
 	}
 }
+
+
+func TestClaimStaleLeaseReplacesOwnerAndPreservesPreviousEvidence(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	previous, err := store.AcquireLease("run-recover", now.Add(-time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	recovery, captured, err := store.ClaimStaleLease(
+		"run-recover",
+		now,
+		30*time.Second,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if captured.OwnerID != previous.OwnerID || recovery.OwnerID == previous.OwnerID {
+		t.Fatalf("previous=%#v captured=%#v recovery=%#v", previous, captured, recovery)
+	}
+	current, err := store.LoadLease("run-recover")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.OwnerID != recovery.OwnerID {
+		t.Fatalf("current=%#v recovery=%#v", current, recovery)
+	}
+	if err := store.ReleaseLease("run-recover", recovery.OwnerID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestClaimStaleLeaseRejectsLiveLease(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	lease, err := store.AcquireLease("run-live", now.Add(-time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.ClaimStaleLease("run-live", now, 30*time.Second); err == nil {
+		t.Fatal("expected live lease recovery rejection")
+	}
+	current, err := store.LoadLease("run-live")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.OwnerID != lease.OwnerID {
+		t.Fatalf("live lease changed: current=%#v original=%#v", current, lease)
+	}
+}
+
+func TestOldLeaseOwnerCannotHeartbeatAfterStaleClaim(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	old, err := store.AcquireLease("run-fenced", now.Add(-time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	recovery, _, err := store.ClaimStaleLease("run-fenced", now, 10*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.ReleaseLease("run-fenced", recovery.OwnerID)
+	if _, err := store.HeartbeatLease("run-fenced", old.OwnerID, now.Add(time.Second)); err == nil {
+		t.Fatal("expected old owner heartbeat rejection after recovery claim")
+	}
+}
