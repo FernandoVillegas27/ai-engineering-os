@@ -25,7 +25,9 @@ type runServeOptions struct {
 	messagesDir  string
 	promotionDir string
 	stateDir     string
-	checkpointDir string
+	checkpointDir      string
+	controlDir         string
+	recoveryStaleAfter time.Duration
 }
 
 func runRunServe(args []string) error {
@@ -80,6 +82,10 @@ func runRunServe(args []string) error {
 	if err != nil {
 		return err
 	}
+	controlStore, err := openRunControlStore(options.controlDir)
+	if err != nil {
+		return err
+	}
 	controlsProvider := func(ctx context.Context, runID string) (controlplane.RunControls, error) {
 		run, err := runStore.Load(runID)
 		if err != nil {
@@ -103,10 +109,24 @@ func runRunServe(args []string) error {
 				checkpointAvailable = true
 			}
 		}
+		leaseStale := false
+		if run.Status == runstate.StatusRunning && state.Status == controlplane.RunRunning {
+			stale, _, leaseErr := controlStore.LeaseStale(
+				runID,
+				time.Now().UTC(),
+				options.recoveryStaleAfter,
+			)
+			if leaseErr == nil {
+				leaseStale = stale
+			} else if !os.IsNotExist(leaseErr) {
+				return controlplane.RunControls{}, leaseErr
+			}
+		}
 		return runcontrol.DeriveCapabilities(runcontrol.CapabilityInput{
 			Run:                 run,
 			ControlPlane:        state,
 			CheckpointAvailable: checkpointAvailable,
+			LeaseStale:          leaseStale,
 		}), nil
 	}
 
@@ -142,7 +162,7 @@ func runRunServe(args []string) error {
 }
 
 func parseRunServeArgs(args []string) (runServeOptions, error) {
-	options := runServeOptions{addr: "127.0.0.1:8765"}
+	options := runServeOptions{addr: "127.0.0.1:8765", recoveryStaleAfter: 30 * time.Second}
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--addr":
@@ -187,8 +207,24 @@ func parseRunServeArgs(args []string) (runServeOptions, error) {
 			}
 			i++
 			options.checkpointDir = args[i]
+		case "--control-dir":
+			if i+1 >= len(args) {
+				return runServeOptions{}, fmt.Errorf("--control-dir requiere una ruta")
+			}
+			i++
+			options.controlDir = args[i]
+		case "--recovery-stale-after":
+			if i+1 >= len(args) {
+				return runServeOptions{}, fmt.Errorf("--recovery-stale-after requiere una duración")
+			}
+			i++
+			value, err := time.ParseDuration(args[i])
+			if err != nil || value < 5*time.Second {
+				return runServeOptions{}, fmt.Errorf("--recovery-stale-after debe ser una duración >= 5s")
+			}
+			options.recoveryStaleAfter = value
 		case "-h", "--help":
-			return runServeOptions{}, fmt.Errorf("uso: ai run serve [--addr 127.0.0.1:8765] [--events-dir ruta] [--artifacts-dir ruta] [--messages-dir ruta] [--promotion-dir ruta] [--state-dir ruta] [--checkpoint-dir ruta]")
+			return runServeOptions{}, fmt.Errorf("uso: ai run serve [--addr 127.0.0.1:8765] [--events-dir ruta] [--artifacts-dir ruta] [--messages-dir ruta] [--promotion-dir ruta] [--state-dir ruta] [--checkpoint-dir ruta] [--control-dir ruta] [--recovery-stale-after 30s]")
 		default:
 			return runServeOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
 		}
