@@ -248,33 +248,64 @@ The repository already has the foundation for:
 
 ### Latest completed milestone
 
-PR #63 — P2a Baseline Integrity Foundation — merged.
+PR #120 — integrated multi-agent engineering OS stack — merged to `master`.
 
 Merge commit:
 
 ~~~text
-2c116ff717505dd7af2ad8f280dfd78197a3c936
+15cc2bed75a48f7aa63ecb920577d75bb61b4ca0
 ~~~
 
-P2a added:
+Validation:
 
-- immutable `staging.PreImage`;
-- baseline provider;
-- original/pre-image integrity checks;
-- staged authorized-change checks;
-- memoization with integrity rechecks;
-- explicit `IntegrityError`;
-- Go 1.23 compile stderr handling;
-- compile failures as unconditional blocking failures;
-- Windows and Linux validation.
+- integration PR #120: `go test ./...` passed;
+- push-to-`master` workflow on merge commit `15cc2bed...`: `go test ./...` passed;
+- the integration branch was a direct descendant of the prior master with no divergence;
+- obsolete stacked PRs #66–#119 were closed after integration;
+- PR #54 remains excluded because role-specific model pinning conflicts with provider-independent model policy.
+
+The merged system now includes:
+
+- production-active baseline-aware Quality;
+- structured Quality outcomes;
+- promotion dry-run and explicit approval-gated apply;
+- durable run/session state;
+- project memory integration;
+- immutable artifacts and typed persistent inter-agent messages;
+- dependency-aware DAG scheduler and concurrent coordinator;
+- automatic Researcher/Architect specialist handoffs;
+- bounded receiver inbox context;
+- live Control Plane JSON/SSE API;
+- isolated mutating workspaces and deterministic multi-workspace integration;
+- run-wide baseline-aware Quality Gate;
+- persisted promotion candidates;
+- tests-only QA after source integration;
+- durable cancellation;
+- targeted read-only retry;
+- graceful read-only pause/resume;
+- integrity-safe mutation checkpoints;
+- checkpoint-based mutation pause/resume;
+- deterministic Control Plane human controls;
+- durable execution lease/heartbeat;
+- explicit stale-run recovery;
+- recovery readiness exposed through the Control Plane.
 
 ### Immediate next milestone
 
-**P2b — integrate lazy baseline behavior into `quality.Loop`.**
+Continue from the merged Control Plane/recovery foundation instead of redesigning earlier phases.
 
-Do not skip directly to multi-agent communication.
+Highest-value next work:
 
-The quality foundation must become production-active first.
+1. integrity-preserving Control Plane snapshots/compaction for long event histories;
+2. richer typed schemas for remaining handoffs and lifecycle artifacts;
+3. broader cross-language structured Quality providers;
+4. contract/architecture verification beyond Go;
+5. memory lifecycle hardening and team-learning evidence;
+6. optional visual/IDE Control Plane client only after backend semantics remain stable under longer runs.
+
+Do not hard-code a model per agent role.
+
+Do not weaken promotion, workspace-integrity, permission or stale-run recovery boundaries.
 
 ---
 
@@ -2058,194 +2089,149 @@ Before beginning work, always verify that this checkpoint is still current.
 
 ---
 
-# 19.5 Active implementation stack — validation checkpoint
+# 19.5 Integrated implementation checkpoint — master
 
-This section records the current **unmerged** implementation stack so a future session can distinguish completed work on `master` from work that is implemented and awaiting human validation.
+The previously stacked implementation from PR #66 through PR #119 has been integrated into `master` through PR #120.
 
-At this checkpoint, `master` still has P2a as the latest functional merged milestone. The following PRs are intentionally stacked and remain open for ordered review.
-
-| PR | Phase / capability | Validation state |
-|---|---|---|
-| #66 | P2b — lazy baseline in Quality Loop | CI passed |
-| #67 | P2c — structured quality outcomes | CI passed |
-| #68 | P3a — promotion dry-run | CI passed |
-| #69 | P3b — approval-gated apply + rollback | CI passed |
-| #70 | P4 — durable run state | CI passed |
-| #71 | durable run CLI | CI passed |
-| #72 | P5 — Engram project save/recall | CI passed |
-| #73 | P6 — immutable agent artifacts | CI passed |
-| #74 | P7 — typed inter-agent message bus | CI passed |
-| #75 | P8 — dependency-aware DAG scheduler | CI passed |
-| #76 | P9 — concurrent execution coordinator | CI passed |
-| #77 | P9.5 — durable Control Plane event stream/projector | CI passed |
-| #78 | Control Plane CLI inspection | CI passed |
-| #79 | integrated durable coordinated read-only run | CI passed |
-| #80 | deterministic specialist collaboration DAG | CI passed |
-| #81 | automatic durable specialist handoffs | CI passed |
-| #82 | bounded receiver inbox context | CI passed |
-| #83 | loopback JSON/SSE live Control Plane API | CI passed |
-| #84 | projected task-graph edges and scopes | CI passed |
-| #85 | stale append-lock recovery | CI passed |
-| #86 | typed ArchitectureDecision/APIContract/VerificationReport payloads | CI passed |
-| #87 | isolated per-task mutating workspaces | CI passed |
-| #88 | deterministic multi-workspace integration plan | CI passed |
-| #89 | isolated integration workspace materialization + frozen-result TOCTOU protection | CI passed |
-| #90 | run-wide baseline-aware integration Quality Gate | CI passed |
-| #91 | bridge promotable integration to explicit promotion boundary | CI passed |
-| #92 | Proposal Freeze before mutating stage | CI passed |
-| #93 | frozen-proposal StageRuntime adapter + filesystem reinspection | CI passed |
-| #94 | explicit `ai run execute --multi-agent-write` safe mutation pipeline | CI passed |
-| #95 | persisted promotion candidates + `ai run promotion` inspection | CI passed |
-| #96 | explicit `ai run promote --approve` apply + audit | CI passed |
-| #97 | registry-derived source-writer role selection | CI passed |
-| #98 | collaboration context in Codex/Cursor proposal runtimes | CI passed |
-| #99 | Cursor read-only ExecutionRuntime + provider fallback | CI passed |
-| #100 | DAG-derived read-only pre-stage collaboration before mutation | CI passed |
-| #101 | projected Control Plane run index (`GET /runs`) | CI passed |
-| #102 | durable active-run cancellation (`ai run cancel`) | CI passed |
-| #103 | Control Plane run messages/artifacts endpoints | CI passed |
-| #104 | read-only promotion candidate status endpoint | CI passed |
-| #105 | cancellation event-stream binding hardening | CI pending |
-
-Review/merge order must remain:
+Current master checkpoint:
 
 ~~~text
-#66 -> #67 -> #68 -> #69 -> #70 -> #71 -> #72 -> #73 -> #74
--> #75 -> #76 -> #77 -> #78 -> #79 -> #80 -> #81 -> #82
--> #83 -> #84 -> #85 -> #86 -> #87 -> #88 -> #89 -> #90 -> #91
--> #92 -> #93 -> #94 -> #95 -> #96 -> #97 -> #98 -> #99
--> #100 -> #101 -> #102 -> #103 -> #104 -> #105
+merge commit: 15cc2bed75a48f7aa63ecb920577d75bb61b4ca0
+integration PR: #120
+integration CI: passed
+master push CI: passed
+open stacked PRs: none
 ~~~
 
-Do not merge later PRs before their stacked bases unless the branch is deliberately rebased and the resulting diff is revalidated.
+## Functional capability now on master
 
-## Functional capability reached by the open stack
-
-If the stack through #104 is validated and merged, AI Engineering OS has the first complete read-only multi-agent collaboration path, an explicit approval-gated coordinated mutation path, durable cancellation, and a Control Plane backend ready for a visual client:
+AI Engineering OS now has a real backend-first multi-agent engineering path:
 
 ~~~text
 user task
-  -> classification
-  -> deterministic specialist plan
+  -> classify intent/capabilities
   -> durable run
-  -> role-aware DAG
-  -> bounded concurrent coordinator
-  -> agent execution
-  -> immutable handoff artifact
-  -> typed message to dependent agent
-  -> bounded receiver inbox
-  -> dependent agent execution
-  -> durable Control Plane events
-  -> CLI / JSON / SSE observation
+  -> deterministic specialist DAG
+  -> Researcher / Architect collaboration
+  -> typed handoffs + bounded inbox
+  -> isolated source-writer stages
+  -> deterministic source integration
+  -> tests-only QA overlay
+  -> durable integration checkpoint
+  -> run-wide baseline-aware Quality
+  -> independent review/correction
+  -> persisted promotion candidate
+  -> explicit human approval
+  -> promotion into original project
 ~~~
 
-The Control Plane can expose:
+The original project remains protected until:
 
-- a recent run index;
-- real run state;
-- agents and their task state;
-- DAG edges;
-- task ownership;
-- dependency state;
-- mutating/file-scope metadata;
-- typed messages and immutable artifacts;
-- quality state;
-- pending approvals;
-- current promotion-candidate readiness;
-- runtime/model summaries;
+~~~text
+ai run promote <run-id> --approve
+~~~
+
+## Durable human controls now on master
+
+Read-only and mutation runs have explicit durable controls:
+
+~~~text
+ai run cancel <run-id>
+ai run pause <run-id>
+ai run resume <run-id>
+ai run retry <run-id> <task-id>
+ai run recover <run-id>
+~~~
+
+Safety boundaries:
+
+- read-only retry operates as a child run and does not rewrite the failed parent;
+- mutation pause happens only at durable integration checkpoints;
+- mutation resume restores only integrity-checked checkpoints;
+- active runners use a durable lease/heartbeat;
+- stale leases are never reclaimed automatically;
+- crash recovery requires an explicit command and stale-heartbeat evidence;
+- mutation recovery requires a valid source/final integration checkpoint;
+- losing lease ownership cancels the active execution context.
+
+## Control Plane surface now on master
+
+The backend can expose:
+
+- recent run index;
+- projected run/task/agent state;
+- task DAG edges and dependencies;
+- file/mutation scopes;
 - ordered event history;
-- resumable SSE events;
-- durable cancellation-request state.
+- resumable SSE stream;
+- typed messages;
+- immutable artifacts;
+- Quality state;
+- promotion status;
+- pause/cancel request state;
+- latest durable checkpoint phase;
+- retry lineage;
+- deterministic safe human controls;
+- stale-run recovery readiness.
 
-This is the first functional foundation for the Promix-like experience described earlier. It is intentionally backend-first; no visual UI is required for the coordination semantics to work.
-
-The open stack now also contains the write-safety pipeline:
-
-~~~text
-per-task isolated writable workspace
-  -> immutable PreImage
-  -> inspected frozen ResultImage
-  -> deterministic disjoint integration plan
-  -> isolated integration workspace
-  -> source-hash TOCTOU validation
-  -> run-wide baseline-aware Quality Gate
-  -> Promotable=true
-  -> promotion candidate
-  -> promotion dry-run
-  -> explicit approval required
-  -> apply
-~~~
-
-## Current safety boundary
-
-The default coordinated command remains read-only.
-
-Write-capable coordination exists only behind the explicit flag:
+Important endpoints include:
 
 ~~~text
-ai run execute <project> --task "..." --runtime auto|codex|cursor --multi-agent-write
+GET /runs
+GET /runs/<run-id>/state
+GET /runs/<run-id>/events
+GET /runs/<run-id>/stream
+GET /runs/<run-id>/messages
+GET /runs/<run-id>/artifacts
+GET /runs/<run-id>/promotion
+GET /runs/<run-id>/controls
 ~~~
 
-That path:
+The visual Promix-like experience remains intentionally a client of this backend, not the source of coordination truth.
 
-- freezes proposals before staging;
-- rejects exact ownership conflicts;
-- stages each source-writer agent in an isolated workspace;
-- reinspects the filesystem instead of trusting provider-reported changes;
-- freezes post-stage ResultImages;
-- integrates only disjoint validated changes;
-- runs run-wide baseline-aware Quality;
-- persists a promotion candidate;
-- requires a separate `ai run promote <run-id> --approve` command before touching the original project.
+## Current product level
 
-#97 additionally restricts Stage to registry-derived `source_code: write` agents. QA's tests-only write permission is not broadened into source writes.
+The project has crossed these earlier completion levels:
 
-### Mutation collaboration now active
+- safe single-agent foundation: complete enough for current architecture;
+- baseline-aware Quality: implemented;
+- durable/resumable run foundation: implemented;
+- collaborative agents: implemented and active;
+- backend multi-agent Control Plane: implemented and active;
+- controlled long-running recovery: first production-safe foundation implemented.
 
-The write path now derives transitive read-only ancestors from the validated DAG before mutation.
+Still incomplete for the full product vision:
 
-With the current specialist graph:
+- event-history compaction/snapshots for very long runs;
+- broader language/toolchain Quality normalization;
+- stronger contract/architecture verification;
+- deeper durable memory lifecycle/team learning;
+- broader external tool/MCP mesh hardening;
+- polished human visual/IDE client;
+- final production-grade release matrix and threat-model closure.
 
-~~~text
-Researcher
-   |
-Architect
-   |
-Backend / Frontend / Database
-~~~
+## Recommended next implementation from master
 
-Researcher/Architect execute through provider-independent read-only runtimes, persist typed handoffs, and source-writer agents load their bounded inbox before Proposal Freeze.
+Proceed in this order unless a new explicit architecture decision changes it:
 
-Cursor now implements the same read-only `execution.Runtime` contract as Codex. `runtime=auto` can use Codex first and fall back to Cursor only for provider-unavailable errors.
+1. integrity-preserving Control Plane snapshots/compaction;
+2. dedicated typed schemas for remaining high-value lifecycle artifacts;
+3. cross-language Quality providers and normalized failure identity;
+4. contract/architecture verification;
+5. long-run recovery/observability soak tests;
+6. memory/team-learning hardening;
+7. optional visual Control Plane client.
 
-Read-only ancestors never receive mutation permissions.
+Keep the current invariants:
 
-### Human/control-plane functionality now active
-
-The stack also contains:
-
-- `GET /runs` for run discovery;
-- `GET /runs/<id>/messages`;
-- `GET /runs/<id>/artifacts`;
-- `GET /runs/<id>/promotion`;
-- `ai run cancel <run-id>`;
-- projected `cancel_requested`;
-- cancellation-aware read-only and mutating runners.
-
-#105 additionally ensures a cancel signal cannot be persisted when the caller points at a mismatched Control Plane event store.
-
-## Recommended next implementation after this stack
-
-After #105 is green and the stack is reviewed, the next high-value milestones are:
-
-1. add deterministic file-kind ownership so QA `tests: write` can be enforced without source-write escalation;
-2. persist richer proposal/stage/integration lifecycle events and artifact references in the Control Plane;
-3. add durable pause/resume checkpoints and targeted task retry;
-4. design integrity-preserving Control Plane snapshots for long histories without hiding event corruption;
-5. add dedicated typed schemas for remaining high-value artifacts/handoffs;
-6. add an optional local visual web/IDE client only after the control semantics are stable.
-
----
+- deterministic first, AI second;
+- provider-independent model policy;
+- no model pinning by role;
+- no automatic permission escalation;
+- no automatic promotion;
+- no automatic stale-lease takeover;
+- original repository protected by PreImage/integrity checks;
+- independent Quality/review before promotion.
 
 # 20. Living roadmap rule
 
