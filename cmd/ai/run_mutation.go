@@ -327,6 +327,22 @@ func runCoordinatedMutation(
 		}
 	}()
 
+	paused, err := pauseMutationAtCheckpoint(
+		ctx,
+		&run,
+		runStore,
+		eventStore,
+		controlStore,
+		runcheckpoint.PhaseSourceIntegrated,
+	)
+	if err != nil {
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
+		return err
+	}
+	if paused {
+		return renderMutationPaused(options, run, runcheckpoint.PhaseSourceIntegrated)
+	}
+
 	qaResult, err := executeMutationTestsPhase(
 		ctx,
 		options,
@@ -369,6 +385,21 @@ func runCoordinatedMutation(
 	); err != nil {
 		_ = abortMutationRun(ctx, runStore, eventStore, &run)
 		return err
+	}
+	paused, err = pauseMutationAtCheckpoint(
+		ctx,
+		&run,
+		runStore,
+		eventStore,
+		controlStore,
+		runcheckpoint.PhaseFinalIntegrated,
+	)
+	if err != nil {
+		_ = abortMutationRun(ctx, runStore, eventStore, &run)
+		return err
+	}
+	if paused {
+		return renderMutationPaused(options, run, runcheckpoint.PhaseFinalIntegrated)
 	}
 
 	if err := emit(controlplane.EventVerificationStarted, "", "", "run-wide integration quality started"); err != nil {
