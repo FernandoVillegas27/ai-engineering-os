@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/scheduler"
 )
 
 func testRun(t *testing.T) Run {
@@ -214,5 +215,51 @@ func TestStoreListNewestFirst(t *testing.T) {
 	}
 	if len(runs) != 2 || runs[0].ID != second.ID {
 		t.Fatalf("runs = %#v", runs)
+	}
+}
+
+
+func TestBindTaskGraphPersistsDependenciesAndStatuses(t *testing.T) {
+	now := time.Now().UTC()
+	units := []execution.WorkUnit{
+		{ID: "architect", AgentID: "architect", Task: "design", Permissions: execution.PermissionEnvelope{SourceCode: "read", Tests: "read", GitCommit: "deny", GitPush: "deny", Secrets: "deny", Production: "deny"}},
+		{ID: "backend", AgentID: "backend-engineer", Task: "implement", Permissions: execution.PermissionEnvelope{SourceCode: "read", Tests: "read", GitCommit: "deny", GitPush: "deny", Secrets: "deny", Production: "deny"}},
+	}
+	run, err := New(NewRunRequest{
+		Task: "build feature", ProjectID: "project", ProjectRoot: ".", WorkUnits: units,
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tasks := []scheduler.Task{
+		{ID: "architect", AgentID: "architect", Status: scheduler.StatusCompleted},
+		{ID: "backend", AgentID: "backend-engineer", DependsOn: []string{"architect"}, Status: scheduler.StatusQueued},
+	}
+	if err := BindTaskGraph(&run, tasks); err != nil {
+		t.Fatal(err)
+	}
+	if len(run.WorkUnits[1].DependsOn) != 1 || run.WorkUnits[1].DependsOn[0] != "architect" {
+		t.Fatalf("backend deps = %#v", run.WorkUnits[1].DependsOn)
+	}
+	if run.WorkUnits[0].Status != WorkUnitCompleted || run.WorkUnits[1].Status != WorkUnitQueued {
+		t.Fatalf("statuses = %#v", run.WorkUnits)
+	}
+}
+
+func TestBindTaskGraphRejectsIncompleteOrMismatchedGraph(t *testing.T) {
+	run, err := New(NewRunRequest{
+		Task: "x", ProjectID: "project",
+		WorkUnits: []execution.WorkUnit{
+			{ID: "backend", AgentID: "backend-engineer", Task: "x", Permissions: execution.PermissionEnvelope{SourceCode: "read", Tests: "read", GitCommit: "deny", GitPush: "deny", Secrets: "deny", Production: "deny"}},
+		},
+	}, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := BindTaskGraph(&run, []scheduler.Task{}); err == nil {
+		t.Fatal("expected empty graph rejection")
+	}
+	if err := BindTaskGraph(&run, []scheduler.Task{{ID: "backend", AgentID: "frontend-engineer"}}); err == nil {
+		t.Fatal("expected agent mismatch rejection")
 	}
 }
