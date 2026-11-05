@@ -9,17 +9,7 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
 )
 
-type Capabilities struct {
-	Consistent        bool     `json:"consistent"`
-	CanPause          bool     `json:"can_pause"`
-	CanResume         bool     `json:"can_resume"`
-	CanCancel         bool     `json:"can_cancel"`
-	CanRetry          bool     `json:"can_retry"`
-	PauseBoundary     string   `json:"pause_boundary,omitempty"`
-	ResumeFrom        string   `json:"resume_from,omitempty"`
-	RetryableTaskIDs  []string `json:"retryable_task_ids,omitempty"`
-	Reason            string   `json:"reason,omitempty"`
-}
+type Capabilities = controlplane.RunControls
 
 type CapabilityInput struct {
 	Run                 runstate.Run
@@ -69,6 +59,8 @@ func DeriveCapabilities(input CapabilityInput) Capabilities {
 		} else if mutationKindsComplete && resumableCheckpoint(state.Pipeline.CheckpointPhase) && input.CheckpointAvailable {
 			out.CanResume = true
 			out.ResumeFrom = state.Pipeline.CheckpointPhase
+		} else if mutating {
+			out.Reason = "durable mutation checkpoint is unavailable or invalid"
 		}
 	case runstate.StatusFailed:
 		if !mutating {
