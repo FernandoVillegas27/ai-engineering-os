@@ -1,6 +1,7 @@
 package runcontrol
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -147,5 +148,76 @@ func TestLeaseRejectsInvalidThresholdAndFutureHeartbeat(t *testing.T) {
 	}
 	if _, _, err := store.LeaseStale("run-future", time.Now().UTC(), time.Second); err == nil {
 		t.Fatal("expected future heartbeat rejection")
+	}
+}
+
+
+func TestLeaseSessionHeartbeatsAndReleasesOnStop(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := StartLeaseSession(context.Background(), store, "run-session", 100*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Stop()
+	first, err := store.LoadLease("run-session")
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(180 * time.Millisecond)
+	second, err := store.LoadLease("run-session")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !second.HeartbeatAt.After(first.HeartbeatAt) {
+		t.Fatalf("heartbeat did not advance: first=%#v second=%#v", first, second)
+	}
+	if err := session.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.LoadLease("run-session"); !os.IsNotExist(err) {
+		t.Fatalf("lease not released: %v", err)
+	}
+}
+
+func TestLeaseSessionCancelsContextWhenLeaseDisappears(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewStore(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := StartLeaseSession(context.Background(), store, "run-lost", 100*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Stop()
+
+	if err := os.Remove(filepath.Join(root, "run-lost.lease.json")); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-session.Context().Done():
+	case <-time.After(time.Second):
+		t.Fatal("lease session did not cancel after losing lease")
+	}
+	if session.Err() == nil {
+		t.Fatal("expected lease renewal error")
+	}
+}
+
+func TestLeaseSessionRejectsSecondActiveOwner(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := StartLeaseSession(context.Background(), store, "run-exclusive", 100*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Stop()
+	if _, err := StartLeaseSession(context.Background(), store, "run-exclusive", 100*time.Millisecond); err == nil {
+		t.Fatal("expected second active lease rejection")
 	}
 }
