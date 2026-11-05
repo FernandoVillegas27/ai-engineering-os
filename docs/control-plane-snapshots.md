@@ -91,3 +91,74 @@ Add snapshot-assisted projection:
 5. fall back to full replay when no valid snapshot exists.
 
 Destructive event-log compaction remains out of scope until historical integrity can still be proven independently.
+
+
+## Snapshot-assisted projection
+
+The Control Plane can continue projection from a validated snapshot instead of replaying its historical prefix.
+
+The continuation path:
+
+1. loads the latest immutable snapshot;
+2. validates the snapshot record;
+3. acquires the same append lock used by event writes;
+4. recomputes the exact historical event-prefix digest;
+5. decodes only event files with sequence greater than the snapshot boundary;
+6. applies suffix events through the **same event-application function** used by full replay;
+7. recomputes the historical prefix digest before returning;
+8. fails closed if the prefix changed or any suffix event is invalid.
+
+If no snapshot exists, projection falls back to normal full replay.
+
+The base snapshot state is deep-cloned before suffix application, so a state read cannot mutate the persisted snapshot representation.
+
+## HTTP behavior
+
+When a snapshot store is configured, this endpoint uses verified snapshot projection:
+
+~~~text
+GET /runs/<run-id>/state
+~~~
+
+The event/audit surfaces remain event-log based:
+
+~~~text
+GET /runs/<run-id>/events
+GET /runs/<run-id>/stream
+~~~
+
+A corrupt snapshot or changed historical event prefix returns an error. The server does not silently ignore a bad snapshot and fall back to a potentially different interpretation.
+
+## Creating snapshots
+
+Snapshot creation is explicit:
+
+~~~text
+ai run snapshot <run-id>
+~~~
+
+Optional overrides:
+
+~~~text
+--events-dir <path>
+--snapshot-dir <path>
+--json
+~~~
+
+Storage resolution for snapshots is:
+
+1. explicit `--snapshot-dir`;
+2. `AI_ENGINEERING_OS_SNAPSHOT_DIR`;
+3. user config `ai-engineering-os/control-plane-snapshots`.
+
+`ai run serve` accepts the same `--snapshot-dir` override.
+
+A read-only GET never creates or rewrites a snapshot.
+
+## Compaction boundary remains unchanged
+
+Snapshot-assisted projection reduces historical **decode/projection** work, but historical event files remain present.
+
+No destructive compaction is enabled yet.
+
+Deleting historical event files would remove the evidence required to recompute the snapshot prefix digest, so any future compaction format must preserve independently verifiable historical integrity before deletion is permitted.
