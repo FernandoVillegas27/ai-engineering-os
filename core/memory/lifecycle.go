@@ -130,6 +130,8 @@ func PersistCuratedArtifactsBestEffort(
 	}
 
 	candidates := curatedArtifactCandidates(report.Project, values)
+	curatedCount := len(candidates)
+	report.Skipped += len(values) - curatedCount
 	if len(candidates) > MaxPersistCandidates {
 		report.Skipped += len(candidates) - MaxPersistCandidates
 		candidates = candidates[:MaxPersistCandidates]
@@ -141,7 +143,6 @@ func PersistCuratedArtifactsBestEffort(
 		}
 		report.Saved++
 	}
-	report.Skipped += len(values) - len(candidates)
 	return report
 }
 
