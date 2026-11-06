@@ -308,7 +308,8 @@ func assertFile(t *testing.T, root, relative, want string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := string(data); got != want {
+	got := string(data)
+	if got != want {
 		t.Fatalf("%s=%q want=%q", relative, got, want)
 	}
 	if strings.TrimSpace(got) == "" {
