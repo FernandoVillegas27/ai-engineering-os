@@ -11,6 +11,8 @@
     promotion: null,
     controls: null,
     refreshTimer: null,
+    eventSource: null,
+    streamRunId: "",
     generation: 0,
   };
 
@@ -132,6 +134,7 @@
     els.copy.disabled = false;
     history.replaceState(null, "", "/ui/?run=" + encodeURIComponent(runId));
     await refreshSelected(generation);
+    connectStream(runId);
     scheduleRefresh();
   }
 
@@ -139,6 +142,7 @@
     state.runId = "";
     state.runState = null;
     state.generation++;
+    closeStream();
     els.empty.classList.remove("hidden");
     els.dashboard.classList.add("hidden");
     els.title.textContent = "Choose a run";
@@ -177,12 +181,51 @@
     }
   }
 
+  function closeStream() {
+    if (state.eventSource) {
+      state.eventSource.close();
+      state.eventSource = null;
+    }
+    state.streamRunId = "";
+  }
+
+  function connectStream(runId) {
+    closeStream();
+    if (!runId || typeof EventSource === "undefined") return;
+    const last = Number(state.runState?.last_sequence || 0);
+    const source = new EventSource(
+      "/runs/" + encodeURIComponent(runId) + "/stream?after=" + encodeURIComponent(last)
+    );
+    state.eventSource = source;
+    state.streamRunId = runId;
+
+    source.onopen = () => {
+      if (state.streamRunId === runId) setConnection(true, "Live stream connected");
+    };
+    source.onmessage = () => {
+      if (state.runId === runId) refreshSelected();
+    };
+    source.onerror = () => {
+      if (state.streamRunId !== runId) return;
+      setConnection(false, "Live stream reconnecting · polling active");
+    };
+    [
+      "run.started", "run.completed", "run.failed", "run.cancelled", "run.paused", "run.resumed",
+      "task.queued", "task.assigned", "task.started", "task.completed", "task.failed", "task.blocked",
+      "message.sent", "artifact.created", "quality.updated", "review.updated", "promotion.updated"
+    ].forEach((eventName) => {
+      source.addEventListener(eventName, () => {
+        if (state.runId === runId) refreshSelected();
+      });
+    });
+  }
+
   function scheduleRefresh() {
     if (state.refreshTimer) clearInterval(state.refreshTimer);
     state.refreshTimer = setInterval(() => {
       if (state.runId && document.visibilityState === "visible") refreshSelected();
       loadRuns(true);
-    }, 2000);
+    }, 5000);
   }
 
   function renderSelected() {
@@ -388,6 +431,7 @@
     if (document.visibilityState === "visible") {
       loadRuns(true);
       refreshSelected();
+      if (state.runId && state.streamRunId !== state.runId) connectStream(state.runId);
     }
   });
 
