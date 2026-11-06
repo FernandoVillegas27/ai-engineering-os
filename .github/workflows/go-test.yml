@@ -31,8 +31,15 @@ jobs:
       - name: Run tests
         run: go test ./...
 
+      - name: Run race tests
+        if: runner.os == 'Linux'
+        run: go test -race ./...
+
       - name: Build all packages
         run: go build ./...
 
       - name: Vet all packages
         run: go vet ./...
+
+      - name: Doctor smoke test
+        run: go run ./cmd/ai doctor
