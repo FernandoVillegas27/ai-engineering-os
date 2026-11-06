@@ -18,6 +18,7 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/promotion"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/promotioncandidate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/proposal"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/runbudget"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runcheckpoint"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/staging"
@@ -49,6 +50,7 @@ func runCoordinatedMutation(
 	units []execution.WorkUnit,
 	memoryProvider memory.ProjectMemory,
 	memoryRecall memory.RecallContext,
+	budget *runbudget.Budget,
 ) error {
 	if !options.multiAgentWrite {
 		return fmt.Errorf("coordinated mutation requires explicit --multi-agent-write")
@@ -195,7 +197,7 @@ func runCoordinatedMutation(
 		}
 	}
 
-	routing := modelRoutingOptions{Policy: options.modelPolicy, Override: options.model}
+	routing := modelRoutingOptions{Policy: options.modelPolicy, Override: options.model, Budget: budget}
 	mutatingUnits, err = executeMutationPreStage(
 		ctx,
 		options,
@@ -513,7 +515,7 @@ func runCoordinatedMutation(
 	keepIntegrated = true
 
 	memoryReport := persistMutationRunMemory(
-		context.Background(),
+		ctx,
 		memoryProvider,
 		options.projectID,
 		run.ID,
