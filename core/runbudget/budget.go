@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/memory"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/modelprovider"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/proposal"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/quality"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/review"
@@ -207,4 +209,43 @@ func (r Corrector) Correct(ctx context.Context, request quality.CorrectionReques
 	if r.Inner == nil { return errors.New("corrector is required") }
 	if err := r.Budget.Acquire("correction:"+r.Inner.ID()); err != nil { return err }
 	return r.Inner.Correct(ctx, request)
+}
+
+
+type ClassificationProvider struct {
+	Budget *Budget
+	Inner  modelprovider.Provider
+}
+func (r ClassificationProvider) ID() string {
+	if r.Inner == nil { return "budgeted-classification" }
+	return r.Inner.ID()
+}
+func (r ClassificationProvider) Classify(ctx context.Context, request modelprovider.ClassificationRequest) (modelprovider.ClassificationResponse, error) {
+	if r.Inner == nil { return modelprovider.ClassificationResponse{}, errors.New("classification provider is required") }
+	if err := r.Budget.Acquire("classification:"+r.Inner.ID()); err != nil { return modelprovider.ClassificationResponse{}, err }
+	return r.Inner.Classify(ctx, request)
+}
+
+type ProjectMemory struct {
+	Budget *Budget
+	Inner  memory.ProjectMemory
+}
+func (r ProjectMemory) ID() string {
+	if r.Inner == nil { return "budgeted-memory" }
+	return r.Inner.ID()
+}
+func (r ProjectMemory) Status(ctx context.Context) (memory.Status, error) {
+	if r.Inner == nil { return memory.Status{}, errors.New("memory provider is required") }
+	if err := r.Budget.Acquire("memory-status:"+r.Inner.ID()); err != nil { return memory.Status{}, err }
+	return r.Inner.Status(ctx)
+}
+func (r ProjectMemory) Recall(ctx context.Context, request memory.RecallRequest) (memory.RecallResult, error) {
+	if r.Inner == nil { return memory.RecallResult{}, errors.New("memory provider is required") }
+	if err := r.Budget.Acquire("memory-recall:"+r.Inner.ID()); err != nil { return memory.RecallResult{}, err }
+	return r.Inner.Recall(ctx, request)
+}
+func (r ProjectMemory) Save(ctx context.Context, request memory.SaveRequest) (memory.SaveResult, error) {
+	if r.Inner == nil { return memory.SaveResult{}, errors.New("memory provider is required") }
+	if err := r.Budget.Acquire("memory-save:"+r.Inner.ID()); err != nil { return memory.SaveResult{}, err }
+	return r.Inner.Save(ctx, request)
 }
