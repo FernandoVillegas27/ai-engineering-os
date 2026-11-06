@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/modelpolicy"
@@ -46,6 +47,9 @@ func TestParseRunExecuteArgsRuntime(t *testing.T) {
 	}
 	if options.maxConcurrency != 2 {
 		t.Fatalf("default concurrency = %d", options.maxConcurrency)
+	}
+	if options.maxInvocations != 64 || options.maxRuntime != 30*time.Minute {
+		t.Fatalf("default budget invocations=%d runtime=%s", options.maxInvocations, options.maxRuntime)
 	}
 }
 
@@ -218,5 +222,33 @@ func TestParseRunExecuteArgsCheckpointStoreOverride(t *testing.T) {
 	}
 	if options.checkpointDir != "./checkpoints" {
 		t.Fatalf("options=%#v", options)
+	}
+}
+
+
+func TestParseRunExecuteArgsRunBudget(t *testing.T) {
+	options, err := parseRunExecuteArgs([]string{
+		"--task", "research architecture",
+		"--runtime", "codex",
+		"--max-invocations", "12",
+		"--max-runtime", "5m",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.maxInvocations != 12 || options.maxRuntime != 5*time.Minute {
+		t.Fatalf("options=%#v", options)
+	}
+
+	for _, args := range [][]string{
+		{"--task", "x", "--runtime", "codex", "--max-invocations", "0"},
+		{"--task", "x", "--runtime", "codex", "--max-invocations", "10001"},
+		{"--task", "x", "--runtime", "codex", "--max-runtime", "500ms"},
+		{"--task", "x", "--runtime", "codex", "--max-runtime", "25h"},
+		{"--task", "x", "--runtime", "codex", "--max-runtime", "bad"},
+	} {
+		if _, err := parseRunExecuteArgs(args); err == nil {
+			t.Fatalf("expected budget parse error for %#v", args)
+		}
 	}
 }
