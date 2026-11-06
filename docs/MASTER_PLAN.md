@@ -4,7 +4,7 @@
 >
 > Purpose: preserve the full product vision, current state, execution order, architectural constraints, and acceptance criteria so development can continue safely across chats, IDE sessions, models, and contributors.
 
-Last updated: 2026-11-03
+Last updated: 2026-11-06
 
 ---
 
@@ -246,58 +246,28 @@ The repository already has the foundation for:
 - baseline comparison primitives;
 - baseline integrity foundation.
 
-### Latest completed milestone
+### Latest verified checkpoint — 2026-11-06
 
-PR #128 — versioned typed lifecycle and coordination contracts — merged to `master`.
+Latest merged implementation: PR #134, `feat(tools): normalize external tool health and MCP failure semantics`.
 
-Merge commit:
+Master commit: `c73ac5eea28a7edaea285961a30a862af8da1d5d`.
 
-~~~text
-345c1bf3617032a6f8f04fa024c04274261183ef
-~~~
+Since PR #128, implementation continued through:
+- #130: structured Java/Gradle/Maven and Jest/Vitest failure identities;
+- #131: deterministic OpenAPI compatibility and architecture policy gate;
+- #132: repeated lease, recovery and long event-history soak tests;
+- #133: bounded Engram recall and curated team learning;
+- #134: normalized external-tool health and bounded adapter deadlines.
 
-Validation:
-
-- PR #128 passed the complete Go test suite before merge;
-- automatic collaboration handoffs now emit strict versioned artifact/message payloads;
-- historical unversioned handoffs remain readable through an explicit read-legacy/write-current compatibility rule.
-
-Typed contract functionality now on master:
-
-- strict payload contracts for task briefs, research notes, implementation plans, change proposals, code patch references, test plans, review reports, risk assessments, questions, decisions, and handoffs;
-- existing strict architecture-decision, API-contract, and verification-report contracts retained;
-- versioned message payload contracts for handoff, question, answer, blocker, decision, and status;
-- stable payload schema identities through `artifact.PayloadSchemaID` and `message.PayloadSchemaID`;
-- unknown-field and unsupported-version fail-closed validation;
-- dependency-graph validation for implementation plans;
-- duplicate ID/severity/reference validation for review/risk/handoff payloads;
-- backward-compatible durable replay for pre-contract handoff records.
+Earlier #125-#127 already completed archived event history and verified compaction. The PR #134 head's Go-test GitHub Actions run succeeded. At this checkpoint repository search returned no open pull requests or issues.
 
 ### Immediate next milestone
 
-**Cross-language Quality providers and normalized failure identity.**
+**Release hardening and independently reproducible end-to-end evidence.**
 
-Highest-value targets:
+Execute the release blockers in [RELEASE_READINESS.md](RELEASE_READINESS.md), beginning with the threat model/negative security tests, cross-platform integration and genuine multi-agent E2E scenarios. The roadmap phases below remain the full product vision, not a claim that every feature is shipped.
 
-1. preserve one provider-independent `verification.Failure` identity across toolchains;
-2. add structured Java/Gradle/JUnit parsing;
-3. add structured TypeScript/Angular/Vitest/Jest parsing;
-4. distinguish test failures, compile/type failures and infrastructure failures;
-5. keep baseline comparison safe by reporting parse completeness explicitly;
-6. route language/toolchain selection deterministically from project evidence.
-
-After that:
-
-- contract/architecture verification;
-- long-run recovery/observability soak tests;
-- memory/team-learning hardening;
-- external tool/MCP mesh hardening;
-- optional visual/IDE Control Plane client;
-- final production release/threat-model closure.
-
-Do not hard-code a model per agent role.
-
-Do not weaken promotion, workspace-integrity, permission, snapshot-integrity or stale-run recovery boundaries.
+Do not declare the platform 100% complete based only on merged PRs and Go unit tests. Do not hard-code a model per role or weaken promotion, integrity, approvals, recovery or permission boundaries.
 
 ---
 
