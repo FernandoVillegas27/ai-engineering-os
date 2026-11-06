@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>AI Engineering OS · Control Plane</title>
+  <link rel="stylesheet" href="/ui/app.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">AI</div>
+        <div>
+          <div class="brand-title">Engineering OS</div>
+          <div class="brand-subtitle">Control Plane</div>
+        </div>
+      </div>
+
+      <div class="sidebar-toolbar">
+        <div>
+          <div class="eyebrow">Runs</div>
+          <div id="run-count" class="muted">Loading…</div>
+        </div>
+        <button id="refresh-runs" class="icon-button" type="button" aria-label="Refresh runs">↻</button>
+      </div>
+      <div id="run-list" class="run-list" aria-live="polite"></div>
+
+      <div class="sidebar-footer">
+        <span id="connection-dot" class="status-dot"></span>
+        <span id="connection-label">Connecting</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">Selected run</div>
+          <h1 id="run-title">Choose a run</h1>
+        </div>
+        <div class="topbar-actions">
+          <span id="run-status" class="status-pill neutral">No run</span>
+          <button id="copy-run-id" class="button secondary" type="button" disabled>Copy run ID</button>
+        </div>
+      </header>
+
+      <section id="empty-state" class="empty-state">
+        <div class="empty-icon">⌁</div>
+        <h2>No run selected</h2>
+        <p>Select a durable run from the left to inspect tasks, agents, events, messages, artifacts, promotion readiness, and recovery controls.</p>
+      </section>
+
+      <div id="dashboard" class="dashboard hidden">
+        <section class="summary-grid" aria-label="Run summary">
+          <article class="summary-card">
+            <div class="summary-label">Progress</div>
+            <div id="progress-value" class="summary-value">0 / 0</div>
+            <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
+          </article>
+          <article class="summary-card">
+            <div class="summary-label">Agents</div>
+            <div id="agent-count" class="summary-value">0</div>
+            <div id="agent-subtitle" class="summary-meta">No active agents</div>
+          </article>
+          <article class="summary-card">
+            <div class="summary-label">Coordination</div>
+            <div id="coordination-value" class="summary-value">0</div>
+            <div id="coordination-subtitle" class="summary-meta">messages · artifacts</div>
+          </article>
+          <article class="summary-card">
+            <div class="summary-label">Quality</div>
+            <div id="quality-value" class="summary-value small">—</div>
+            <div id="quality-subtitle" class="summary-meta">verification · review</div>
+          </article>
+        </section>
+
+        <section class="work-grid">
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <div class="eyebrow">Execution graph</div>
+                <h2>Tasks</h2>
+              </div>
+              <span id="task-count" class="count-badge">0</span>
+            </div>
+            <div id="task-list" class="task-list"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <div class="eyebrow">Team</div>
+                <h2>Agents</h2>
+              </div>
+              <span id="active-agent-count" class="count-badge">0 active</span>
+            </div>
+            <div id="agent-list" class="agent-list"></div>
+          </article>
+        </section>
+
+        <section class="panel detail-panel">
+          <div class="tabs" role="tablist" aria-label="Run details">
+            <button class="tab active" data-tab="events" type="button">Timeline <span id="event-count" class="tab-count">0</span></button>
+            <button class="tab" data-tab="messages" type="button">Messages <span id="message-count" class="tab-count">0</span></button>
+            <button class="tab" data-tab="artifacts" type="button">Artifacts <span id="artifact-count" class="tab-count">0</span></button>
+            <button class="tab" data-tab="promotion" type="button">Promotion</button>
+            <button class="tab" data-tab="controls" type="button">Controls</button>
+          </div>
+
+          <div id="tab-events" class="tab-pane active">
+            <div id="event-list" class="timeline"></div>
+          </div>
+          <div id="tab-messages" class="tab-pane">
+            <div id="message-list" class="card-list"></div>
+          </div>
+          <div id="tab-artifacts" class="tab-pane">
+            <div id="artifact-list" class="card-list"></div>
+          </div>
+          <div id="tab-promotion" class="tab-pane">
+            <div id="promotion-view"></div>
+          </div>
+          <div id="tab-controls" class="tab-pane">
+            <div id="controls-view"></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/ui/app.js" defer></script>
+</body>
+</html>

@@ -33,6 +33,8 @@ func (s HTTPServer) Handler() http.Handler {
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/runs", s.handleRunIndex)
 	mux.HandleFunc("/runs/", s.handleRuns)
+	ui := controlPlaneUIHandler()
+	mux.HandleFunc("/", handleControlPlaneUI(ui))
 	return securityHeaders(mux)
 }
 
@@ -387,6 +389,8 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 		next.ServeHTTP(w, r)
 	})
 }

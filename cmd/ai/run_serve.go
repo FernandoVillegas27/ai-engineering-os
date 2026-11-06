@@ -151,8 +151,10 @@ func runRunServe(args []string) error {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
+	fmt.Printf("Control Plane dashboard: http://%s/ui/\n", options.addr)
 	fmt.Printf("Control Plane live API: http://%s\n", options.addr)
 	fmt.Println("Read-only endpoints:")
+	fmt.Println("  GET /ui/")
 	fmt.Println("  GET /health")
 	fmt.Println("  GET /runs/<run-id>/state")
 	fmt.Println("  GET /runs/<run-id>/events")
