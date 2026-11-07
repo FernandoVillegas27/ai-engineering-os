@@ -9,6 +9,17 @@ case "$VERSION" in
   v*) VERSION="${VERSION#v}" ;;
 esac
 
+manifest_version="${VERSION%%-*}"
+if [[ ! "$manifest_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "VS Code manifest version must resolve to major.minor.patch, got: $manifest_version" >&2
+  exit 2
+fi
+
+pre_release_args=()
+if [[ "$VERSION" == *"-"* ]]; then
+  pre_release_args+=(--pre-release)
+fi
+
 mkdir -p "$OUT_DIR"
 OUT_DIR_ABS="$(cd "$OUT_DIR" && pwd)"
 work_dir="$(mktemp -d)"
@@ -16,7 +27,7 @@ trap 'rm -rf "$work_dir"' EXIT
 
 cp -R clients/vscode/. "$work_dir/"
 
-node - "$work_dir/package.json" "$VERSION" <<'NODE'
+node - "$work_dir/package.json" "$manifest_version" <<'NODE'
 const fs = require("node:fs");
 const [path, version] = process.argv.slice(2);
 const pkg = JSON.parse(fs.readFileSync(path, "utf8"));
