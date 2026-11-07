@@ -21,8 +21,9 @@ type Evidence struct {
 	ToolID    string                 `json:"tool_id"`
 	Provider  string                 `json:"provider,omitempty"`
 	State     State                  `json:"state"`
-	Healthy   bool                   `json:"healthy"`
-	Failure   toolhealth.Failure     `json:"failure,omitempty"`
+	Healthy      bool                   `json:"healthy"`
+	RuntimeBound bool                   `json:"runtime_bound"`
+	Failure      toolhealth.Failure     `json:"failure,omitempty"`
 	Details   string                 `json:"details,omitempty"`
 }
 
@@ -32,9 +33,10 @@ func Native(tool registry.Tool) Evidence {
 	return Evidence{
 		ToolID:   tool.ID,
 		Provider: providerID(tool),
-		State:    StateAvailable,
-		Healthy:  true,
-		Details:  "native tool declared enabled",
+		State:        StateAvailable,
+		Healthy:      true,
+		RuntimeBound: true,
+		Details:      "native tool declared enabled",
 	}
 }
 
@@ -44,8 +46,9 @@ func FromHealth(tool registry.Tool, health toolhealth.Status, verified bool) Evi
 	evidence := Evidence{
 		ToolID:   tool.ID,
 		Provider: providerID(tool),
-		Healthy:  health.Healthy,
-		Failure:  failure,
+		Healthy:      health.Healthy,
+		RuntimeBound: false,
+		Failure:      failure,
 		Details:  toolhealth.Redact(strings.TrimSpace(health.Details)),
 		State:    StateUnknown,
 	}
@@ -64,8 +67,9 @@ func Unknown(tool registry.Tool, detail string) Evidence {
 		ToolID:   tool.ID,
 		Provider: providerID(tool),
 		State:    StateUnknown,
-		Healthy:  false,
-		Details:  toolhealth.Redact(strings.TrimSpace(detail)),
+		Healthy:      false,
+		RuntimeBound: false,
+		Details:      toolhealth.Redact(strings.TrimSpace(detail)),
 	}
 }
 
@@ -105,6 +109,12 @@ func ResolvePlan(
 				id,
 			)
 		}
+		if !evidence.RuntimeBound {
+			return nil, nil, fmt.Errorf(
+				"required external tool %q is healthy but not bound to the selected execution runtime",
+				id,
+			)
+		}
 		requiredOut = append(requiredOut, id)
 	}
 
@@ -129,7 +139,7 @@ func ResolvePlan(
 			continue
 		}
 		evidence, exists := snapshot[id]
-		if exists && evidence.State == StateAvailable {
+		if exists && evidence.State == StateAvailable && evidence.RuntimeBound {
 			recommendedOut = append(recommendedOut, id)
 		}
 	}
@@ -137,6 +147,11 @@ func ResolvePlan(
 	sort.Strings(requiredOut)
 	sort.Strings(recommendedOut)
 	return requiredOut, recommendedOut, nil
+}
+
+func Bound(evidence Evidence) Evidence {
+	evidence.RuntimeBound = true
+	return evidence
 }
 
 func ValidateSnapshot(tools registry.ToolRegistry, snapshot Snapshot) error {
