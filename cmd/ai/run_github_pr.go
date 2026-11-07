@@ -164,6 +164,12 @@ func runRunGitHubPRCreate(args []string) error {
 	if !githubPRApprovalRecorded(events, options.taskID, digest, approval.ID) {
 		return errors.New("matching approval evidence has no resolved human grant in the Control Plane audit trail")
 	}
+	// The external operation is not safe to replay after its start was
+	// recorded: a process crash can happen after GitHub accepted the request
+	// but before the completion event was durably appended.
+	if githubPRMutationStarted(events, options.taskID, digest) {
+		return errors.New("this pull-request mutation has already started; inspect GitHub and the audit trail before any new approval")
+	}
 	started, err := controlplane.NewEvent(controlplane.NewEventRequest{
 		RunID: options.runID,
 		TaskID: options.taskID,
@@ -270,6 +276,28 @@ func githubPRApprovalRecorded(events []controlplane.Event, taskID, digest, evide
 		}
 	}
 	return approved
+}
+
+// githubPRMutationStarted treats a pre-mutation event as an irreversible
+// attempt, even if a completion or failure event was never recorded. This is a
+// sequential replay guard; concurrent CLI processes require a separate lock.
+func githubPRMutationStarted(events []controlplane.Event, taskID, digest string) bool {
+	for _, event := range events {
+		if event.TaskID != taskID || event.Type != controlplane.EventToolStarted {
+			continue
+		}
+		var data struct {
+			ToolID string `json:"tool_id"`
+			Operation string `json:"operation"`
+			RequestDigest string `json:"request_digest"`
+		}
+		if json.Unmarshal(event.Data, &data) == nil &&
+			data.ToolID == "github" && data.Operation == "create-pull-request" &&
+			data.RequestDigest == digest {
+			return true
+		}
+	}
+	return false
 }
 
 func githubPRRequest(options githubPROptions, root string) githubintegration.CreatePullRequestRequest {
