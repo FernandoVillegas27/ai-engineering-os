@@ -295,7 +295,7 @@ func prepareVerificationEnvironment(root string) ([]string, func(), error) {
 		"USERPROFILE="+home,
 		"NPM_CONFIG_CACHE="+npmCache,
 		"GRADLE_USER_HOME="+gradleHome,
-		"MAVEN_OPTS=-Duser.home="+home+" -Dmaven.repo.local="+mavenRepo,
+		"MAVEN_OPTS=-Duser.home=\""+home+"\" -Dmaven.repo.local=\""+mavenRepo+"\"",
 	)
 	return env, cleanup, nil
 }
