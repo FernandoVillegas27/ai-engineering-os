@@ -4,9 +4,11 @@ AI Engineering OS separates three questions that must never be conflated:
 
 1. **Is the tool declared and enabled in the registry?**
 2. **Is the provider currently healthy/reachable?**
-3. **Is that tool explicitly bound to the selected execution runtime?**
+3. **Which exact operations of that tool are explicitly bound to the selected execution runtime?**
 
-Only the combination of all required evidence can make an external tool executable by a work unit.
+Only the combination of all required evidence can make an external tool operation executable by a work unit.
+
+Binding is operation-scoped. A provider that is healthy for one read operation does not implicitly expose the rest of the operations declared in the Tool Registry.
 
 ## CLI
 
@@ -29,10 +31,10 @@ Current evidence sources:
 The human output shows both provider state and:
 
 ~~~text
-bound=yes|no
+bound=yes|no operations=<comma-separated-bound-operations>
 ~~~
 
-A healthy provider with `bound=no` is **not** an executable agent capability.
+A healthy provider with `bound=no` is **not** an executable agent capability. A provider with `bound=yes` exposes only the listed `bound_operations`.
 
 ## Runtime work units
 
@@ -113,8 +115,8 @@ The direction is always:
 registry plan
   -> permission boundary
   -> provider health evidence
-  -> explicit runtime binding
-  -> executable subset
+  -> explicit operation-scoped runtime binding
+  -> executable operation subset
 ~~~
 
 
@@ -140,7 +142,10 @@ A successful prefetch produces runtime availability evidence:
 state=available
 healthy=true
 runtime_bound=true
+bound_operations=["search-docs"]
 ~~~
+
+The current Context7 prefetch binds only `search-docs`, because that is the operation AI Engineering OS actually performs. Registry-declared `resolve-library-id` or `query-docs` operations are not advertised as runtime-bound by this adapter.
 
 A provider/network/rate-limit/protocol failure produces unavailable evidence. Because Context7 is currently optional in the built-in agents, the planner removes it rather than failing an otherwise valid run.
 
@@ -163,3 +168,22 @@ The adapter does not give Cursor, Codex, or another model runtime direct network
 Cursor can merge global and project MCP configuration. AI Engineering OS does not use blanket MCP approval as the Context7 binding because that could expose unrelated user-configured servers.
 
 Provider auto-control files are also removed from sanitized runtime views as documented in `runtime-instruction-isolation.md`.
+
+
+## Operation-scoped binding invariant
+
+Runtime availability evidence contains `bound_operations`.
+
+Rules:
+
+- every bound operation must exist in that tool's registry declaration;
+- duplicate, empty, or undeclared operations fail validation;
+- `runtime_bound=true` is valid only when at least one operation is bound;
+- native tools bind their declared local operations;
+- external adapters must name their exact implemented operations;
+- work units persist the operation map durably;
+- Cursor/Codex prompts show only bound operations, never the registry's full theoretical operation list;
+- a tool with no bound operations is omitted from prompt-visible capabilities;
+- external evidence injection may additionally require a specific operation.
+
+This is a prerequisite for higher-risk connectors such as GitHub: a future read-only repository binding can expose `read-repository` without making `create-branch`, `create-commit`, or `create-pull-request` executable.
