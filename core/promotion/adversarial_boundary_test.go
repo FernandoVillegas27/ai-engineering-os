@@ -111,3 +111,22 @@ func TestVerifyTargetStateRejectsUnplannedCreateCollision(t *testing.T) {
 		t.Fatalf("existing file was modified: %q err=%v", data, err)
 	}
 }
+
+
+func TestEnsureSafeParentRejectsTraversalAbsoluteAndVolumePaths(t *testing.T) {
+	root := t.TempDir()
+	cases := []string{
+		"../outside/payload.go",
+		"nested/../../outside/payload.go",
+		"/absolute/payload.go",
+		"C:\\absolute\\payload.go",
+		"\\\\server\\share\\payload.go",
+	}
+	for _, relative := range cases {
+		t.Run(relative, func(t *testing.T) {
+			if err := ensureSafeParent(root, relative, true); err == nil {
+				t.Fatalf("unsafe path accepted: %q", relative)
+			}
+		})
+	}
+}
