@@ -1,0 +1,65 @@
+{
+  "name": "ai-engineering-os",
+  "displayName": "AI Engineering OS",
+  "description": "Read-only VS Code client for the local AI Engineering OS Control Plane.",
+  "version": "0.1.0",
+  "publisher": "fernandovillegas27",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onCommand:aiEngineeringOS.startControlPlane",
+    "onCommand:aiEngineeringOS.openControlPlane",
+    "onCommand:aiEngineeringOS.showRuns",
+    "onCommand:aiEngineeringOS.refreshStatus"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiEngineeringOS.startControlPlane",
+        "title": "AI Engineering OS: Start Control Plane"
+      },
+      {
+        "command": "aiEngineeringOS.openControlPlane",
+        "title": "AI Engineering OS: Open Control Plane"
+      },
+      {
+        "command": "aiEngineeringOS.showRuns",
+        "title": "AI Engineering OS: Show Runs"
+      },
+      {
+        "command": "aiEngineeringOS.refreshStatus",
+        "title": "AI Engineering OS: Refresh Status"
+      }
+    ],
+    "configuration": {
+      "title": "AI Engineering OS",
+      "properties": {
+        "aiEngineeringOS.binaryPath": {
+          "type": "string",
+          "default": "ai",
+          "description": "Path to the AI Engineering OS CLI binary."
+        },
+        "aiEngineeringOS.controlPlaneAddress": {
+          "type": "string",
+          "default": "127.0.0.1:8765",
+          "description": "Loopback address used by ai run serve."
+        },
+        "aiEngineeringOS.requestTimeoutMs": {
+          "type": "number",
+          "default": 3000,
+          "minimum": 250,
+          "maximum": 30000,
+          "description": "Timeout for read-only Control Plane requests."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "check": "node --check extension.js && node --check lib/controlplane.js"
+  }
+}
