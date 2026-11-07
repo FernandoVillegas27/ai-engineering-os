@@ -190,10 +190,36 @@ func TestToolApprovalPendingLifecycleIsExactByOperation(t *testing.T) {
 		makeEvent(controlplane.EventApprovalRequested, "create-commit"),
 		makeEvent(controlplane.EventApprovalGranted, "create-pull-request"),
 	}
-	if toolApprovalPending(events, "task-1", "github", "create-pull-request") {
+	if toolApprovalPending(events, "task-1", "github", "create-pull-request", "") {
 		t.Fatal("granted operation must no longer be pending")
 	}
-	if !toolApprovalPending(events, "task-1", "github", "create-commit") {
+	if !toolApprovalPending(events, "task-1", "github", "create-commit", "") {
 		t.Fatal("sibling operation must remain pending")
+	}
+}
+
+
+func TestToolApprovalPendingSeparatesSameOperationByRequestDigest(t *testing.T) {
+	now := time.Now().UTC()
+	digestA := toolapproval.DigestRequest([]byte("request-a"))
+	digestB := toolapproval.DigestRequest([]byte("request-b"))
+	event, err := controlplane.NewEvent(controlplane.NewEventRequest{
+		RunID: "run-1", TaskID: "task-1", Type: controlplane.EventApprovalRequested,
+		Data: map[string]any{
+			"kind": "tool-operation",
+			"tool_id": "github",
+			"operation": "create-pull-request",
+			"request_digest": digestA,
+		},
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := []controlplane.Event{event}
+	if !toolApprovalPending(events, "task-1", "github", "create-pull-request", digestA) {
+		t.Fatal("exact request digest should be pending")
+	}
+	if toolApprovalPending(events, "task-1", "github", "create-pull-request", digestB) {
+		t.Fatal("different mutation request must not share pending approval")
 	}
 }
