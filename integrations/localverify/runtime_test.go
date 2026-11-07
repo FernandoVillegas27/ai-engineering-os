@@ -146,15 +146,58 @@ func TestVerifyProvidesIsolatedGoBuildCacheAndCleansIt(t *testing.T) {
 	}
 }
 
-func TestSafeVerificationEnvironmentPreservesConfiguredGoModuleCache(t *testing.T) {
+func TestSafeVerificationEnvironmentPreservesModuleCacheButNotUserHomeOrGoPath(t *testing.T) {
 	t.Setenv("GOMODCACHE", filepath.Join(t.TempDir(), "mod-cache"))
-	t.Setenv("GOPATH", filepath.Join(t.TempDir(), "gopath"))
+	t.Setenv("GOPATH", filepath.Join(t.TempDir(), "developer-gopath"))
+	t.Setenv("HOME", filepath.Join(t.TempDir(), "developer-home"))
+	t.Setenv("USERPROFILE", filepath.Join(t.TempDir(), "developer-profile"))
 	env := safeVerificationEnvironment()
 	if got := envValue(env, "GOMODCACHE"); got == "" {
 		t.Fatal("GOMODCACHE should be preserved when configured")
 	}
-	if got := envValue(env, "GOPATH"); got == "" {
-		t.Fatal("GOPATH should be preserved when configured")
+	for _, key := range []string{"GOPATH", "HOME", "USERPROFILE", "NPM_CONFIG_CACHE", "GRADLE_USER_HOME", "MAVEN_OPTS"} {
+		if got := envValue(env, key); got != "" {
+			t.Fatalf("%s leaked from caller environment: %q", key, got)
+		}
+	}
+}
+
+func TestVerifyUsesIsolatedHomeAndLanguageCaches(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/test\n\ngo 1.23\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	developerHome := filepath.Join(t.TempDir(), "developer-home")
+	developerProfile := filepath.Join(t.TempDir(), "developer-profile")
+	t.Setenv("HOME", developerHome)
+	t.Setenv("USERPROFILE", developerProfile)
+	t.Setenv("GOPATH", filepath.Join(t.TempDir(), "developer-gopath"))
+	t.Setenv("NPM_CONFIG_CACHE", filepath.Join(t.TempDir(), "developer-npm-cache"))
+
+	runner := &fakeRunner{}
+	if _, err := (Runtime{Runner: runner}).Verify(context.Background(), root); err != nil {
+		t.Fatal(err)
+	}
+	if len(runner.invocations) != 1 {
+		t.Fatalf("invocations=%d", len(runner.invocations))
+	}
+	env := runner.invocations[0].Env
+	home := envValue(env, "HOME")
+	profile := envValue(env, "USERPROFILE")
+	if home == "" || profile == "" || home != profile {
+		t.Fatalf("isolated HOME/USERPROFILE missing: home=%q profile=%q", home, profile)
+	}
+	if home == developerHome || profile == developerProfile {
+		t.Fatalf("developer home leaked into verification env: %q %q", home, profile)
+	}
+	for _, key := range []string{"GOPATH", "NPM_CONFIG_CACHE", "GRADLE_USER_HOME", "MAVEN_OPTS"} {
+		value := envValue(env, key)
+		if value == "" {
+			t.Fatalf("%s not isolated", key)
+		}
+		if strings.Contains(value, developerHome) || strings.Contains(value, developerProfile) {
+			t.Fatalf("%s references developer home: %q", key, value)
+		}
 	}
 }
 
