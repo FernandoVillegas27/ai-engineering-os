@@ -606,6 +606,9 @@ func parseRunExecuteArgs(args []string) (runExecuteOptions, error) {
 	if options.trustProjectCode && !options.multiAgentWrite {
 		return runExecuteOptions{}, fmt.Errorf("--trust-project-code solo aplica a --multi-agent-write")
 	}
+	if options.multiAgentWrite && !options.trustProjectCode {
+		return runExecuteOptions{}, fmt.Errorf("--multi-agent-write ejecuta código de verificación del repositorio; requiere --trust-project-code explícito")
+	}
 	if strings.TrimSpace(options.task) == "" {
 		return runExecuteOptions{}, fmt.Errorf("--task es obligatorio")
 	}
