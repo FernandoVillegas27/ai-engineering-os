@@ -2,6 +2,7 @@ package localverify
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -25,6 +26,23 @@ type nodeAssertion struct {
 	FullName        string   `json:"fullName"`
 	Status          string   `json:"status"`
 	FailureMessages []string `json:"failureMessages"`
+}
+
+func parseNodeTestJSONFile(path string, exitFailed bool, roots ...string) structuredParse {
+	if strings.TrimSpace(path) == "" {
+		if exitFailed {
+			return structuredParse{Confidence: verification.ParseFailed}
+		}
+		return structuredParse{Confidence: verification.ParseNotAttempted}
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if exitFailed {
+			return structuredParse{Confidence: verification.ParseFailed}
+		}
+		return structuredParse{Confidence: verification.ParsePartial}
+	}
+	return parseNodeTestJSON(string(data), "", exitFailed, roots...)
 }
 
 func parseNodeTestJSON(stdout, stderr string, exitFailed bool, roots ...string) structuredParse {
