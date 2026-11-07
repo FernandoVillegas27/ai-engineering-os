@@ -82,6 +82,15 @@ type PipelineState struct {
 	CheckpointPhase  string `json:"checkpoint_phase,omitempty"`
 }
 
+type ToolApprovalState struct {
+	TaskID       string `json:"task_id"`
+	ToolID       string `json:"tool_id"`
+	Operation    string `json:"operation"`
+	Status       string `json:"status"`
+	EvidenceID   string `json:"evidence_id,omitempty"`
+	ExpiresAt    string `json:"expires_at,omitempty"`
+	LastSequence uint64 `json:"last_sequence"`
+}
 
 
 type Progress struct {
@@ -111,6 +120,7 @@ type State struct {
 	MessageCount     int                   `json:"message_count"`
 	ArtifactCount    int                   `json:"artifact_count"`
 	PendingApprovals int                   `json:"pending_approvals"`
+	ToolApprovals    []ToolApprovalState   `json:"tool_approvals,omitempty"`
 	CancelRequested  bool                  `json:"cancel_requested"`
 	PauseRequested   bool                  `json:"pause_requested"`
 	Runtime          string                `json:"runtime,omitempty"`
@@ -372,9 +382,22 @@ func applyProjectionEvent(state *State, event Event) error {
 		state.Quality.Review = "rejected"
 	case EventApprovalRequested:
 		state.PendingApprovals++
-	case EventApprovalGranted, EventApprovalRejected:
+		if err := applyToolApprovalProjection(state, event, "pending"); err != nil {
+			return err
+		}
+	case EventApprovalGranted:
 		if state.PendingApprovals > 0 {
-		state.PendingApprovals--
+			state.PendingApprovals--
+		}
+		if err := applyToolApprovalProjection(state, event, "granted"); err != nil {
+			return err
+		}
+	case EventApprovalRejected:
+		if state.PendingApprovals > 0 {
+			state.PendingApprovals--
+		}
+		if err := applyToolApprovalProjection(state, event, "rejected"); err != nil {
+			return err
 		}
 	case EventRuntimeSelected:
 		state.Runtime = event.Summary
@@ -386,6 +409,53 @@ func applyProjectionEvent(state *State, event Event) error {
 
 func (s State) task(id string) TaskState {
 	return s.Tasks[id]
+}
+
+func applyToolApprovalProjection(state *State, event Event, status string) error {
+	var metadata struct {
+		Kind       string `json:"kind"`
+		ToolID     string `json:"tool_id"`
+		Operation  string `json:"operation"`
+		EvidenceID string `json:"evidence_id"`
+		ExpiresAt  any    `json:"expires_at"`
+	}
+	if err := json.Unmarshal(event.Data, &metadata); err != nil {
+		return fmt.Errorf("decode approval metadata: %w", err)
+	}
+	if metadata.Kind != "tool-operation" {
+		return nil
+	}
+	metadata.ToolID = strings.TrimSpace(metadata.ToolID)
+	metadata.Operation = strings.TrimSpace(metadata.Operation)
+	if strings.TrimSpace(event.TaskID) == "" || metadata.ToolID == "" || metadata.Operation == "" {
+		return errors.New("tool-operation approval event requires task_id, tool_id and operation")
+	}
+	expiresAt := ""
+	if metadata.ExpiresAt != nil {
+		if raw, err := json.Marshal(metadata.ExpiresAt); err == nil && string(raw) != "null" {
+			expiresAt = strings.Trim(string(raw), "\"")
+		}
+	}
+	value := ToolApprovalState{
+		TaskID:       event.TaskID,
+		ToolID:       metadata.ToolID,
+		Operation:    metadata.Operation,
+		Status:       status,
+		EvidenceID:   strings.TrimSpace(metadata.EvidenceID),
+		ExpiresAt:    expiresAt,
+		LastSequence: event.Sequence,
+	}
+	for i := range state.ToolApprovals {
+		current := &state.ToolApprovals[i]
+		if current.TaskID == value.TaskID &&
+			current.ToolID == value.ToolID &&
+			current.Operation == value.Operation {
+			*current = value
+			return nil
+		}
+	}
+	state.ToolApprovals = append(state.ToolApprovals, value)
+	return nil
 }
 
 func (s *State) recompute() {
@@ -431,6 +501,15 @@ func (s *State) recompute() {
 		sort.Strings(agent.ActiveTasks)
 		s.Agents[id] = agent
 	}
+	sort.Slice(s.ToolApprovals, func(i, j int) bool {
+		if s.ToolApprovals[i].TaskID != s.ToolApprovals[j].TaskID {
+			return s.ToolApprovals[i].TaskID < s.ToolApprovals[j].TaskID
+		}
+		if s.ToolApprovals[i].ToolID != s.ToolApprovals[j].ToolID {
+			return s.ToolApprovals[i].ToolID < s.ToolApprovals[j].ToolID
+		}
+		return s.ToolApprovals[i].Operation < s.ToolApprovals[j].Operation
+	})
 	sort.Slice(s.Edges, func(i, j int) bool {
 		if s.Edges[i].From != s.Edges[j].From {
 			return s.Edges[i].From < s.Edges[j].From

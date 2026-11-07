@@ -93,6 +93,10 @@ func TestControlPlaneUIUsesSameOriginReadOnlyEndpoints(t *testing.T) {
 		`new EventSource(`,
 		`task.tool_operations`,
 		`formatToolOperations`,
+		`tool_approvals`,
+		`approval.requested`,
+		`approval.granted`,
+		`approval.rejected`,
 	} {
 		if !strings.Contains(script, required) {
 			t.Fatalf("dashboard script missing %q", required)
