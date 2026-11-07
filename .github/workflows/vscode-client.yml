@@ -23,7 +23,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: false
       - name: Syntax
         working-directory: clients/vscode
         run: npm run check
