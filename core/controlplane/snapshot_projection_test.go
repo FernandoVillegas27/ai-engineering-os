@@ -221,3 +221,38 @@ func TestProjectFromStateRejectsGapMixedRunAndRunStarted(t *testing.T) {
 		t.Fatal("expected run.started continuation rejection")
 	}
 }
+
+
+func TestProjectFromStateDeepClonesToolOperationAuthority(t *testing.T) {
+	base := State{
+		RunID: "run-tool-authority",
+		Status: RunRunning,
+		LastSequence: 2,
+		Tasks: map[string]TaskState{
+			"task-1": {
+				ID: "task-1",
+				AgentID: "researcher",
+				Status: TaskQueued,
+				ToolOperations: map[string][]string{
+					"github": {"read-repository", "read-issues"},
+				},
+				LastSequence: 2,
+			},
+		},
+		Agents: map[string]AgentState{},
+	}
+	base.recompute()
+
+	continued, err := ProjectFromState(base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := continued.Tasks["task-1"]
+	task.ToolOperations["github"][0] = "create-commit"
+	continued.Tasks["task-1"] = task
+
+	got := base.Tasks["task-1"].ToolOperations["github"]
+	if len(got) != 2 || got[0] != "read-repository" {
+		t.Fatalf("base tool authority was mutated through clone: %#v", got)
+	}
+}
