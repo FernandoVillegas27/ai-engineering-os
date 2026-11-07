@@ -145,13 +145,18 @@ func printToolAvailability(tools registry.ToolRegistry, snapshot toolavailabilit
 		} else if evidence.State == toolavailability.StateUnavailable {
 			health = "unavailable"
 		}
+		binding := "no"
+		if evidence.RuntimeBound {
+			binding = "yes"
+		}
 		fmt.Printf(
-			"%-12s %-10s %-12s %-11s %s\n",
+			"%-12s %-10s %-12s %-11s health=%-11s bound=%s\n",
 			id,
 			tool.Interface.Type,
 			provider,
 			evidence.State,
 			health,
+			binding,
 		)
 		if detail := strings.TrimSpace(evidence.Details); detail != "" {
 			fmt.Printf("  %s\n", toolhealth.Redact(detail))
