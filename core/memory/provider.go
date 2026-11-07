@@ -32,19 +32,29 @@ const (
 	TypeLearning     Type = "learning"
 )
 
+type Provenance struct {
+	RunID   string `json:"run_id,omitempty"`
+	TaskID  string `json:"task_id,omitempty"`
+	AgentID string `json:"agent_id,omitempty"`
+	Source  string `json:"source,omitempty"`
+}
+
 type SaveRequest struct {
-	Project  string
-	Title    string
-	Content  string
-	Type     Type
-	TopicKey string
+	Project    string
+	Title      string
+	Content    string
+	Type       Type
+	TopicKey   string
+	Provenance Provenance
 }
 
 type SaveResult struct {
-	Provider string
-	Project  string
-	Saved    bool
-	Summary  string
+	Provider     string
+	Project      string
+	Saved        bool
+	Summary      string
+	MemoryID     string
+	GovernanceID string
 }
 
 type RecallRequest struct {
@@ -128,4 +138,38 @@ func validType(value Type) bool {
 	default:
 		return false
 	}
+}
+
+
+type DeleteRequest struct {
+	Project  string
+	MemoryID string
+	Hard     bool
+}
+
+type DeleteResult struct {
+	Provider string
+	Project  string
+	MemoryID string
+	Deleted  bool
+	Hard     bool
+	Summary  string
+}
+
+type DeletableProjectMemory interface {
+	ProjectMemory
+	Delete(ctx context.Context, request DeleteRequest) (DeleteResult, error)
+}
+
+func ValidateDeleteRequest(request DeleteRequest) error {
+	if err := validateProject(request.Project); err != nil {
+		return err
+	}
+	if strings.TrimSpace(request.MemoryID) == "" {
+		return errors.New("memory id is required")
+	}
+	if len(request.MemoryID) > 200 || strings.ContainsAny(request.MemoryID, "\r\n") {
+		return errors.New("memory id is invalid")
+	}
+	return nil
 }
