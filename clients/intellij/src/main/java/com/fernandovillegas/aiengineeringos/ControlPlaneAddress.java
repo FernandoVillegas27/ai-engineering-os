@@ -39,7 +39,7 @@ public final class ControlPlaneAddress {
         if (parsed.getUserInfo() != null) {
             throw new IllegalArgumentException("Control Plane URL must not contain user info.");
         }
-        String host = parsed.getHost();
+        String host = stripBrackets(parsed.getHost());
         if (host == null || !isLoopbackHost(host)) {
             throw new IllegalArgumentException("Control Plane address must use localhost or a loopback IP.");
         }
@@ -68,10 +68,7 @@ public final class ControlPlaneAddress {
 
     public static boolean isLoopbackHost(String hostname) {
         if (hostname == null) return false;
-        String host = hostname.trim().toLowerCase(Locale.ROOT);
-        if (host.startsWith("[") && host.endsWith("]")) {
-            host = host.substring(1, host.length() - 1);
-        }
+        String host = stripBrackets(hostname).trim().toLowerCase(Locale.ROOT);
         if (host.equals("localhost") || host.equals("::1") || host.equals("0:0:0:0:0:0:0:1")) {
             return true;
         }
@@ -92,11 +89,20 @@ public final class ControlPlaneAddress {
     }
 
     public @NotNull String authority() {
-        String host = base.getHost();
+        String host = stripBrackets(base.getHost());
         if (host.contains(":")) {
             host = "[" + host + "]";
         }
         return host + ":" + base.getPort();
+    }
+
+    private static String stripBrackets(String host) {
+        if (host == null) return null;
+        String value = host.trim();
+        if (value.startsWith("[") && value.endsWith("]") && value.length() > 2) {
+            return value.substring(1, value.length() - 1);
+        }
+        return value;
     }
 
     public @NotNull URI dashboardUri() {
