@@ -2,8 +2,10 @@ package context7
 
 import (
 	"context"
+	"errors"
 	"os/exec"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +18,10 @@ type fakeRunner struct {
 	version     string
 	versionErr  error
 	block       bool
+	searchOutput string
+	searchErr    error
+	lastEnv      []string
+	lastArgs     []string
 }
 
 func (f *fakeRunner) LookPath(file string) (string, error) {
@@ -34,6 +40,17 @@ func (f *fakeRunner) Run(ctx context.Context, _ string, args ...string) (string,
 		return f.version, f.versionErr
 	}
 	return "", nil
+}
+
+
+func (f *fakeRunner) RunWithEnv(ctx context.Context, env []string, _ string, args ...string) (string, error) {
+	f.lastEnv = append([]string(nil), env...)
+	f.lastArgs = append([]string(nil), args...)
+	if f.block {
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
+	return f.searchOutput, f.searchErr
 }
 
 func TestStatusReadyWhenNPXExists(t *testing.T) {
@@ -104,3 +121,67 @@ func TestHealthClassifiesProbeTimeout(t *testing.T) {
 		t.Fatalf("failure=%#v", health.Failure)
 	}
 }
+
+
+func TestSearchUsesPinnedCLIControlledEnvironmentAndBoundedLibraries(t *testing.T) {
+	runner := &fakeRunner{
+		path: "/usr/bin/npx",
+		searchOutput: `{"codeSnippets":[{"libraryId":"/angular/angular","codeTitle":"Signals"}],"infoSnippets":[]}`,
+	}
+	client := New()
+	client.Runner = runner
+
+	result, err := client.Search(context.Background(), SearchRequest{
+		Query: "Current API usage and compatibility notes for detected project libraries.",
+		Libraries: []string{"Angular", "Spring Boot", "Angular", "TypeScript", "React", "Next.js"},
+		Language: "TypeScript",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(result.Context, "untrusted data") ||
+		!strings.Contains(result.Context, "/angular/angular") {
+		t.Fatalf("context=%q", result.Context)
+	}
+	args := strings.Join(runner.lastArgs, " ")
+	if !strings.Contains(args, "ctx7@0.10.0 search") ||
+		!strings.Contains(args, "--json") ||
+		strings.Count(args, "--library") != 4 {
+		t.Fatalf("args=%q", args)
+	}
+	env := strings.Join(runner.lastEnv, "\n")
+	if !strings.Contains(env, "CTX7_TELEMETRY_DISABLED=1") {
+		t.Fatalf("controlled env missing telemetry disable: %q", env)
+	}
+	if strings.Contains(env, "CONTEXT7_API_KEY=") {
+		t.Fatalf("API key must not be forwarded implicitly: %q", env)
+	}
+}
+
+func TestSearchFailsClosedOnInvalidJSONOrProviderFailure(t *testing.T) {
+	client := New()
+	client.Runner = &fakeRunner{path: "/usr/bin/npx", searchOutput: "not-json"}
+	if _, err := client.Search(context.Background(), SearchRequest{Query: "docs"}); err == nil ||
+		!strings.Contains(err.Error(), "invalid JSON") {
+		t.Fatalf("err=%v", err)
+	}
+
+	client.Runner = &fakeRunner{path: "/usr/bin/npx", searchErr: errors.New("429 rate limit")}
+	if _, err := client.Search(context.Background(), SearchRequest{Query: "docs"}); err == nil ||
+		!strings.Contains(err.Error(), "rate-limit") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestSearchRequiresControlledEnvironmentRunner(t *testing.T) {
+	client := New()
+	client.Runner = structRunner{path: "/usr/bin/npx"}
+	if _, err := client.Search(context.Background(), SearchRequest{Query: "docs"}); err == nil ||
+		!strings.Contains(err.Error(), "controlled environment") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+type structRunner struct{ path string }
+func (r structRunner) LookPath(string) (string, error) { return r.path, nil }
+func (r structRunner) Run(context.Context, string, ...string) (string, error) { return "", nil }

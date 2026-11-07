@@ -116,3 +116,50 @@ registry plan
   -> explicit runtime binding
   -> executable subset
 ~~~
+
+
+## Context7 AI Engineering OS-owned binding
+
+Context7 now has one concrete execution binding that does not depend on model-runtime MCP configuration.
+
+For real runs whose selected plan declares `context7`:
+
+1. AI Engineering OS derives up to four public library hints only from deterministic project technology detection.
+2. It never sends the user's task text, repository source, prompts, file paths, or business context to Context7.
+3. It runs the pinned official CLI package:
+   `ctx7@0.10.0 search <generic-doc-query> --library ... --json`.
+4. The child process runs with a controlled environment and `CTX7_TELEMETRY_DISABLED=1`.
+5. `CONTEXT7_API_KEY` is not implicitly forwarded.
+6. The provider output must be valid JSON and is bounded before it can enter a work unit.
+7. Returned documentation is prefixed as **untrusted external evidence**.
+8. Only work units whose post-availability tool plan still contains `context7` receive that context.
+
+A successful prefetch produces runtime availability evidence:
+
+~~~text
+state=available
+healthy=true
+runtime_bound=true
+~~~
+
+A provider/network/rate-limit/protocol failure produces unavailable evidence. Because Context7 is currently optional in the built-in agents, the planner removes it rather than failing an otherwise valid run.
+
+If a future agent/skill makes Context7 required, the existing fail-closed required-tool rule applies and the run cannot proceed unless this binding succeeds.
+
+### Privacy boundary
+
+The outbound query is intentionally generic:
+
+~~~text
+Current API usage, compatibility notes, and recommended patterns for the detected public project libraries.
+~~~
+
+Only detected public technology names such as Angular, React, Next.js, Spring Boot, Django, pytest, Java, Go, Python, or TypeScript may be used as library hints.
+
+The adapter does not give Cursor, Codex, or another model runtime direct network/MCP access. The model sees only the bounded documentation evidence returned by the AI Engineering OS-owned adapter.
+
+### Why not Cursor global MCP
+
+Cursor can merge global and project MCP configuration. AI Engineering OS does not use blanket MCP approval as the Context7 binding because that could expose unrelated user-configured servers.
+
+Provider auto-control files are also removed from sanitized runtime views as documented in `runtime-instruction-isolation.md`.
