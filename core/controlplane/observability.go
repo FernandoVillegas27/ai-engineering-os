@@ -103,7 +103,7 @@ func (value ObservabilitySnapshot) Prometheus() string {
 	}
 
 	writeMetricHelp(&b, "ai_engineering_os_events_total", "Total durable Control Plane events across retained run history.")
-	writeMetricType(&b, "ai_engineering_os_events_total", "gauge")
+	writeMetricType(&b, "ai_engineering_os_events_total", "counter")
 	fmt.Fprintf(&b, "ai_engineering_os_events_total %d\n", value.EventCount)
 
 	writeMetricHelp(&b, "ai_engineering_os_tasks", "Current projected tasks by status.")
@@ -125,7 +125,11 @@ func (value ObservabilitySnapshot) Prometheus() string {
 		{"ai_engineering_os_cancel_requested_runs", "Runs with a durable cancel request.", value.CancelRequested},
 	} {
 		writeMetricHelp(&b, metric.name, metric.help)
-		writeMetricType(&b, metric.name, "gauge")
+		kind := "gauge"
+		if strings.HasSuffix(metric.name, "_total") {
+			kind = "counter"
+		}
+		writeMetricType(&b, metric.name, kind)
 		fmt.Fprintf(&b, "%s %d\n", metric.name, metric.value)
 	}
 
