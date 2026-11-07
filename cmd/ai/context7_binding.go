@@ -114,6 +114,9 @@ func injectRuntimeToolContext(
 	out := append([]execution.WorkUnit(nil), units...)
 	for i := range out {
 		for _, toolID := range out[i].Tools {
+			if toolID == "context7" && !hasBoundOperation(out[i], toolID, "search-docs") {
+				continue
+			}
 			contextValue := strings.TrimSpace(contextByTool[toolID])
 			if contextValue == "" {
 				continue
@@ -188,4 +191,14 @@ func context7LibraryHints(detection detector.Detection) ([]string, string) {
 		}
 	}
 	return libraries, language
+}
+
+
+func hasBoundOperation(unit execution.WorkUnit, toolID, operation string) bool {
+	for _, value := range unit.ToolOperations[toolID] {
+		if strings.TrimSpace(value) == operation {
+			return true
+		}
+	}
+	return false
 }
