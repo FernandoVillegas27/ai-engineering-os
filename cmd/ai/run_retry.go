@@ -313,9 +313,10 @@ func retryExecutionUnit(parent runstate.Run, target runstate.WorkUnit) execution
 		Intent:       orchestration.Intent(parent.Intent),
 		AgentID:      target.AgentID,
 		Capabilities: append([]string(nil), target.Capabilities...),
-		Skills:       append([]string(nil), target.Skills...),
-		Tools:        append([]string(nil), target.Tools...),
-		Permissions:  target.Permissions,
+		Skills:         append([]string(nil), target.Skills...),
+		Tools:          append([]string(nil), target.Tools...),
+		ToolOperations: execution.CloneToolOperations(target.ToolOperations),
+		Permissions:    target.Permissions,
 		Mode:         execution.ModeReadOnly,
 	}
 }
