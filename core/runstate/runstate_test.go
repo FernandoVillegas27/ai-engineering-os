@@ -431,3 +431,12 @@ func TestProjectCodeTrustPersistsAcrossStoreRoundTrip(t *testing.T) {
 		t.Fatalf("loaded run lost project-code trust: %#v", loaded)
 	}
 }
+
+
+func TestValidateRejectsOperationsForUndeclaredTool(t *testing.T) {
+	run := testRun(t)
+	run.WorkUnits[0].ToolOperations["github"] = []string{"read-repository"}
+	if err := Validate(run); err == nil {
+		t.Fatal("expected undeclared tool operation rejection")
+	}
+}
