@@ -142,8 +142,8 @@ func TestContext7BindingFailsClosedAndOptionalToolIsRemoved(t *testing.T) {
 
 func TestInjectRuntimeToolContextTargetsOnlyDeclaredToolUsers(t *testing.T) {
 	units := []execution.WorkUnit{
-		{ID: "with", Tools: []string{"context7"}, CollaborationContext: "memory"},
-		{ID: "without", Tools: []string{"filesystem"}, CollaborationContext: "memory"},
+		{ID: "with", Tools: []string{"context7"}, ToolOperations: map[string][]string{"context7": {"search-docs"}}, CollaborationContext: "memory"},
+		{ID: "without", Tools: []string{"filesystem"}, ToolOperations: map[string][]string{"filesystem": {"read-files"}}, CollaborationContext: "memory"},
 	}
 	got := injectRuntimeToolContext(units, map[string]string{
 		"context7": "external docs",
@@ -176,5 +176,19 @@ func TestContext7LibraryHintsAreBoundedAndDeterministic(t *testing.T) {
 	}
 	if language != "TypeScript" {
 		t.Fatalf("language=%q", language)
+	}
+}
+
+
+func TestInjectRuntimeToolContextRequiresSearchDocsOperation(t *testing.T) {
+	units := []execution.WorkUnit{{
+		ID: "context7-without-search",
+		Tools: []string{"context7"},
+		ToolOperations: map[string][]string{"context7": {"query-docs"}},
+		CollaborationContext: "memory",
+	}}
+	got := injectRuntimeToolContext(units, map[string]string{"context7": "external docs"})
+	if got[0].CollaborationContext != "memory" {
+		t.Fatalf("context=%q", got[0].CollaborationContext)
 	}
 }
