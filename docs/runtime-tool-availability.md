@@ -435,3 +435,35 @@ A future adapter must additionally define:
 8. explicit approval evidence for every approval-required operation.
 
 Until those requirements are implemented and tested, `ai tools status` correctly leaves Playwright unbound/unknown and real runs omit it from executable optional tools.
+
+
+## Durable operation approval evidence
+
+Approval-required tool operations now have a concrete durable evidence contract.
+
+An approval grant is scoped exactly to:
+
+~~~text
+run_id
+task_id
+tool_id
+operation
+~~~
+
+and records:
+
+- a generated immutable approval ID;
+- a human actor;
+- a granted or rejected decision;
+- creation time;
+- optional expiry.
+
+The evidence store is append-only: an existing approval record cannot be overwritten in place.
+
+Runtime authority validation remains fail-closed. An approval-required operation can be accepted only when a non-expired human grant matches the exact run, task, tool and operation being validated.
+
+Evidence from another run or task cannot be reused. Approval for one operation cannot authorize a sibling operation on the same provider. Rejected or expired evidence never grants authority.
+
+The legacy validator without an approval scope continues to reject approval-required operations. This prevents old call sites from accidentally gaining new authority merely because the evidence type exists.
+
+This foundation does not itself execute GitHub mutations or Playwright browser actions. Concrete mutation/browser adapters must separately prove their fixed request/command boundary and then supply matching durable approval evidence at the exact execution boundary.
