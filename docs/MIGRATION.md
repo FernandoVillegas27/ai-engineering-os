@@ -52,6 +52,20 @@ Provider-native records are not imported automatically because doing so would by
 
 If old provider knowledge is still important, review it and deliberately recreate the durable facts through governed memory rather than bulk-importing transcripts.
 
+## Durable tool operation bindings
+
+New run records may contain the additive optional field:
+
+~~~text
+work_units[].tool_operations
+~~~
+
+It records the exact runtime-bound operations that were available to a work unit.
+
+Current binaries remain able to read older run records that do not contain this field. Missing operation metadata is treated as missing evidence; it is never used to infer new external-tool authority.
+
+Older binaries may reject newer run records containing fields they do not understand. Do not remove or hand-edit `tool_operations` to force a downgrade. Use the newer binary for inspection/resume/export of runs written by the newer release line.
+
 ## Runtime/model configuration
 
 Do not migrate by pinning a model to each agent role.
