@@ -72,9 +72,6 @@ func runRunToolApprovalRequest(args []string) error {
 	if toolApprovalPending(events, options.taskID, options.toolID, options.operation) {
 		return fmt.Errorf("approval is already pending for %s/%s on task %s", options.toolID, options.operation, options.taskID)
 	}
-	if toolApprovalResolved(events, options.taskID, options.toolID, options.operation) {
-		return fmt.Errorf("approval was already resolved for %s/%s on task %s", options.toolID, options.operation, options.taskID)
-	}
 	event, err := controlplane.NewEvent(controlplane.NewEventRequest{
 		RunID:   run.ID,
 		Type:    controlplane.EventApprovalRequested,
@@ -91,6 +88,13 @@ func runRunToolApprovalRequest(args []string) error {
 	}
 	if _, err := eventStore.Append(context.Background(), event); err != nil {
 		return err
+	}
+	store, err := openToolApprovalStore(options.approvalDir)
+	if err != nil {
+		return err
+	}
+	if err := store.Save(evidence); err != nil {
+		return fmt.Errorf("persist approval evidence after audit event: %w", err)
 	}
 	return printToolApprovalView(toolApprovalView{
 		RunID: run.ID, TaskID: options.taskID, ToolID: options.toolID,
@@ -138,13 +142,6 @@ func runRunToolApprovalResolve(args []string, granted bool) error {
 		Operation: options.operation, Status: status, Actor: "human", ExpiresAt: expiresAt,
 	}, now)
 	if err != nil {
-		return err
-	}
-	store, err := openToolApprovalStore(options.approvalDir)
-	if err != nil {
-		return err
-	}
-	if err := store.Save(evidence); err != nil {
 		return err
 	}
 	event, err := controlplane.NewEvent(controlplane.NewEventRequest{
