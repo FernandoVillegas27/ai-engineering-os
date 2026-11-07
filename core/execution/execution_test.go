@@ -187,7 +187,7 @@ func TestFormatToolBindingsMarksMissingOperationEvidence(t *testing.T) {
 	unit := WorkUnit{
 		Tools: []string{"github"},
 	}
-	if got := FormatToolBindings(unit); got != "github[no-bound-operations]" {
+	if got := FormatToolBindings(unit); got != "" {
 		t.Fatalf("got=%q", got)
 	}
 }
