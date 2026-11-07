@@ -93,7 +93,14 @@ func Build(
 			recommendedTools = append(recommendedTools, skill.Tools.Recommended...)
 		}
 
-		requiredTools = enabledToolIDs(uniqueSorted(requiredTools), tools)
+		requiredTools, toolErr := resolveRequiredTools(
+			agent.ID,
+			uniqueSorted(requiredTools),
+			tools,
+		)
+		if toolErr != nil {
+			return Plan{}, toolErr
+		}
 		recommendedTools = enabledToolIDs(uniqueSorted(recommendedTools), tools)
 		recommendedTools = subtract(recommendedTools, requiredTools)
 
@@ -306,6 +313,34 @@ func skillIDs(matches []resolver.SkillMatch) []string {
 	}
 	sort.Strings(ids)
 	return ids
+}
+
+func resolveRequiredTools(
+	agentID string,
+	ids []string,
+	registry registry.ToolRegistry,
+) ([]string, error) {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		tool, ok := registry.Tools[id]
+		if !ok {
+			return nil, fmt.Errorf(
+				"agent %q requires tool %q but it is not present in the tool registry",
+				agentID,
+				id,
+			)
+		}
+		if tool.Status != "enabled" {
+			return nil, fmt.Errorf(
+				"agent %q requires tool %q but its registry status is %q",
+				agentID,
+				id,
+				tool.Status,
+			)
+		}
+		out = append(out, id)
+	}
+	return out, nil
 }
 
 func enabledToolIDs(ids []string, registry registry.ToolRegistry) []string {
