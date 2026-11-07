@@ -55,6 +55,9 @@ func runCoordinatedMutation(
 	if !options.multiAgentWrite {
 		return fmt.Errorf("coordinated mutation requires explicit --multi-agent-write")
 	}
+	if !options.trustProjectCode {
+		return fmt.Errorf("mutating verification executes repository-owned code; review the project and pass --trust-project-code explicitly, or use a read-only/dry-run workflow")
+	}
 	if options.dryRun {
 		return fmt.Errorf("--multi-agent-write cannot be combined with --dry-run")
 	}
@@ -126,6 +129,7 @@ func runCoordinatedMutation(
 			ModelPolicy: string(options.modelPolicy),
 			Model:       options.model,
 		},
+		ProjectCodeTrusted: options.trustProjectCode,
 		WorkUnits: participants,
 	}, time.Now().UTC())
 	if err != nil {

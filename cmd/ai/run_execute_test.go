@@ -95,12 +95,13 @@ func TestParseRunExecuteArgsMultiAgentWriteOptIn(t *testing.T) {
 		"--task", "implement backend and frontend",
 		"--runtime", "cursor",
 		"--multi-agent-write",
+		"--trust-project-code",
 		"--model-policy", "auto",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !options.multiAgentWrite || options.runtime != "cursor" {
+	if !options.multiAgentWrite || !options.trustProjectCode || options.runtime != "cursor" {
 		t.Fatalf("options = %#v", options)
 	}
 	if options.modelPolicy != modelpolicy.PolicyAuto {
@@ -114,6 +115,8 @@ func TestParseRunExecuteArgsMultiAgentWriteRequiresExplicitCompatibleMode(t *tes
 		{"--task", "x", "--runtime", "unknown", "--multi-agent-write"},
 		{"--task", "x", "--runtime", "cursor"},
 		{"--task", "x", "--runtime", "auto"},
+		{"--task", "x", "--runtime", "cursor", "--multi-agent-write"},
+		{"--task", "x", "--runtime", "cursor", "--trust-project-code"},
 	}
 	for _, args := range cases {
 		if _, err := parseRunExecuteArgs(args); err == nil {
@@ -215,6 +218,7 @@ func TestParseRunExecuteArgsCheckpointStoreOverride(t *testing.T) {
 		"--task", "implement",
 		"--runtime", "cursor",
 		"--multi-agent-write",
+		"--trust-project-code",
 		"--checkpoint-dir", "./checkpoints",
 	})
 	if err != nil {

@@ -159,3 +159,30 @@ Do not include:
 - private keys;
 - raw secret files;
 - production credentials.
+
+
+## Mutating run refuses without --trust-project-code
+
+This is a release security boundary, not a missing configuration.
+
+Quality may execute repository-owned commands such as `go test`, Maven/Gradle tests, `npm test`, or pytest. Arbitrary project code cannot be treated as safe merely because it is called a test.
+
+After reviewing/trusting the repository:
+
+~~~sh
+ai run execute . \
+  --task "..." \
+  --runtime auto \
+  --multi-agent-write \
+  --trust-project-code
+~~~
+
+The trust decision is persisted in the durable run for safe pause/resume.
+
+A legacy paused mutation without this evidence must be resumed with an explicit:
+
+~~~sh
+ai run resume <run-id> --trust-project-code
+~~~
+
+Verification still receives an isolated HOME/USERPROFILE and language-tool caches. This trust flag does **not** allow agents to access secrets, production, Git push, or promotion without approval.

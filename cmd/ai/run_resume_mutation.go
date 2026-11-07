@@ -26,6 +26,9 @@ func runRunResumeMutation(
 	run runstate.Run,
 	runStore *runstate.Store,
 ) error {
+	if !run.ProjectCodeTrusted {
+		return fmt.Errorf("mutating run %s lacks explicit project-code trust evidence", run.ID)
+	}
 	if strings.TrimSpace(run.ProjectRoot) == "" {
 		return fmt.Errorf("mutating run %s has no durable project root", run.ID)
 	}

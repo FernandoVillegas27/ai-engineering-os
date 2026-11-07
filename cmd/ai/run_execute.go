@@ -47,6 +47,7 @@ type runExecuteOptions struct {
 	modelPolicy    modelpolicy.Policy
 	model          string
 	memoryMode     string
+	trustProjectCode bool
 	multiAgentWrite bool
 	json           bool
 }
@@ -509,6 +510,8 @@ func parseRunExecuteArgs(args []string) (runExecuteOptions, error) {
 			if _, err := runMemoryProvider(options.memoryMode); err != nil {
 				return runExecuteOptions{}, err
 			}
+		case "--trust-project-code":
+			options.trustProjectCode = true
 		case "--multi-agent-write":
 			options.multiAgentWrite = true
 		case "--state-dir":
@@ -586,7 +589,7 @@ func parseRunExecuteArgs(args []string) (runExecuteOptions, error) {
 		case "--json":
 			options.json = true
 		case "-h", "--help":
-			return runExecuteOptions{}, fmt.Errorf("uso: ai run execute [ruta] --task <tarea> (--dry-run | --runtime auto|codex|cursor) [--multi-agent-write] [--project id] [--max-concurrency N] [--max-invocations N] [--max-runtime 30m] [--model-policy auto|economy|balanced|deep] [--model id] [--memory auto|engram|off] [--ai]")
+			return runExecuteOptions{}, fmt.Errorf("uso: ai run execute [ruta] --task <tarea> (--dry-run | --runtime auto|codex|cursor) [--multi-agent-write] [--project id] [--max-concurrency N] [--max-invocations N] [--max-runtime 30m] [--model-policy auto|economy|balanced|deep] [--model id] [--memory auto|engram|off] [--trust-project-code] [--ai]")
 		default:
 			if strings.HasPrefix(args[i], "-") {
 				return runExecuteOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
@@ -599,6 +602,12 @@ func parseRunExecuteArgs(args []string) (runExecuteOptions, error) {
 	}
 	if len(positional) == 1 {
 		options.root = positional[0]
+	}
+	if options.trustProjectCode && !options.multiAgentWrite {
+		return runExecuteOptions{}, fmt.Errorf("--trust-project-code solo aplica a --multi-agent-write")
+	}
+	if options.multiAgentWrite && !options.trustProjectCode {
+		return runExecuteOptions{}, fmt.Errorf("--multi-agent-write ejecuta código de verificación del repositorio; requiere --trust-project-code explícito")
 	}
 	if strings.TrimSpace(options.task) == "" {
 		return runExecuteOptions{}, fmt.Errorf("--task es obligatorio")

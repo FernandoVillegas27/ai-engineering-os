@@ -333,3 +333,18 @@ func TestParseRunPauseResumeArgs(t *testing.T) {
 		t.Fatalf("resume=%#v", resume)
 	}
 }
+
+
+func TestParseRunResumeArgsProjectCodeTrust(t *testing.T) {
+	options, err := parseRunResumeArgs([]string{
+		"run-legacy",
+		"--trust-project-code",
+		"--max-concurrency", "3",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !options.trustProjectCode || options.runID != "run-legacy" || options.maxConcurrency != 3 {
+		t.Fatalf("options=%#v", options)
+	}
+}

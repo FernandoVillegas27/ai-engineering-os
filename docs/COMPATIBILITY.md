@@ -98,3 +98,17 @@ The `0.1.0-rc.1` line targets:
 - Linux/Windows/macOS core verification.
 
 Items outside that scope must remain documented as roadmap work rather than implied support.
+
+
+## Repository-owned verification code
+
+Mutating coordinated runs are supported only when the operator explicitly supplies `--trust-project-code`.
+
+Reason: test/build commands are executable repository content. AI Engineering OS isolates their user/cache environment and enforces post-verification workspace/promotion checks, but it does not claim a universal cross-platform filesystem/network sandbox for arbitrary third-party test programs.
+
+Therefore:
+
+- read-only/dry-run operation remains available for untrusted repositories;
+- unattended mutating verification of an untrusted repository is outside the release scope;
+- trusting project code is an explicit human decision and is persisted durably;
+- that decision does not expand agent/model permissions.

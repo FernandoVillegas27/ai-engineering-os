@@ -195,6 +195,7 @@ func TestRunResumeRoutesMutatingPausedRunThroughCheckpointRestore(t *testing.T) 
 	now := time.Now().UTC().Add(-time.Minute)
 
 	run := mutationCheckpointFixtureRun(t)
+	run.ProjectCodeTrusted = true
 	run.ProjectRoot = base + "/project"
 	if err := os.MkdirAll(run.ProjectRoot, 0o755); err != nil {
 		t.Fatal(err)
@@ -248,5 +249,49 @@ func TestRunResumeRoutesMutatingPausedRunThroughCheckpointRestore(t *testing.T) 
 	})
 	if err == nil || !strings.Contains(err.Error(), "restore mutation checkpoint") {
 		t.Fatalf("err=%#v", err)
+	}
+}
+
+
+func TestRunResumeMutatingLegacyRunRequiresExplicitTrust(t *testing.T) {
+	base := t.TempDir()
+	stateDir := base + "/runs"
+	run := mutationCheckpointFixtureRun(t)
+	run.ProjectCodeTrusted = false
+	run.ProjectRoot = base + "/project"
+	if err := os.MkdirAll(run.ProjectRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().UTC()
+	if at.Before(run.UpdatedAt) {
+		at = run.UpdatedAt
+	}
+	if err := runstate.Transition(&run, runstate.StatusPaused, at); err != nil {
+		t.Fatal(err)
+	}
+	store, err := runstate.NewStore(stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(run); err != nil {
+		t.Fatal(err)
+	}
+
+	err = runRunResume([]string{run.ID, "--state-dir", stateDir})
+	if err == nil || !strings.Contains(err.Error(), "no durable project-code trust evidence") {
+		t.Fatalf("err=%#v", err)
+	}
+
+	// Explicit trust is persisted before downstream resume validation proceeds.
+	err = runRunResume([]string{run.ID, "--state-dir", stateDir, "--trust-project-code"})
+	if err == nil {
+		t.Fatal("expected later resume validation error because no event stream fixture exists")
+	}
+	loaded, loadErr := store.Load(run.ID)
+	if loadErr != nil {
+		t.Fatal(loadErr)
+	}
+	if !loaded.ProjectCodeTrusted {
+		t.Fatalf("explicit resume trust was not persisted: %#v", loaded)
 	}
 }

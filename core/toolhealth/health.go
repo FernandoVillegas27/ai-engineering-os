@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -58,18 +59,19 @@ func Run(
 	defer cancel()
 
 	output, err := fn(runCtx)
+	safeOutput := Redact(output)
 	duration := time.Since(started)
 	if err == nil {
-		return output, Failure{}, duration
+		return safeOutput, Failure{}, duration
 	}
 	if errors.Is(runCtx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
-		return output, Failure{
+		return safeOutput, Failure{
 			Kind:      FailureTimeout,
 			Retryable: true,
 			Detail:    fmt.Sprintf("operation exceeded %s", timeout),
 		}, duration
 	}
-	return output, Classify(err, output), duration
+	return safeOutput, Classify(err, safeOutput), duration
 }
 
 func Classify(err error, output string) Failure {
@@ -77,10 +79,10 @@ func Classify(err error, output string) Failure {
 		return Failure{}
 	}
 	if errors.Is(err, exec.ErrNotFound) {
-		return Failure{Kind: FailureUnavailable, Detail: err.Error()}
+		return Failure{Kind: FailureUnavailable, Detail: Redact(err.Error())}
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return Failure{Kind: FailureTimeout, Retryable: true, Detail: err.Error()}
+		return Failure{Kind: FailureTimeout, Retryable: true, Detail: Redact(err.Error())}
 	}
 
 	combined := strings.ToLower(strings.TrimSpace(err.Error() + "\n" + output))
@@ -103,7 +105,7 @@ func Classify(err error, output string) Failure {
 func Unhealthy(detail string) Failure {
 	return Failure{
 		Kind:   FailureUnhealthy,
-		Detail: strings.TrimSpace(detail),
+		Detail: Redact(strings.TrimSpace(detail)),
 	}
 }
 
@@ -116,6 +118,26 @@ func containsAny(value string, terms ...string) bool {
 	return false
 }
 
+var diagnosticSecretPatterns = []*regexp.Regexp{
+	regexp.MustCompile("(?i)(authorization\\s*:\\s*bearer\\s+)[A-Za-z0-9._~+/=-]+"),
+	regexp.MustCompile("(?i)((?:api[_-]?key|token|secret|password|passwd|pwd)\\s*[:=]\\s*)[^\\s,;]+"),
+	regexp.MustCompile("\\bgh[pousr]_[A-Za-z0-9]{20,}\\b"),
+	regexp.MustCompile("\\bsk-[A-Za-z0-9_-]{16,}\\b"),
+	regexp.MustCompile("(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----"),
+}
+
+func Redact(value string) string {
+	result := value
+	for index, pattern := range diagnosticSecretPatterns {
+		replacement := "[REDACTED]"
+		if index < 2 {
+			replacement = "$1[REDACTED]"
+		}
+		result = pattern.ReplaceAllString(result, replacement)
+	}
+	return result
+}
+
 func compactDetail(err error, output string) string {
 	parts := []string{}
 	if err != nil && strings.TrimSpace(err.Error()) != "" {
@@ -124,7 +146,7 @@ func compactDetail(err error, output string) string {
 	if strings.TrimSpace(output) != "" {
 		parts = append(parts, strings.TrimSpace(output))
 	}
-	detail := strings.Join(parts, ": ")
+	detail := Redact(strings.Join(parts, ": "))
 	if len(detail) > 2000 {
 		detail = detail[:1997] + "..."
 	}
