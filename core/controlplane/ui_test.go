@@ -94,6 +94,7 @@ func TestControlPlaneUIUsesSameOriginReadOnlyEndpoints(t *testing.T) {
 		`task.tool_operations`,
 		`formatToolOperations`,
 		`tool_approvals`,
+		`request_digest`,
 		`approval.requested`,
 		`approval.granted`,
 		`approval.rejected`,
