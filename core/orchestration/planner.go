@@ -93,13 +93,13 @@ func Build(
 			recommendedTools = append(recommendedTools, skill.Tools.Recommended...)
 		}
 
-		requiredTools, err = resolveRequiredTools(
+		requiredTools, toolErr := resolveRequiredTools(
 			agent.ID,
 			uniqueSorted(requiredTools),
 			tools,
 		)
-		if err != nil {
-			return Plan{}, err
+		if toolErr != nil {
+			return Plan{}, toolErr
 		}
 		recommendedTools = enabledToolIDs(uniqueSorted(recommendedTools), tools)
 		recommendedTools = subtract(recommendedTools, requiredTools)
