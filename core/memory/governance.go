@@ -231,6 +231,23 @@ func (s *GovernanceStore) Delete(project, id, reason string, now time.Time) (Rec
 	return record, nil
 }
 
+func (s *GovernanceStore) ActiveByTopic(project, topic string, now time.Time) (Record, bool, error) {
+	topic = strings.TrimSpace(topic)
+	if topic == "" {
+		return Record{}, false, nil
+	}
+	values, err := s.List(project, false, now)
+	if err != nil {
+		return Record{}, false, err
+	}
+	for _, record := range values {
+		if record.TopicKey == topic {
+			return record, true, nil
+		}
+	}
+	return Record{}, false, nil
+}
+
 func (s *GovernanceStore) Supersede(project, id string, replacement GovernedSaveRequest, now time.Time) (Record, Record, error) {
 	current, err := s.Load(project, id)
 	if err != nil {
@@ -251,6 +268,10 @@ func (s *GovernanceStore) Supersede(project, id string, replacement GovernedSave
 	current.SupersededBy = next.ID
 	current.UpdatedAt = next.CreatedAt
 	if err := s.replace(current); err != nil {
+		dir, dirErr := s.projectDir(project)
+		if dirErr == nil {
+			_ = os.Remove(filepath.Join(dir, next.ID+".json"))
+		}
 		return Record{}, Record{}, err
 	}
 	return current, next, nil
