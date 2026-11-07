@@ -237,3 +237,21 @@ func TestParseRunRetryArgs(t *testing.T) {
 		t.Fatalf("options=%#v", options)
 	}
 }
+
+
+func TestRetryExecutionUnitPreservesToolOperations(t *testing.T) {
+	parent := runstate.Run{ProjectRoot: ".", Intent: "research"}
+	target := runstate.WorkUnit{
+		ID: "research", AgentID: "researcher", Task: "research",
+		Tools: []string{"context7"},
+		ToolOperations: map[string][]string{"context7": {"search-docs"}},
+		Permissions: execution.PermissionEnvelope{
+			SourceCode: "read", Tests: "read", GitCommit: "deny",
+			GitPush: "deny", Secrets: "deny", Production: "deny",
+		},
+	}
+	unit := retryExecutionUnit(parent, target)
+	if got := unit.ToolOperations["context7"]; len(got) != 1 || got[0] != "search-docs" {
+		t.Fatalf("tool operations=%#v", unit.ToolOperations)
+	}
+}
