@@ -296,9 +296,10 @@ func reconstructPausedReadOnlyRun(run runstate.Run) ([]execution.WorkUnit, []sch
 			Intent:       orchestration.Intent(run.Intent),
 			AgentID:      durable.AgentID,
 			Capabilities: append([]string(nil), durable.Capabilities...),
-			Skills:       append([]string(nil), durable.Skills...),
-			Tools:        append([]string(nil), durable.Tools...),
-			Permissions:  durable.Permissions,
+			Skills:         append([]string(nil), durable.Skills...),
+			Tools:          append([]string(nil), durable.Tools...),
+			ToolOperations: execution.CloneToolOperations(durable.ToolOperations),
+			Permissions:    durable.Permissions,
 			Mode:         execution.ModeReadOnly,
 		})
 		tasks = append(tasks, scheduler.Task{
