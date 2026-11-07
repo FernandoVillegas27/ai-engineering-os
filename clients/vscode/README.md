@@ -40,3 +40,21 @@ npm run check
 ~~~
 
 To run in VS Code extension development mode, open this directory in VS Code and launch an Extension Development Host using the standard VS Code extension debugger configuration of your choice.
+
+
+## Installable package
+
+Release CI builds a checksum-protected VSIX:
+
+~~~text
+ai-engineering-os_<product-version>_vscode.vsix
+ai-engineering-os_<product-version>_vscode.vsix.sha256
+~~~
+
+Install it from **Extensions → … → Install from VSIX…** or:
+
+~~~sh
+code --install-extension ai-engineering-os_<product-version>_vscode.vsix
+~~~
+
+For product release candidates, the VSIX is marked as a VS Code pre-release while keeping a numeric `major.minor.patch` extension manifest version.

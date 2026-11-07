@@ -8,7 +8,9 @@
   "engines": {
     "vscode": "^1.95.0"
   },
-  "categories": ["Other"],
+  "categories": [
+    "Other"
+  ],
   "activationEvents": [
     "onCommand:aiEngineeringOS.startControlPlane",
     "onCommand:aiEngineeringOS.openControlPlane",
@@ -61,5 +63,10 @@
   "scripts": {
     "test": "node --test test/*.test.js",
     "check": "node --check extension.js && node --check lib/controlplane.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FernandoVillegas27/ai-engineering-os.git",
+    "directory": "clients/vscode"
   }
 }

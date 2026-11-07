@@ -41,3 +41,17 @@ The project uses IntelliJ Platform Gradle Plugin 2.20.0 and targets IntelliJ IDE
 ~~~text
 gradle test buildPlugin verifyPluginProjectConfiguration
 ~~~
+
+
+## Installable package
+
+Release CI builds a checksum-protected IntelliJ plugin distribution:
+
+~~~text
+ai-engineering-os_<product-version>_intellij.zip
+ai-engineering-os_<product-version>_intellij.zip.sha256
+~~~
+
+Install the ZIP from IntelliJ IDEA using **Settings → Plugins → ⚙ → Install Plugin from Disk…**.
+
+The plugin distribution version is injected from the release version without editing source files.

@@ -5,6 +5,10 @@ on:
     paths:
       - ".github/workflows/release-artifacts.yml"
       - "scripts/build-release.sh"
+      - "scripts/build-vscode-release.sh"
+      - "scripts/build-intellij-release.sh"
+      - "clients/vscode/**"
+      - "clients/intellij/**"
       - "core/buildinfo/**"
       - "cmd/ai/**"
       - "go.mod"
@@ -19,7 +23,7 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    name: Build CLI ${{ matrix.goos }}/${{ matrix.goarch }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -59,7 +63,7 @@ jobs:
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
           echo "date=$date" >> "$GITHUB_OUTPUT"
 
-      - name: Build package and checksum
+      - name: Build CLI package and checksum
         shell: bash
         env:
           VERSION: ${{ steps.meta.outputs.version }}
@@ -70,12 +74,105 @@ jobs:
           OUT_DIR: dist
         run: bash scripts/build-release.sh
 
-      - name: Upload package evidence
+      - name: Upload CLI package evidence
         uses: actions/upload-artifact@v4
         with:
-          name: ai-engineering-os-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: ai-engineering-os-cli-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
             dist/*.tar.gz
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  vscode:
+    name: Build VS Code client
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Resolve release version
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="0.1.0-rc.1"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Test VS Code client
+        working-directory: clients/vscode
+        run: |
+          npm run check
+          npm test
+
+      - name: Build VSIX and checksum
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          OUT_DIR: dist
+        run: bash scripts/build-vscode-release.sh
+
+      - name: Upload VS Code package evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-engineering-os-vscode
+          path: |
+            dist/*.vsix
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  intellij:
+    name: Build IntelliJ client
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.8.2"
+
+      - name: Resolve release version
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="0.1.0-rc.1"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build IntelliJ plugin and checksum
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          OUT_DIR: dist
+        run: bash scripts/build-intellij-release.sh
+
+      - name: Upload IntelliJ package evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-engineering-os-intellij
+          path: |
+            dist/*.zip
             dist/*.sha256
           if-no-files-found: error
           retention-days: 14
@@ -83,7 +180,10 @@ jobs:
   release:
     name: Publish tagged release
     if: github.event_name == 'push' && github.ref_type == 'tag'
-    needs: build
+    needs:
+      - build
+      - vscode
+      - intellij
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -103,10 +203,17 @@ jobs:
         run: |
           set -euo pipefail
           cd release
-          for checksum in *.sha256; do
+          shopt -s nullglob
+          checksum_files=( *.sha256 )
+          packages=( *.tar.gz *.vsix *.zip )
+          if [[ "${#checksum_files[@]}" -eq 0 || "${#packages[@]}" -eq 0 ]]; then
+            echo "release artifacts or checksum files are missing" >&2
+            exit 1
+          fi
+          for checksum in "${checksum_files[@]}"; do
             sha256sum -c "$checksum"
           done
-          sha256sum *.tar.gz > SHA256SUMS
+          sha256sum "${packages[@]}" > SHA256SUMS
           cat SHA256SUMS
 
       - name: Publish GitHub release
@@ -119,4 +226,12 @@ jobs:
           if [[ "$GITHUB_REF_NAME" == *"-rc."* ]]; then
             prerelease="--prerelease"
           fi
-          gh release create "$GITHUB_REF_NAME"             release/*.tar.gz             release/*.sha256             release/SHA256SUMS             --verify-tag             --generate-notes             $prerelease
+          gh release create "$GITHUB_REF_NAME" \
+            release/*.tar.gz \
+            release/*.vsix \
+            release/*.zip \
+            release/*.sha256 \
+            release/SHA256SUMS \
+            --verify-tag \
+            --generate-notes \
+            $prerelease

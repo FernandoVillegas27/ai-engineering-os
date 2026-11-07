@@ -5,12 +5,14 @@ on:
     paths:
       - "clients/vscode/**"
       - ".github/workflows/vscode-client.yml"
+      - "scripts/build-vscode-release.sh"
   push:
     branches:
       - master
     paths:
       - "clients/vscode/**"
       - ".github/workflows/vscode-client.yml"
+      - "scripts/build-vscode-release.sh"
 
 permissions:
   contents: read
@@ -29,3 +31,17 @@ jobs:
       - name: Unit tests
         working-directory: clients/vscode
         run: npm test
+      - name: Build installable VSIX and checksum
+        env:
+          VERSION: 0.1.0-rc.1
+          OUT_DIR: dist
+        run: bash scripts/build-vscode-release.sh
+      - name: Upload VSIX evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-engineering-os-vscode
+          path: |
+            dist/*.vsix
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 14
