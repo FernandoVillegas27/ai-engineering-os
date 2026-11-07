@@ -43,3 +43,6 @@ jobs:
 
       - name: Doctor smoke test
         run: go run ./cmd/ai doctor
+
+      - name: Version smoke test
+        run: go run ./cmd/ai version --json
