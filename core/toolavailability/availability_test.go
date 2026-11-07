@@ -55,9 +55,9 @@ func TestResolvePlanAllowsVerifiedExternalAndOmitsUnknownOptional(t *testing.T) 
 		tools,
 		Snapshot{
 			"filesystem": Native(tools.Tools["filesystem"]),
-			"engram": FromHealth(tools.Tools["engram"], toolhealth.Status{
+			"engram": Bound(FromHealth(tools.Tools["engram"], toolhealth.Status{
 				Provider: "engram", Available: true, Healthy: true,
-			}, true),
+			}, true)),
 			"context7": Unknown(tools.Tools["context7"], "remote host connectivity not verified"),
 			"github": Unknown(tools.Tools["github"], "connector status unavailable"),
 		},
@@ -81,9 +81,9 @@ func TestResolvePlanKeepsOnlyAvailableOptionalExternalTools(t *testing.T) {
 		tools,
 		Snapshot{
 			"filesystem": Native(tools.Tools["filesystem"]),
-			"engram": FromHealth(tools.Tools["engram"], toolhealth.Status{
+			"engram": Bound(FromHealth(tools.Tools["engram"], toolhealth.Status{
 				Provider: "engram", Available: true, Healthy: true,
-			}, true),
+			}, true)),
 			"context7": Unknown(tools.Tools["context7"], "launcher only"),
 			"github": Unknown(tools.Tools["github"], "not connected"),
 		},
@@ -136,5 +136,23 @@ func TestNilSnapshotPreservesDeclarativePlan(t *testing.T) {
 	}
 	if strings.Join(required, ",") != "filesystem" || strings.Join(recommended, ",") != "github" {
 		t.Fatalf("required=%#v recommended=%#v", required, recommended)
+	}
+}
+
+
+func TestResolvePlanRejectsHealthyExternalToolWithoutRuntimeBinding(t *testing.T) {
+	tools := registryFixture()
+	_, _, err := ResolvePlan(
+		[]string{"engram"},
+		nil,
+		tools,
+		Snapshot{
+			"engram": FromHealth(tools.Tools["engram"], toolhealth.Status{
+				Provider: "engram", Available: true, Healthy: true,
+			}, true),
+		},
+	)
+	if err == nil || !strings.Contains(err.Error(), "not bound to the selected execution runtime") {
+		t.Fatalf("err=%v", err)
 	}
 }
