@@ -368,3 +368,34 @@ This is audit metadata only:
 - snapshot continuation deep-clones the metadata so projected state cannot mutate the immutable base snapshot through shared references.
 
 The execution authority remains the durable WorkUnit operation map established before execution. Control Plane state is a reconstructable view of that decision, not a second permission source.
+
+
+## Project-scoped binding verification
+
+The default command remains conservative:
+
+~~~text
+ai tools status
+~~~
+
+It reports local/native availability and local provider health without performing project-scoped external documentation or repository reads.
+
+To explicitly verify the read-only bindings for one project:
+
+~~~text
+ai tools status --project <project-root> --verify-bindings
+ai tools status --project <project-root> --verify-bindings --json
+~~~
+
+The `--verify-bindings` flag requires `--project`.
+
+This explicit mode may perform the same bounded external reads already owned by AI Engineering OS during a real run:
+
+- Context7 documentation search, only when public library hints are detected from the project;
+- GitHub CLI authentication and fixed read-only repository/issue/pull-request operations.
+
+It does not create an execution plan, grant tool permissions, execute mutation operations, or promote changes.
+
+Supplying `--project` without `--verify-bindings` performs no project-scoped external binding verification and the human output says so explicitly.
+
+The returned availability snapshot is validated with the same operation and approval invariants used by real runs. Therefore a malformed adapter result or an approval-required GitHub write operation fails closed rather than appearing as usable project authority.

@@ -848,7 +848,7 @@ func printUsage() {
 	fmt.Println("  ai run init --task <tarea> --project <id> [--state-dir ruta]")
 	fmt.Println("  ai run status <run-id> [--state-dir ruta] [--json]")
 	fmt.Println("  ai run list [--state-dir ruta] [--json]")
-	fmt.Println("  ai tools status [--json]")
+	fmt.Println("  ai tools status [--json] [--project ruta --verify-bindings]")
 	fmt.Println("  ai memory status")
 	fmt.Println("  ai memory list --project <id> [--all] [--json]")
 	fmt.Println("  ai memory show <memory-id> --project <id> [--json]")
