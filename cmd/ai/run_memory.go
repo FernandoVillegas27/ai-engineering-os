@@ -95,6 +95,7 @@ func persistReadOnlyRunMemory(
 		result.Progress.Blocked == 0 &&
 		result.Progress.Cancelled == 0 {
 		learning := memory.RunLearning{
+			RunID:  runID,
 			Task:   task,
 			Intent: intent,
 		}
@@ -149,6 +150,7 @@ func persistMutationRunMemory(
 		provider,
 		projectID,
 		memory.RunLearning{
+			RunID:  runID,
 			Task:   task,
 			Intent: intent,
 			TaskSummaries: []memory.TaskLearning{{
@@ -184,4 +186,28 @@ func printMemorySummary(recall memory.RecallContext, report runMemoryReport) {
 	) {
 		fmt.Printf("Memory warning: %s\n", warning)
 	}
+}
+
+
+func openMemoryGovernanceStore() (*memory.GovernanceStore, error) {
+	root, err := resolveRunAuxDir(
+		"",
+		"AI_ENGINEERING_OS_MEMORY_GOVERNANCE_DIR",
+		"memory-governance",
+	)
+	if err != nil {
+		return nil, err
+	}
+	return memory.NewGovernanceStore(root)
+}
+
+func governedRunMemoryProvider(provider memory.ProjectMemory) (memory.ProjectMemory, error) {
+	if provider == nil {
+		return nil, nil
+	}
+	store, err := openMemoryGovernanceStore()
+	if err != nil {
+		return nil, err
+	}
+	return memory.GovernedProvider{Inner: provider, Store: store}, nil
 }
