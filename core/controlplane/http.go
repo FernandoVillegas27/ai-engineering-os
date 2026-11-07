@@ -31,6 +31,8 @@ type HTTPServer struct {
 func (s HTTPServer) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.handleHealth)
+	mux.HandleFunc("/observability", s.handleObservability)
+	mux.HandleFunc("/metrics", s.handleMetrics)
 	mux.HandleFunc("/runs", s.handleRunIndex)
 	mux.HandleFunc("/runs/", s.handleRuns)
 	ui := controlPlaneUIHandler()
@@ -41,6 +43,45 @@ func (s HTTPServer) Handler() http.Handler {
 func (s HTTPServer) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
+
+func (s HTTPServer) handleObservability(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	value, err := s.observability(r.Context(), time.Now().UTC())
+	if err != nil {
+		status := http.StatusConflict
+		if s.Store == nil {
+			status = http.StatusServiceUnavailable
+		}
+		writeJSON(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, value)
+}
+
+func (s HTTPServer) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	value, err := s.observability(r.Context(), time.Now().UTC())
+	if err != nil {
+		status := http.StatusConflict
+		if s.Store == nil {
+			status = http.StatusServiceUnavailable
+		}
+		writeJSON(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(value.Prometheus()))
+}
+
 
 type RunSummary struct {
 	RunID            string    `json:"run_id"`
