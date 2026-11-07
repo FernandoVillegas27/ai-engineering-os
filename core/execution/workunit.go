@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
@@ -151,4 +152,21 @@ func cloneToolOperations(values map[string][]string) map[string][]string {
 		out[toolID] = uniqueSorted(operations)
 	}
 	return out
+}
+
+
+func FormatToolBindings(unit WorkUnit) string {
+	if len(unit.Tools) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(unit.Tools))
+	for _, toolID := range uniqueSorted(unit.Tools) {
+		operations := uniqueSorted(unit.ToolOperations[toolID])
+		if len(operations) == 0 {
+			parts = append(parts, toolID+"[no-bound-operations]")
+			continue
+		}
+		parts = append(parts, toolID+"["+strings.Join(operations, ",")+"]")
+	}
+	return strings.Join(parts, "; ")
 }
