@@ -106,20 +106,25 @@ tools:
 
   playwright:
     id: playwright
-    description: Automate browser interactions and verify user-facing application behavior.
+    description: Inspect or automate browser behavior under explicit operation-scoped safety boundaries.
     category: testing
     interface:
       type: mcp
       provider: playwright
     operations:
+      - inspect-ui
       - navigate-browser
       - interact-browser
-      - verify-ui
+      - run-browser-checks
     access:
       - read
       - execute
       - network
-    risk: medium
-    requires_approval: false
+    risk: high
+    requires_approval: true
+    approval_required_operations:
+      - navigate-browser
+      - interact-browser
+      - run-browser-checks
     availability_check: playwright-available
     status: enabled
