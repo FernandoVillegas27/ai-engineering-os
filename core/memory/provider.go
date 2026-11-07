@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 type Status struct {
@@ -33,11 +34,13 @@ const (
 )
 
 type SaveRequest struct {
-	Project  string
-	Title    string
-	Content  string
-	Type     Type
-	TopicKey string
+	Project    string
+	Title      string
+	Content    string
+	Type       Type
+	TopicKey   string
+	Provenance Provenance
+	Retention  time.Duration
 }
 
 type SaveResult struct {
