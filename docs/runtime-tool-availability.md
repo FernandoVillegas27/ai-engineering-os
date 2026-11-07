@@ -222,3 +222,104 @@ create-pull-request
 ~~~
 
 Operation evidence remains subordinate to the agent permission envelope, run mode, mutation capability, and explicit promotion/approval boundaries.
+
+
+## GitHub AI Engineering OS-owned read binding
+
+GitHub now has an AI Engineering OS-owned read-only runtime binding based on the local GitHub CLI.
+
+The adapter never grants general GitHub authority to the model runtime. Instead AI Engineering OS executes a fixed allowlist of non-mutating commands itself and injects only bounded JSON evidence.
+
+Current bindable operations:
+
+~~~text
+read-repository
+read-issues
+read-pull-requests
+~~~
+
+Fixed command shapes:
+
+~~~text
+gh auth status
+gh repo view --json nameWithOwner,url,defaultBranchRef,isPrivate
+gh issue list --state open --limit 20 --json number,title,state,updatedAt,url,labels
+gh pr list --state open --limit 20 --json number,title,state,isDraft,updatedAt,url,headRefName,baseRefName
+~~~
+
+The adapter does not construct or expose commands for:
+
+~~~text
+create-branch
+create-commit
+create-pull-request
+review-pull-request
+merge
+edit
+delete
+~~~
+
+### Credential boundary
+
+The trusted adapter may forward GitHub-specific authentication variables required by `gh`:
+
+- `GH_TOKEN`;
+- `GITHUB_TOKEN`;
+- `GH_HOST`.
+
+Unrelated environment secrets are not forwarded.
+
+The token itself is never included in model context. Diagnostic/provider errors pass through the shared redaction boundary.
+
+The process is explicitly non-interactive:
+
+~~~text
+GH_PROMPT_DISABLED=1
+GH_PAGER=cat
+NO_COLOR=1
+~~~
+
+### Partial binding
+
+Read operations are independent.
+
+For example, if repository metadata and pull requests are readable but issue listing is forbidden, the evidence may become:
+
+~~~json
+{
+  "runtime_bound": true,
+  "bound_operations": [
+    "read-pull-requests",
+    "read-repository"
+  ]
+}
+~~~
+
+The unavailable operation is not inferred from provider health.
+
+If authentication fails, `gh` is absent, or no read operation returns valid JSON, GitHub remains unavailable/unbound and optional GitHub access is removed from the plan.
+
+### Operation-scoped approvals
+
+GitHub retains high-risk mutation/review operations in the canonical Tool Registry, but approval is scoped to:
+
+- `create-branch`;
+- `create-commit`;
+- `create-pull-request`;
+- `review-pull-request`.
+
+The read operations do not require that mutation approval.
+
+Runtime availability validation rejects any approval-required operation that appears bound without a future explicit approval-evidence layer. Therefore an authenticated high-privilege GitHub token does not make write operations available merely because read-only binding succeeded.
+
+### Evidence trust
+
+Repository metadata, issue titles, PR titles, labels and other GitHub fields are labeled **untrusted external data** before entering work-unit context.
+
+They cannot change:
+
+- task;
+- permissions;
+- system/safety rules;
+- runtime/model policy;
+- promotion approval.
