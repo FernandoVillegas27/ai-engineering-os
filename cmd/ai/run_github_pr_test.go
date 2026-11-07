@@ -256,6 +256,14 @@ func TestGitHubPRCreateUsesExactApprovalAndAuditsMutation(t *testing.T) {
 		events[4].Type != controlplane.EventToolCompleted {
 		t.Fatalf("events=%#v", events)
 	}
+	// A second invocation with the same human grant cannot repeat a
+	// mutation that has already reached the external execution boundary.
+	if err := runRunGitHubPRCreate(args); err == nil {
+		t.Fatal("replay of an already completed mutation must fail closed")
+	}
+	if fake.calls != 1 {
+		t.Fatalf("replay invoked the external adapter: %d", fake.calls)
+	}
 }
 
 func TestGitHubPRCreateDoesNotInvokeAdapterForChangedRequest(t *testing.T) {
@@ -348,5 +356,27 @@ func TestGitHubPRApprovalRecordedRejectsUnrelatedAndRejectedGrants(t *testing.T)
 		request, grant, makeEvent(controlplane.EventApprovalRejected, "digest-a", "approval-3"),
 	}, "task-1", "digest-a", "approval-1") {
 		t.Fatal("later rejection must invalidate recorded grant")
+	}
+}
+
+func TestGitHubPRMutationStartedFailsClosedWithoutCompletion(t *testing.T) {
+	now := time.Now().UTC()
+	event, err := controlplane.NewEvent(controlplane.NewEventRequest{
+		RunID: "run-1", TaskID: "task-1", Type: controlplane.EventToolStarted,
+		Data: map[string]any{
+			"tool_id": "github", "operation": "create-pull-request",
+			"request_digest": "digest-a", "approval_id": "approval-1",
+		},
+	}, now)
+	if err != nil { t.Fatal(err) }
+	events := []controlplane.Event{event}
+	if !githubPRMutationStarted(events, "task-1", "digest-a") {
+		t.Fatal("started mutation without completion must prevent replay")
+	}
+	if githubPRMutationStarted(events, "task-2", "digest-a") {
+		t.Fatal("different task must not match")
+	}
+	if githubPRMutationStarted(events, "task-1", "digest-b") {
+		t.Fatal("different request digest must not match")
 	}
 }
