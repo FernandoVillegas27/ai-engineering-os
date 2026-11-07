@@ -257,18 +257,51 @@ func TestVerifyKeepsInfrastructureClassificationWithJSONOutput(t *testing.T) {
 
 func TestCrossLanguageChecksKeepCommandsAndSafeParseConfidence(t *testing.T) {
 	for _, tc := range []struct {
+		name       string
 		file       string
 		content    string
-		args       string
 		command    string
 		parse      verification.ParseConfidence
+		assertArgs func(*testing.T, string, []string)
 	}{
-		{"pom.xml", "<project/>", "-q test", "mvn", verification.ParseFailed},
-		{"build.gradle", "", "test --no-daemon --console=plain", "gradle", verification.ParseFailed},
-		{"pyproject.toml", "", "-m pytest", "python", verification.ParseNotAttempted},
-		{"package.json", `{"scripts":{"test":"jest"}}`, "test -- --runInBand --json", "npm", verification.ParseFailed},
+		{
+			name: "maven", file: "pom.xml", content: "<project/>", command: "mvn",
+			parse: verification.ParseFailed,
+			assertArgs: func(t *testing.T, _ string, args []string) {
+				if strings.Join(args, " ") != "-q test" { t.Fatalf("args=%#v", args) }
+			},
+		},
+		{
+			name: "gradle", file: "build.gradle", content: "", command: "gradle",
+			parse: verification.ParseFailed,
+			assertArgs: func(t *testing.T, _ string, args []string) {
+				if strings.Join(args, " ") != "test --no-daemon --console=plain" { t.Fatalf("args=%#v", args) }
+			},
+		},
+		{
+			name: "pytest", file: "pyproject.toml", content: "", command: "python",
+			parse: verification.ParseFailed,
+			assertArgs: func(t *testing.T, root string, args []string) {
+				got := strings.Join(args, " ")
+				if !strings.HasPrefix(got, "-m pytest -r fE --junitxml=") {
+					t.Fatalf("args=%#v", args)
+				}
+				assertReportArgOutsideWorkspace(t, root, args[len(args)-1], "--junitxml=")
+			},
+		},
+		{
+			name: "jest", file: "package.json", content: `{"scripts":{"test":"jest"}}`, command: "npm",
+			parse: verification.ParseFailed,
+			assertArgs: func(t *testing.T, root string, args []string) {
+				got := strings.Join(args, " ")
+				if !strings.HasPrefix(got, "test -- --runInBand --json --outputFile=") {
+					t.Fatalf("args=%#v", args)
+				}
+				assertReportArgOutsideWorkspace(t, root, args[len(args)-1], "--outputFile=")
+			},
+		},
 	} {
-		t.Run(tc.file, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
 			if err := os.WriteFile(filepath.Join(root, tc.file), []byte(tc.content), 0o600); err != nil {
 				t.Fatal(err)
@@ -279,9 +312,10 @@ func TestCrossLanguageChecksKeepCommandsAndSafeParseConfidence(t *testing.T) {
 				t.Fatal(err)
 			}
 			invocation := runner.invocations[0]
-			if filepath.Base(invocation.Command) != tc.command || strings.Join(invocation.Args, " ") != tc.args {
+			if filepath.Base(invocation.Command) != tc.command {
 				t.Fatalf("invocation=%#v", invocation)
 			}
+			tc.assertArgs(t, root, invocation.Args)
 			check := report.Checks[0]
 			if check.FailureParse != tc.parse || check.Failures != nil {
 				t.Fatalf("check=%#v", check)
@@ -290,6 +324,21 @@ func TestCrossLanguageChecksKeepCommandsAndSafeParseConfidence(t *testing.T) {
 				t.Fatalf("check-level classification must be unchanged: %#v", check)
 			}
 		})
+	}
+}
+
+func assertReportArgOutsideWorkspace(t *testing.T, root, arg, prefix string) {
+	t.Helper()
+	path := strings.TrimPrefix(arg, prefix)
+	if path == arg || strings.TrimSpace(path) == "" {
+		t.Fatalf("report arg %q missing prefix %q", arg, prefix)
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rel == "." || !strings.HasPrefix(filepath.ToSlash(rel), "../") {
+		t.Fatalf("report path should be outside workspace: root=%q path=%q", root, path)
 	}
 }
 
