@@ -246,28 +246,51 @@ The repository already has the foundation for:
 - baseline comparison primitives;
 - baseline integrity foundation.
 
-### Latest verified checkpoint — 2026-11-06
+### Latest verified checkpoint — 2026-11-07
 
-Latest merged implementation: PR #134, `feat(tools): normalize external tool health and MCP failure semantics`.
+Latest merged implementation: PR #150, `feat(release): add reproducible RC packaging and checksum workflow`.
 
-Master commit: `c73ac5eea28a7edaea285961a30a862af8da1d5d`.
+Master commit:
 
-Since PR #128, implementation continued through:
-- #130: structured Java/Gradle/Maven and Jest/Vitest failure identities;
-- #131: deterministic OpenAPI compatibility and architecture policy gate;
-- #132: repeated lease, recovery and long event-history soak tests;
-- #133: bounded Engram recall and curated team learning;
-- #134: normalized external-tool health and bounded adapter deadlines.
+~~~text
+01a636b88810814bc2f686ded6913489450d9c7f
+~~~
 
-Earlier #125-#127 already completed archived event history and verified compaction. The PR #134 head's Go-test GitHub Actions run succeeded. At this checkpoint repository search returned no open pull requests or issues.
+Release-hardening milestones after #134:
 
-### Immediate next milestone
+- #138: embedded read-only Control Plane web client;
+- #139: promotion adversarial boundaries and Linux/Windows/macOS CI matrix;
+- #140: coordinated multi-agent + explicit-promotion E2E;
+- #142: provider-independent per-run invocation/runtime budgets;
+- #143: governed, inspectable, reversible project memory;
+- #145: `ai version`, quickstart, compatibility, troubleshooting, migration and releasing docs;
+- #146: R1 threat hardening — project-code trust, process-tree cancellation, diagnostic redaction, prompt-injection tests, traversal/reparse hardening, isolated verification home/caches;
+- #149: fixed the lease shutdown race discovered by release CI;
+- #150: reproducible RC packages and SHA-256 evidence for linux/amd64, windows/amd64, darwin/amd64 and darwin/arm64.
 
-**Release hardening and independently reproducible end-to-end evidence.**
+The complete R1 hardening matrix passed on Linux, Windows and macOS; Linux passed `go test -race ./...`.
 
-Execute the release blockers in [RELEASE_READINESS.md](RELEASE_READINESS.md), beginning with the threat model/negative security tests, cross-platform integration and genuine multi-agent E2E scenarios. The roadmap phases below remain the full product vision, not a claim that every feature is shipped.
+The final packaging PR also passed the normal multi-OS matrix and successfully produced all four release packages/checksums while correctly skipping publication on a pull request.
 
-Do not declare the platform 100% complete based only on merged PRs and Go unit tests. Do not hard-code a model per role or weaken promotion, integrity, approvals, recovery or permission boundaries.
+### Current release milestone
+
+**The documented `0.1.0-rc.1` implementation/readiness scope is complete and ready for exact-tag publication.**
+
+See [RELEASE_READINESS.md](RELEASE_READINESS.md) for the evidence ledger and [THREAT_MODEL.md](THREAT_MODEL.md) for the explicit autonomy scope.
+
+Immediate release operation:
+
+1. validate this checkpoint PR;
+2. merge it to `master`;
+3. create exact tag `v0.1.0-rc.1` from the green master commit;
+4. allow the tag-only release workflow to build/verify/publish artifacts and `SHA256SUMS`;
+5. verify the published release metadata/checksums.
+
+Do not confuse RC-scope completion with exhaustion of the long-term product vision.
+
+Post-RC evolution may include dedicated VS Code/IntelliJ clients, broader Quality/toolchain coverage, additional connectors/MCP integrations and UX/observability improvements.
+
+Provider/model policy remains provider-independent. Do not hard-code a model per agent role. Promotion, integrity, approvals, recovery, budgets, memory governance and permission boundaries remain mandatory.
 
 ---
 
