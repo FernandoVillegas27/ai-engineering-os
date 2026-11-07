@@ -74,6 +74,9 @@ func TestContext7BindingUsesOnlyDetectedPublicLibraryHints(t *testing.T) {
 	if evidence.State != toolavailability.StateAvailable || !evidence.RuntimeBound || !evidence.Healthy {
 		t.Fatalf("evidence=%#v", evidence)
 	}
+	if strings.Join(evidence.BoundOperations, ",") != "search-docs" {
+		t.Fatalf("bound operations=%#v", evidence.BoundOperations)
+	}
 	if request.Query != context7DocumentationQuery {
 		t.Fatalf("query=%q", request.Query)
 	}
