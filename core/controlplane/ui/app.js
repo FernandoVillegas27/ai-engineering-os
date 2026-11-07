@@ -415,6 +415,7 @@
           '</div><span class="mini-status ' + statusClass(approval.status) + '">' +
           escapeHTML(approval.status || "unknown") + '</span></div><div class="detail-card-meta">' +
           escapeHTML("task=" + (approval.task_id || "—") +
+            (approval.request_digest ? " · request=" + shortId(approval.request_digest, 20) : "") +
             (approval.evidence_id ? " · evidence=" + shortId(approval.evidence_id, 24) : "") +
             (approval.expires_at ? " · expires=" + formatTime(approval.expires_at) : "")) +
           '</div></article>'
