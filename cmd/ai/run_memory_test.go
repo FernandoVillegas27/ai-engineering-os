@@ -74,6 +74,7 @@ func TestInjectRunMemoryUnavailableDoesNotBlock(t *testing.T) {
 }
 
 func TestRunMemoryProviderModes(t *testing.T) {
+	t.Setenv("AI_ENGINEERING_OS_MEMORY_DIR", t.TempDir())
 	if provider, err := runMemoryProvider("off"); err != nil || provider != nil {
 		t.Fatalf("off provider=%#v err=%v", provider, err)
 	}
