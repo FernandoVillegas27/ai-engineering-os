@@ -28,7 +28,7 @@ func context7TestRegistry() registry.ToolRegistry {
 			"context7": {
 				ID: "context7", Description: "docs", Status: "enabled",
 				Interface: registry.ToolInterface{Type: "mcp", Provider: &provider},
-				Operations: []string{"resolve-library-id", "query-docs"},
+				Operations: []string{"resolve-library-id", "query-docs", "search-docs"},
 				Access: []string{"read", "network"}, Risk: "low",
 				AvailabilityCheck: &check,
 			},
@@ -73,6 +73,9 @@ func TestContext7BindingUsesOnlyDetectedPublicLibraryHints(t *testing.T) {
 	evidence := bindings.Availability["context7"]
 	if evidence.State != toolavailability.StateAvailable || !evidence.RuntimeBound || !evidence.Healthy {
 		t.Fatalf("evidence=%#v", evidence)
+	}
+	if strings.Join(evidence.BoundOperations, ",") != "search-docs" {
+		t.Fatalf("bound operations=%#v", evidence.BoundOperations)
 	}
 	if request.Query != context7DocumentationQuery {
 		t.Fatalf("query=%q", request.Query)
