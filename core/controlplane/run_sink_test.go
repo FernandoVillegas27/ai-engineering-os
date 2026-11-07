@@ -126,6 +126,10 @@ func TestRunCoordinatorSinkProjectsTaskDependenciesAndScopes(t *testing.T) {
 				DependsOn: []string{"architect"},
 				Mutating: true,
 				Scopes: []string{"backend/api", "backend/service"},
+				ToolOperations: map[string][]string{
+					"filesystem": {"read-files", "write-files"},
+					"github": {"read-repository"},
+				},
 			},
 		},
 	}
@@ -152,6 +156,13 @@ func TestRunCoordinatorSinkProjectsTaskDependenciesAndScopes(t *testing.T) {
 	}
 	if len(state.Edges) != 1 || state.Edges[0].From != "architect" || state.Edges[0].To != "backend" {
 		t.Fatalf("edges = %#v", state.Edges)
+	}
+	if got := backend.ToolOperations["github"]; len(got) != 1 || got[0] != "read-repository" {
+		t.Fatalf("backend GitHub authority = %#v", backend.ToolOperations)
+	}
+	if got := backend.ToolOperations["filesystem"]; len(got) != 2 ||
+		got[0] != "read-files" || got[1] != "write-files" {
+		t.Fatalf("backend filesystem authority = %#v", backend.ToolOperations)
 	}
 }
 
@@ -223,5 +234,36 @@ func TestRunCoordinatorSinkResumeDoesNotRecreateTasks(t *testing.T) {
 	}
 	if events[3].Type != EventRunResumed {
 		t.Fatalf("events=%#v", events)
+	}
+}
+
+
+func TestProjectorAcceptsLegacyTaskCreatedWithoutToolOperations(t *testing.T) {
+	now := time.Now().UTC()
+	started, err := NewEvent(NewEventRequest{
+		RunID: "legacy-tools", Type: EventRunStarted, Data: map[string]bool{"ok": true},
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := NewEvent(NewEventRequest{
+		RunID: "legacy-tools", Type: EventTaskCreated, TaskID: "task-1",
+		Data: map[string]any{
+			"depends_on": []string{},
+			"mutating": false,
+			"scopes": []string{},
+		},
+	}, now.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	started.Sequence = 1
+	created.Sequence = 2
+	state, err := Project([]Event{started, created})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Tasks["task-1"].ToolOperations != nil {
+		t.Fatalf("legacy task unexpectedly gained tool authority: %#v", state.Tasks["task-1"])
 	}
 }
