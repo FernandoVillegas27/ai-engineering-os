@@ -55,9 +55,9 @@ func TestResolvePlanAllowsVerifiedExternalAndOmitsUnknownOptional(t *testing.T) 
 		tools,
 		Snapshot{
 			"filesystem": Native(tools.Tools["filesystem"]),
-			"engram": Bound(FromHealth(tools.Tools["engram"], toolhealth.Status{
+			"engram": BindOperations(FromHealth(tools.Tools["engram"], toolhealth.Status{
 				Provider: "engram", Available: true, Healthy: true,
-			}, true)),
+			}, true), "read"),
 			"context7": Unknown(tools.Tools["context7"], "remote host connectivity not verified"),
 			"github": Unknown(tools.Tools["github"], "connector status unavailable"),
 		},
@@ -81,9 +81,9 @@ func TestResolvePlanKeepsOnlyAvailableOptionalExternalTools(t *testing.T) {
 		tools,
 		Snapshot{
 			"filesystem": Native(tools.Tools["filesystem"]),
-			"engram": Bound(FromHealth(tools.Tools["engram"], toolhealth.Status{
+			"engram": BindOperations(FromHealth(tools.Tools["engram"], toolhealth.Status{
 				Provider: "engram", Available: true, Healthy: true,
-			}, true)),
+			}, true), "read"),
 			"context7": Unknown(tools.Tools["context7"], "launcher only"),
 			"github": Unknown(tools.Tools["github"], "not connected"),
 		},
@@ -153,6 +153,60 @@ func TestResolvePlanRejectsHealthyExternalToolWithoutRuntimeBinding(t *testing.T
 		},
 	)
 	if err == nil || !strings.Contains(err.Error(), "not bound to the selected execution runtime") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+
+func TestBindOperationsNormalizesAndScopesRuntimeAuthority(t *testing.T) {
+	tools := registryFixture()
+	evidence := BindOperations(
+		FromHealth(tools.Tools["engram"], toolhealth.Status{
+			Provider: "engram", Available: true, Healthy: true,
+		}, true),
+		"read", "read", "",
+	)
+	if !evidence.RuntimeBound || strings.Join(evidence.BoundOperations, ",") != "read" {
+		t.Fatalf("evidence=%#v", evidence)
+	}
+}
+
+func TestValidateSnapshotRejectsUndeclaredOrMissingBoundOperations(t *testing.T) {
+	tools := registryFixture()
+	err := ValidateSnapshot(tools, Snapshot{
+		"engram": {
+			ToolID: "engram", Provider: "engram",
+			State: StateAvailable, Healthy: true, RuntimeBound: true,
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "without bound operations") {
+		t.Fatalf("err=%v", err)
+	}
+
+	err = ValidateSnapshot(tools, Snapshot{
+		"engram": BindOperations(Evidence{
+			ToolID: "engram", Provider: "engram",
+			State: StateAvailable, Healthy: true,
+		}, "write"),
+	})
+	if err == nil || !strings.Contains(err.Error(), "not declared") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestResolvePlanRejectsRuntimeBoundExternalWithoutOperationAuthority(t *testing.T) {
+	tools := registryFixture()
+	_, _, err := ResolvePlan(
+		[]string{"engram"},
+		nil,
+		tools,
+		Snapshot{
+			"engram": Bound(FromHealth(tools.Tools["engram"], toolhealth.Status{
+				Provider: "engram", Available: true, Healthy: true,
+			}, true)),
+		},
+	)
+	if err == nil || !strings.Contains(err.Error(), "no bound runtime operations") {
 		t.Fatalf("err=%v", err)
 	}
 }
