@@ -412,7 +412,12 @@ func runMemory(args []string) error {
 		return nil
 	}
 
-	return fmt.Errorf("subcomando de memoria desconocido: %s", args[0])
+	switch args[0] {
+	case "list", "review", "delete", "supersede", "prune":
+		return runMemoryGovernance(args)
+	default:
+		return fmt.Errorf("subcomando de memoria desconocido: %s", args[0])
+	}
 }
 
 func runDocs(args []string) error {
