@@ -134,16 +134,17 @@ func runRunExecute(args []string) error {
 		return err
 	}
 
+	bindings := runtimeToolBindings{Context: map[string]string{}}
 	if !options.dryRun {
-		// External tool health and execution binding are separate. The current
-		// Codex/Cursor work-unit runtimes do not expose generic MCP/connector
-		// bindings, so external tools remain unknown/unbound and cannot appear
-		// as executable capabilities. Native tools remain available.
-		availability := collectToolAvailability(runCtx, tools, nil)
-		if err := toolavailability.ValidateSnapshot(tools, availability); err != nil {
+		// Runtime availability and binding are independent evidence. Native
+		// tools are bound locally. Context7 may be bound by an AI Engineering
+		// OS-owned documentation prefetch; other external tools remain
+		// unknown/unbound until their own adapter exists.
+		bindings = collectRuntimeToolBindings(runCtx, tools, plan, detection)
+		if err := toolavailability.ValidateSnapshot(tools, bindings.Availability); err != nil {
 			return fmt.Errorf("validate runtime tool availability: %w", err)
 		}
-		plan, err = orchestration.ApplyToolAvailability(plan, tools, availability)
+		plan, err = orchestration.ApplyToolAvailability(plan, tools, bindings.Availability)
 		if err != nil {
 			return fmt.Errorf("apply runtime tool availability: %w", err)
 		}
@@ -152,6 +153,9 @@ func runRunExecute(args []string) error {
 	units, err := execution.BuildWorkUnits(options.task, root, plan, agents)
 	if err != nil {
 		return err
+	}
+	if !options.dryRun {
+		units = injectRuntimeToolContext(units, bindings.Context)
 	}
 
 	memoryProvider, err := runMemoryProvider(options.memoryMode)
