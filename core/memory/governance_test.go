@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,8 @@ type governedFakeMemory struct {
 	saves   []SaveRequest
 	deletes []DeleteRequest
 	nextID  int
+	saveErr error
+	omitID  bool
 }
 
 func (f *governedFakeMemory) ID() string { return "fake" }
@@ -25,7 +28,14 @@ func (f *governedFakeMemory) Recall(_ context.Context, request RecallRequest) (R
 func (f *governedFakeMemory) Save(_ context.Context, request SaveRequest) (SaveResult, error) {
 	f.nextID++
 	f.saves = append(f.saves, request)
-	return SaveResult{Provider:"fake", Project:request.Project, Saved:true, MemoryID:fmtInt(f.nextID)}, nil
+	if f.saveErr != nil {
+		return SaveResult{}, f.saveErr
+	}
+	memoryID := fmtInt(f.nextID)
+	if f.omitID {
+		memoryID = ""
+	}
+	return SaveResult{Provider:"fake", Project:request.Project, Saved:true, MemoryID:memoryID}, nil
 }
 func (f *governedFakeMemory) Delete(_ context.Context, request DeleteRequest) (DeleteResult, error) {
 	f.deletes = append(f.deletes, request)
@@ -154,5 +164,50 @@ func TestRedactSensitiveCommonSecrets(t *testing.T) {
 	value := RedactSensitive("api_key=abcdef123456 password=hunter22 Authorization: Bearer abcdefghijklmnop ghp_abcdefghijklmnopqrstuvwxyz1234 AKIAABCDEFGHIJKLMNOP")
 	for _, secret := range []string{"abcdef123456","hunter22","abcdefghijklmnop","ghp_abcdefghijklmnopqrstuvwxyz1234","AKIAABCDEFGHIJKLMNOP"} {
 		if strings.Contains(value, secret) { t.Fatalf("secret %q remained in %q", secret, value) }
+	}
+}
+
+
+func TestGovernedProviderLeavesPendingEvidenceWhenProviderFails(t *testing.T) {
+	store, _ := NewGovernanceStore(t.TempDir())
+	provider := &governedFakeMemory{saveErr: errors.New("connection reset")}
+	governed := GovernedProvider{Inner:provider, Store:store}
+
+	result, err := governed.Save(context.Background(), SaveRequest{
+		Project:"project", Title:"Decision", Content:"Use typed boundaries",
+		Type:TypeDecision, TopicKey:"decision/boundaries",
+	})
+	if err == nil {
+		t.Fatal("expected provider failure")
+	}
+	if result.GovernanceID == "" || result.Saved {
+		t.Fatalf("result=%#v", result)
+	}
+	records, err := store.Records("project")
+	if err != nil { t.Fatal(err) }
+	if len(records) != 1 || records[0].State != GovernancePendingState {
+		t.Fatalf("records=%#v", records)
+	}
+	if records[0].Content != "Use typed boundaries" {
+		t.Fatalf("pending content=%q", records[0].Content)
+	}
+}
+
+func TestGovernedProviderRefusesToConfirmWithoutStableProviderID(t *testing.T) {
+	store, _ := NewGovernanceStore(t.TempDir())
+	provider := &governedFakeMemory{omitID:true}
+	governed := GovernedProvider{Inner:provider, Store:store}
+
+	result, err := governed.Save(context.Background(), SaveRequest{
+		Project:"project", Title:"Decision", Content:"Keep approval explicit",
+		Type:TypeDecision, TopicKey:"decision/promotion",
+	})
+	if err == nil || !strings.Contains(err.Error(), "stable memory id") {
+		t.Fatalf("result=%#v err=%v", result, err)
+	}
+	records, err := store.Records("project")
+	if err != nil { t.Fatal(err) }
+	if len(records) != 1 || records[0].State != GovernancePendingState {
+		t.Fatalf("records=%#v", records)
 	}
 }
