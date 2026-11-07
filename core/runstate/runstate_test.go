@@ -29,6 +29,7 @@ func testRun(t *testing.T) Run {
 			Capabilities: []string{"backend-development"},
 			Skills:       []string{"go"},
 			Tools:        []string{"filesystem"},
+			ToolOperations: map[string][]string{"filesystem": {"read-files"}},
 			Permissions: execution.PermissionEnvelope{
 				SourceCode: "read",
 				Tests:      "read",
@@ -58,6 +59,9 @@ func TestNewRunCreatesStableShape(t *testing.T) {
 	}
 	if len(run.WorkUnits) != 1 || run.WorkUnits[0].Status != WorkUnitQueued {
 		t.Fatalf("work units = %#v", run.WorkUnits)
+	}
+	if got := run.WorkUnits[0].ToolOperations["filesystem"]; len(got) != 1 || got[0] != "read-files" {
+		t.Fatalf("tool operations = %#v", run.WorkUnits[0].ToolOperations)
 	}
 }
 
