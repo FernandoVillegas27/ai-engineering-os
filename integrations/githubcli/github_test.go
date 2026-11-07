@@ -50,7 +50,7 @@ func TestSnapshotBindsOnlyReadOperations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(result.BoundOperations, ","); got != "read-issues,read-pull-requests,read-repositorysitory" {
+	if got := strings.Join(result.BoundOperations, ","); got != "read-issues,read-pull-requests,read-repository" {
 		t.Fatalf("operations=%q", got)
 	}
 	if !strings.Contains(result.Context, "untrusted external data") ||
@@ -76,7 +76,7 @@ func TestSnapshotSupportsPartialReadBinding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(result.BoundOperations, ","); got != "read-pull-requests,read-repo" {
+	if got := strings.Join(result.BoundOperations, ","); got != "read-pull-requests,read-repository" {
 		t.Fatalf("operations=%q", got)
 	}
 	if len(result.Warnings) != 1 || !strings.Contains(result.Warnings[0], "read-issues") {
