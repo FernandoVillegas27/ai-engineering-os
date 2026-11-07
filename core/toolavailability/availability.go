@@ -39,11 +39,13 @@ func Native(tool registry.Tool) Evidence {
 }
 
 func FromHealth(tool registry.Tool, health toolhealth.Status, verified bool) Evidence {
+	failure := health.Failure
+	failure.Detail = toolhealth.Redact(failure.Detail)
 	evidence := Evidence{
 		ToolID:   tool.ID,
 		Provider: providerID(tool),
 		Healthy:  health.Healthy,
-		Failure:  health.Failure,
+		Failure:  failure,
 		Details:  toolhealth.Redact(strings.TrimSpace(health.Details)),
 		State:    StateUnknown,
 	}
