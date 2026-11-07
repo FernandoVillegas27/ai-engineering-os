@@ -124,7 +124,7 @@ func (c Client) Snapshot(ctx context.Context, root string) (Snapshot, error) {
 	}
 	operations := []operation{
 		{
-			name: "read-repo",
+			name: "read-repository",
 			key:  "repository",
 			args: []string{"repo", "view", "--json", "nameWithOwner,url,defaultBranchRef,isPrivate"},
 		},
