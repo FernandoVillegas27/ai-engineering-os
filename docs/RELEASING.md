@@ -56,7 +56,28 @@ The core is currently verified by CI on:
 - Windows amd64 runner;
 - macOS GitHub-hosted runner.
 
-A public binary release should publish separate platform artifacts rather than pretending one binary is portable across operating systems.
+A tagged release publishes independently verifiable installable artifacts for:
+
+- CLI linux/amd64;
+- CLI windows/amd64;
+- CLI darwin/amd64;
+- CLI darwin/arm64;
+- VS Code client as a `.vsix`;
+- IntelliJ IDEA client as a plugin distribution `.zip`.
+
+Every package is accompanied by its own `.sha256` file. The release job verifies every package checksum again and generates one combined `SHA256SUMS` manifest before publication.
+
+Build helpers:
+
+~~~sh
+VERSION=0.1.0-rc.1 bash scripts/build-release.sh
+VERSION=0.1.0-rc.1 bash scripts/build-vscode-release.sh
+VERSION=0.1.0-rc.1 bash scripts/build-intellij-release.sh
+~~~
+
+VS Code does not encode SemVer prerelease suffixes in the extension manifest. For an RC product version such as `0.1.0-rc.1`, the VSIX keeps manifest version `0.1.0` and is packaged with VS Code's prerelease marker; the filename retains the complete product version.
+
+A public binary release should publish separate platform/client artifacts rather than pretending one package is portable across operating systems or IDEs.
 
 ## Release checklist
 
@@ -67,7 +88,8 @@ A public binary release should publish separate platform artifacts rather than p
 - ensure optional provider absence still degrades visibly rather than failing open;
 - verify original-tree promotion remains approval-gated;
 - run the full CI matrix from the exact candidate commit;
-- record checksums for published binaries;
+- record checksums for all CLI and IDE packages;
+- verify the VSIX and IntelliJ distribution were built from the exact candidate source;
 - create the Git tag only after evidence is green.
 
 ## Tag convention
