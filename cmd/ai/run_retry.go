@@ -150,8 +150,9 @@ func runRunRetry(args []string) error {
 	task := scheduler.Task{
 		ID:       target.ID,
 		AgentID:  target.AgentID,
-		Mutating: false,
-		Status:   scheduler.StatusQueued,
+		Mutating:       false,
+		ToolOperations: execution.CloneToolOperations(target.ToolOperations),
+		Status:         scheduler.StatusQueued,
 	}
 	if err := runstate.BindTaskGraph(&child, []scheduler.Task{task}); err != nil {
 		return err
