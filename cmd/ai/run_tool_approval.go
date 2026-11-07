@@ -89,13 +89,6 @@ func runRunToolApprovalRequest(args []string) error {
 	if _, err := eventStore.Append(context.Background(), event); err != nil {
 		return err
 	}
-	store, err := openToolApprovalStore(options.approvalDir)
-	if err != nil {
-		return err
-	}
-	if err := store.Save(evidence); err != nil {
-		return fmt.Errorf("persist approval evidence after audit event: %w", err)
-	}
 	return printToolApprovalView(toolApprovalView{
 		RunID: run.ID, TaskID: options.taskID, ToolID: options.toolID,
 		Operation: options.operation, Status: "pending",
@@ -162,6 +155,13 @@ func runRunToolApprovalResolve(args []string, granted bool) error {
 	}
 	if _, err := eventStore.Append(context.Background(), event); err != nil {
 		return err
+	}
+	store, err := openToolApprovalStore(options.approvalDir)
+	if err != nil {
+		return err
+	}
+	if err := store.Save(evidence); err != nil {
+		return fmt.Errorf("persist approval evidence after audit event: %w", err)
 	}
 	return printToolApprovalView(toolApprovalView{
 		RunID: run.ID, TaskID: options.taskID, ToolID: options.toolID,
