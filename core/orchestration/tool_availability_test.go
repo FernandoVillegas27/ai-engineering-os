@@ -98,3 +98,48 @@ func TestApplyToolAvailabilityBlocksRequiredUnboundExternalTool(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 }
+
+
+func TestApplyToolAvailabilityCarriesEffectiveOperations(t *testing.T) {
+	provider := "github"
+	tools := registry.ToolRegistry{SchemaVersion: 1, Tools: map[string]registry.Tool{
+		"filesystem": {
+			ID: "filesystem", Description: "fs",
+			Interface: registry.ToolInterface{Type: "native"},
+			Operations: []string{"read-files", "write-files"},
+			Access: []string{"read", "write"}, Risk: "low", Status: "enabled",
+		},
+		"github": {
+			ID: "github", Description: "gh",
+			Interface: registry.ToolInterface{Type: "connector", Provider: &provider},
+			Operations: []string{"read-repository", "create-pull-request"},
+			Access: []string{"read", "write", "network"}, Risk: "high", Status: "enabled",
+		},
+	}}
+	plan := Plan{Agents: []AgentPlan{{
+		AgentID: "researcher",
+		Tools: ToolPlan{Required: []string{"filesystem"}, Recommended: []string{"github"}},
+	}}}
+	snapshot := toolavailability.Snapshot{
+		"filesystem": toolavailability.Native(tools.Tools["filesystem"]),
+		"github": toolavailability.BindOperations(
+			toolavailability.FromHealth(
+				tools.Tools["github"],
+				toolhealth.Status{Provider: "github", Available: true, Healthy: true},
+				true,
+			),
+			"read-repository",
+		),
+	}
+	got, err := ApplyToolAvailability(plan, tools, snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ops := got.Agents[0].Tools.Operations
+	if strings.Join(ops["filesystem"], ",") != "read-files,write-files" {
+		t.Fatalf("filesystem ops=%#v", ops["filesystem"])
+	}
+	if strings.Join(ops["github"], ",") != "read-repository" {
+		t.Fatalf("github ops=%#v", ops["github"])
+	}
+}
