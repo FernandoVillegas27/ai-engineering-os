@@ -20,6 +20,7 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/modelpolicy"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/runbudget"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/scheduler"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/taskgraph"
@@ -41,6 +42,8 @@ type runExecuteOptions struct {
 	checkpointDir  string
 	controlDir     string
 	maxConcurrency int
+	maxInvocations int
+	maxRuntime     time.Duration
 	modelPolicy    modelpolicy.Policy
 	model          string
 	memoryMode     string
@@ -61,6 +64,16 @@ func runRunExecute(args []string) error {
 	if options.projectID == "" {
 		options.projectID = filepath.Base(root)
 	}
+
+	budget, err := runbudget.New(runbudget.Config{
+		MaxInvocations: options.maxInvocations,
+		MaxDuration:    options.maxRuntime,
+	})
+	if err != nil {
+		return err
+	}
+	runCtx, cancelBudget := budget.Context(context.Background())
+	defer cancelBudget()
 
 	capabilitiesPath, err := resolveRegistryFile("capabilities.yaml")
 	if err != nil {
@@ -100,7 +113,7 @@ func runRunExecute(args []string) error {
 		return fmt.Errorf("inspeccionar proyecto: %w", err)
 	}
 
-	classified, err := classifyRunTask(context.Background(), options, capabilities, root)
+	classified, err := classifyRunTask(runCtx, options, capabilities, root, budget)
 	if err != nil {
 		return err
 	}
@@ -130,9 +143,11 @@ func runRunExecute(args []string) error {
 	}
 	if options.dryRun {
 		memoryProvider = nil
+	} else if memoryProvider != nil {
+		memoryProvider = runbudget.ProjectMemory{Budget: budget, Inner: memoryProvider}
 	}
 	units, memoryRecall := injectRunMemory(
-		context.Background(),
+		runCtx,
 		memoryProvider,
 		options.projectID,
 		options.task,
@@ -141,7 +156,7 @@ func runRunExecute(args []string) error {
 
 	if options.multiAgentWrite {
 		return runCoordinatedMutation(
-			context.Background(),
+			runCtx,
 			options,
 			root,
 			plan.RequestedCapabilities,
@@ -149,6 +164,7 @@ func runRunExecute(args []string) error {
 			units,
 			memoryProvider,
 			memoryRecall,
+			budget,
 		)
 	}
 
@@ -224,7 +240,13 @@ func runRunExecute(args []string) error {
 		if options.dryRun {
 			executor = execution.DryRunExecutor{}
 		} else {
-			executor = execution.RuntimeExecutor{Runtime: codexintegration.NewExecutionRuntime()}
+			runtime, _, runtimeErr := executionRuntimeFor(options.runtime, modelRoutingOptions{
+				Policy: options.modelPolicy, Override: options.model, Budget: budget,
+			})
+			if runtimeErr != nil {
+				return runtimeErr
+			}
+			executor = execution.RuntimeExecutor{Runtime: runtime}
 		}
 		inner := coordinator.ExecutionWorker{
 			Executor: executor,
@@ -260,7 +282,7 @@ func runRunExecute(args []string) error {
 	if err != nil {
 		return err
 	}
-	active, err := startActiveRunContext(context.Background(), controlStore, run.ID)
+	active, err := startActiveRunContext(runCtx, controlStore, run.ID)
 	if err != nil {
 		return err
 	}
@@ -297,7 +319,7 @@ func runRunExecute(args []string) error {
 	memoryReport := runMemoryReport{Recall: memoryRecall}
 	if finalStatus == runstate.StatusCompleted {
 		persisted := persistReadOnlyRunMemory(
-			context.Background(),
+			runCtx,
 			memoryProvider,
 			options.projectID,
 			run.ID,
@@ -358,6 +380,7 @@ func classifyRunTask(
 	options runExecuteOptions,
 	capabilities registry.CapabilityRegistry,
 	root string,
+	budget *runbudget.Budget,
 ) (classifier.Result, error) {
 	if options.useAI {
 		resolution, err := classifier.Resolve(
@@ -365,7 +388,7 @@ func classifyRunTask(
 			options.task,
 			capabilities,
 			readNormalizedProjectContext(root),
-			codexintegration.New(),
+			runbudget.ClassificationProvider{Budget: budget, Inner: codexintegration.New()},
 		)
 		if err != nil {
 			return classifier.Result{}, err
@@ -431,6 +454,8 @@ func parseRunExecuteArgs(args []string) (runExecuteOptions, error) {
 	options := runExecuteOptions{
 		root:           ".",
 		maxConcurrency: 2,
+		maxInvocations: 64,
+		maxRuntime:     30 * time.Minute,
 		modelPolicy:    modelpolicy.PolicyAuto,
 		memoryMode:     "auto",
 	}
@@ -528,6 +553,26 @@ func parseRunExecuteArgs(args []string) (runExecuteOptions, error) {
 			}
 			i++
 			options.controlDir = args[i]
+		case "--max-invocations":
+			if i+1 >= len(args) {
+				return runExecuteOptions{}, fmt.Errorf("--max-invocations requiere un entero")
+			}
+			i++
+			value, err := strconv.Atoi(args[i])
+			if err != nil || value < 1 || value > 10000 {
+				return runExecuteOptions{}, fmt.Errorf("--max-invocations debe estar entre 1 y 10000")
+			}
+			options.maxInvocations = value
+		case "--max-runtime":
+			if i+1 >= len(args) {
+				return runExecuteOptions{}, fmt.Errorf("--max-runtime requiere una duración, por ejemplo 30m")
+			}
+			i++
+			value, err := time.ParseDuration(args[i])
+			if err != nil || value < time.Second || value > 24*time.Hour {
+				return runExecuteOptions{}, fmt.Errorf("--max-runtime debe estar entre 1s y 24h")
+			}
+			options.maxRuntime = value
 		case "--max-concurrency":
 			if i+1 >= len(args) {
 				return runExecuteOptions{}, fmt.Errorf("--max-concurrency requiere un entero")
@@ -541,7 +586,7 @@ func parseRunExecuteArgs(args []string) (runExecuteOptions, error) {
 		case "--json":
 			options.json = true
 		case "-h", "--help":
-			return runExecuteOptions{}, fmt.Errorf("uso: ai run execute [ruta] --task <tarea> (--dry-run | --runtime auto|codex|cursor) [--multi-agent-write] [--project id] [--max-concurrency N] [--model-policy auto|economy|balanced|deep] [--model id] [--memory auto|engram|off] [--ai]")
+			return runExecuteOptions{}, fmt.Errorf("uso: ai run execute [ruta] --task <tarea> (--dry-run | --runtime auto|codex|cursor) [--multi-agent-write] [--project id] [--max-concurrency N] [--max-invocations N] [--max-runtime 30m] [--model-policy auto|economy|balanced|deep] [--model id] [--memory auto|engram|off] [--ai]")
 		default:
 			if strings.HasPrefix(args[i], "-") {
 				return runExecuteOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
