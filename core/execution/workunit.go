@@ -38,6 +38,7 @@ type WorkUnit struct {
 	Capabilities []string
 	Skills       []string
 	Tools                []string
+	ToolOperations       map[string][]string
 	CollaborationContext string
 	Permissions          PermissionEnvelope
 	Mutation             MutationCapability
@@ -83,8 +84,9 @@ func BuildWorkUnits(
 			AgentID:      agentPlan.AgentID,
 			Capabilities: uniqueSorted(agentPlan.Capabilities),
 			Skills:       uniqueSorted(agentPlan.Skills.Enabled),
-			Tools:        uniqueSorted(tools),
-			Permissions:  readOnlyEnvelope(agent.Permissions),
+			Tools:          uniqueSorted(tools),
+			ToolOperations: cloneToolOperations(agentPlan.Tools.Operations),
+			Permissions:    readOnlyEnvelope(agent.Permissions),
 			Mutation:     mutationCapability(agent.Permissions),
 			Mode:         ModeReadOnly,
 		})
@@ -137,4 +139,16 @@ func mutationCapability(source registry.AgentPermissions) MutationCapability {
 
 func (u WorkUnit) CanMutate() bool {
 	return u.Mutation.SourceCode || u.Mutation.Tests
+}
+
+
+func cloneToolOperations(values map[string][]string) map[string][]string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make(map[string][]string, len(values))
+	for toolID, operations := range values {
+		out[toolID] = uniqueSorted(operations)
+	}
+	return out
 }
