@@ -94,7 +94,7 @@ func PrepareSafeReadOnlyViewWithPolicy(projectRoot string, destination string, p
 		}
 		relative = filepath.Clean(relative)
 
-		if IsSensitivePathWithPolicy(relative, policy) {
+		if IsSensitivePathWithPolicy(relative, policy) || IsRuntimeControlPath(relative) {
 			report.ExcludedPaths = append(report.ExcludedPaths, filepath.ToSlash(relative))
 			if entry.IsDir() {
 				return filepath.SkipDir
@@ -143,6 +143,30 @@ func IsAllowedRuntimeFile(relativePath string, policy SafeViewPolicy) bool {
 		return true
 	}
 	return policy.AllowedExtensions[strings.ToLower(filepath.Ext(base))]
+}
+
+// IsRuntimeControlPath identifies repository-owned files that provider runtimes
+// may auto-discover as instructions, skills, or tool configuration. These paths
+// are excluded from sanitized runtime views so repository text cannot bypass
+// AI Engineering OS prompt, permission, skill-registry, or tool-binding policy.
+func IsRuntimeControlPath(relativePath string) bool {
+	clean := filepath.ToSlash(filepath.Clean(relativePath))
+	lower := strings.ToLower(clean)
+	parts := strings.Split(lower, "/")
+
+	for _, part := range parts {
+		switch part {
+		case ".cursor", ".codex", ".claude", ".agents":
+			return true
+		}
+	}
+
+	base := parts[len(parts)-1]
+	switch base {
+	case "agents.md", "agents.override.md", "claude.md":
+		return true
+	}
+	return false
 }
 
 func IsSensitivePath(relativePath string) bool {
