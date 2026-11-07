@@ -2,7 +2,6 @@ package localverify
 
 import (
 	"encoding/xml"
-	"fmt"
 	"os"
 	"strings"
 
@@ -143,19 +142,3 @@ func junitExpectedFailures(report junitReport) (int, bool) {
 	return total, known
 }
 
-func parseJUnitFixture(data string, exitFailed bool, roots ...string) (structuredParse, error) {
-	file, err := os.CreateTemp("", "ai-engineering-os-pytest-*.xml")
-	if err != nil {
-		return structuredParse{}, fmt.Errorf("create junit fixture: %w", err)
-	}
-	path := file.Name()
-	defer os.Remove(path)
-	if _, err := file.WriteString(data); err != nil {
-		_ = file.Close()
-		return structuredParse{}, err
-	}
-	if err := file.Close(); err != nil {
-		return structuredParse{}, err
-	}
-	return parsePytestJUnitFile(path, exitFailed, roots...), nil
-}
