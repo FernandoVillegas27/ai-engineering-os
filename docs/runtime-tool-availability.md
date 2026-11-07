@@ -222,3 +222,31 @@ create-pull-request
 ~~~
 
 Operation evidence remains subordinate to the agent permission envelope, run mode, mutation capability, and explicit promotion/approval boundaries.
+
+
+## Durable operation propagation
+
+Operation-scoped evidence is propagated into execution rather than remaining diagnostic metadata.
+
+For real runs the path is:
+
+~~~text
+runtime availability snapshot
+  -> orchestration ToolPlan.Operations
+  -> execution WorkUnit.ToolOperations
+  -> durable run work_unit.tool_operations
+  -> reconstructed resume/retry work units
+  -> runtime prompt capability summary
+~~~
+
+Rules:
+
+- only tools retained by runtime availability narrowing receive operation entries;
+- native tools receive their normalized declared local operations;
+- external tools receive only the exact verified `bound_operations`;
+- Cursor and Codex prompts show the effective operation set, not the Tool Registry's full theoretical operation list;
+- a tool without effective operations is omitted from prompt-visible capability text;
+- Context7 documentation evidence is injected only when the work unit contains `context7/search-docs`;
+- pause/resume, mutation resume and targeted retry restore the durable operation map rather than inferring new authority.
+
+This propagation still does not make Cursor or Codex call the external provider directly. It records and presents only the AI Engineering OS-owned capability that was already proven and materialized before the model invocation.

@@ -183,6 +183,31 @@ func BindOperations(evidence Evidence, operations ...string) Evidence {
 	return evidence
 }
 
+func EffectiveOperations(tool registry.Tool, evidence Evidence) []string {
+	if tool.Interface.Type == "native" {
+		return normalizedOperations(tool.Operations)
+	}
+	if evidence.State != StateAvailable || !evidence.RuntimeBound {
+		return nil
+	}
+	return append([]string(nil), evidence.BoundOperations...)
+}
+
+func normalizedOperations(values []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func ValidateSnapshot(tools registry.ToolRegistry, snapshot Snapshot) error {
 	for id, evidence := range snapshot {
 		if id != evidence.ToolID {

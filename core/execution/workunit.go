@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
@@ -36,8 +37,9 @@ type WorkUnit struct {
 	Intent       orchestration.Intent
 	AgentID      string
 	Capabilities []string
-	Skills       []string
+	Skills               []string
 	Tools                []string
+	ToolOperations       map[string][]string
 	CollaborationContext string
 	Permissions          PermissionEnvelope
 	Mutation             MutationCapability
@@ -82,9 +84,10 @@ func BuildWorkUnits(
 			Intent:       plan.Intent,
 			AgentID:      agentPlan.AgentID,
 			Capabilities: uniqueSorted(agentPlan.Capabilities),
-			Skills:       uniqueSorted(agentPlan.Skills.Enabled),
-			Tools:        uniqueSorted(tools),
-			Permissions:  readOnlyEnvelope(agent.Permissions),
+			Skills:         uniqueSorted(agentPlan.Skills.Enabled),
+			Tools:          uniqueSorted(tools),
+			ToolOperations: CloneToolOperations(agentPlan.Tools.Operations),
+			Permissions:    readOnlyEnvelope(agent.Permissions),
 			Mutation:     mutationCapability(agent.Permissions),
 			Mode:         ModeReadOnly,
 		})
@@ -137,4 +140,28 @@ func mutationCapability(source registry.AgentPermissions) MutationCapability {
 
 func (u WorkUnit) CanMutate() bool {
 	return u.Mutation.SourceCode || u.Mutation.Tests
+}
+
+
+func CloneToolOperations(values map[string][]string) map[string][]string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make(map[string][]string, len(values))
+	for toolID, operations := range values {
+		out[toolID] = uniqueSorted(operations)
+	}
+	return out
+}
+
+func FormatToolBindings(unit WorkUnit) string {
+	parts := make([]string, 0, len(unit.Tools))
+	for _, toolID := range uniqueSorted(unit.Tools) {
+		operations := uniqueSorted(unit.ToolOperations[toolID])
+		if len(operations) == 0 {
+			continue
+		}
+		parts = append(parts, toolID+"["+strings.Join(operations, ",")+"]")
+	}
+	return strings.Join(parts, "; ")
 }

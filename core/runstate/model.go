@@ -67,8 +67,9 @@ type WorkUnit struct {
 	Status       WorkUnitStatus               `json:"status"`
 	Capabilities []string                     `json:"capabilities,omitempty"`
 	Skills       []string                     `json:"skills,omitempty"`
-	Tools        []string                     `json:"tools,omitempty"`
-	Permissions  execution.PermissionEnvelope `json:"permissions"`
+	Tools          []string                     `json:"tools,omitempty"`
+	ToolOperations map[string][]string            `json:"tool_operations,omitempty"`
+	Permissions    execution.PermissionEnvelope   `json:"permissions"`
 	Mutating     bool                         `json:"mutating,omitempty"`
 	MutationKind string                       `json:"mutation_kind,omitempty"`
 	Scopes       []string                     `json:"scopes,omitempty"`
@@ -160,8 +161,9 @@ func New(request NewRunRequest, now time.Time) (Run, error) {
 			Status:       WorkUnitQueued,
 			Capabilities: sortedUnique(unit.Capabilities),
 			Skills:       sortedUnique(unit.Skills),
-			Tools:        sortedUnique(unit.Tools),
-			Permissions:  unit.Permissions,
+			Tools:          sortedUnique(unit.Tools),
+			ToolOperations: cloneOperationMap(unit.ToolOperations),
+			Permissions:    unit.Permissions,
 		})
 	}
 	if err := Validate(run); err != nil {
@@ -203,6 +205,23 @@ func Validate(run Run) error {
 		ids[unit.ID] = true
 		if !validWorkUnitStatus(unit.Status) {
 			return fmt.Errorf("invalid work unit status for %s: %q", unit.ID, unit.Status)
+		}
+		declaredTools := map[string]bool{}
+		for _, toolID := range unit.Tools {
+			declaredTools[strings.TrimSpace(toolID)] = true
+		}
+		for toolID, operations := range unit.ToolOperations {
+			if !declaredTools[strings.TrimSpace(toolID)] {
+				return fmt.Errorf("work unit %s binds operations for undeclared tool %q", unit.ID, toolID)
+			}
+			if len(sortedUnique(operations)) == 0 {
+				return fmt.Errorf("work unit %s tool %q has no bound operations", unit.ID, toolID)
+			}
+			for _, operation := range operations {
+				if strings.TrimSpace(operation) == "" {
+					return fmt.Errorf("work unit %s tool %q has empty bound operation", unit.ID, toolID)
+				}
+			}
 		}
 		switch unit.MutationKind {
 		case "":
@@ -313,5 +332,17 @@ func sortedUnique(values []string) []string {
 		out = append(out, value)
 	}
 	sort.Strings(out)
+	return out
+}
+
+
+func cloneOperationMap(values map[string][]string) map[string][]string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make(map[string][]string, len(values))
+	for toolID, operations := range values {
+		out[toolID] = sortedUnique(operations)
+	}
 	return out
 }

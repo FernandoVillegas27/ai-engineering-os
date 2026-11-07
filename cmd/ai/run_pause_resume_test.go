@@ -348,3 +348,31 @@ func TestParseRunResumeArgsProjectCodeTrust(t *testing.T) {
 		t.Fatalf("options=%#v", options)
 	}
 }
+
+
+func TestReconstructPausedReadOnlyRunPreservesToolOperations(t *testing.T) {
+	run, err := runstate.New(runstate.NewRunRequest{
+		Task: "research", Intent: "research", ProjectID: "project", ProjectRoot: ".",
+		WorkUnits: []execution.WorkUnit{{
+			ID: "research", AgentID: "researcher", Task: "research",
+			Tools: []string{"context7"},
+			ToolOperations: map[string][]string{"context7": {"search-docs"}},
+			Permissions: execution.PermissionEnvelope{
+				SourceCode: "read", Tests: "read", GitCommit: "deny",
+				GitPush: "deny", Secrets: "deny", Production: "deny",
+			},
+			Mode: execution.ModeReadOnly,
+		}},
+	}, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	run.WorkUnits[0].Status = runstate.WorkUnitQueued
+	units, _, err := reconstructPausedReadOnlyRun(run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := units[0].ToolOperations["context7"]; len(got) != 1 || got[0] != "search-docs" {
+		t.Fatalf("tool operations=%#v", units[0].ToolOperations)
+	}
+}

@@ -35,12 +35,16 @@ func mutationCheckpointFixtureRun(t *testing.T) runstate.Run {
 			},
 			{
 				ID: "backend", AgentID: "backend-engineer", Task: "implement",
+				Tools: []string{"filesystem"},
+				ToolOperations: map[string][]string{"filesystem": {"read-files", "write-files"}},
 				Permissions: execution.PermissionEnvelope{SourceCode: "read", Tests: "read", GitCommit: "deny", GitPush: "deny", Secrets: "deny", Production: "deny"},
 				Mutation: execution.MutationCapability{SourceCode: true, Tests: true},
 				Mode: execution.ModeReadOnly,
 			},
 			{
 				ID: "qa", AgentID: "qa-engineer", Task: "implement",
+				Tools: []string{"filesystem"},
+				ToolOperations: map[string][]string{"filesystem": {"read-files", "write-files"}},
 				Permissions: execution.PermissionEnvelope{SourceCode: "read", Tests: "read", GitCommit: "deny", GitPush: "deny", Secrets: "deny", Production: "deny"},
 				Mutation: execution.MutationCapability{Tests: true},
 				Mode: execution.ModeReadOnly,
@@ -163,6 +167,9 @@ func TestReconstructMutationUnitsUsesDurableMutationKind(t *testing.T) {
 	if len(testsOnly) != 1 || testsOnly[0].ID != "qa" ||
 		!testsOnly[0].Mutation.Tests || testsOnly[0].Mutation.SourceCode {
 		t.Fatalf("testsOnly=%#v", testsOnly)
+	}
+	if got := testsOnly[0].ToolOperations["filesystem"]; len(got) != 2 {
+		t.Fatalf("testsOnly tool operations=%#v", testsOnly[0].ToolOperations)
 	}
 	source, err := reconstructMutationUnits(run, "source")
 	if err != nil {

@@ -36,6 +36,18 @@ func ApplyToolAvailability(
 		}
 		agent.Tools.Required = required
 		agent.Tools.Recommended = recommended
+		agent.Tools.Operations = map[string][]string{}
+		for _, toolID := range append(append([]string(nil), required...), recommended...) {
+			tool, ok := tools.Tools[toolID]
+			if !ok {
+				return Plan{}, fmt.Errorf("tool %q missing while deriving runtime operations", toolID)
+			}
+			operations := toolavailability.EffectiveOperations(tool, snapshot[toolID])
+			if len(operations) == 0 {
+				return Plan{}, fmt.Errorf("tool %q has no effective runtime operations", toolID)
+			}
+			agent.Tools.Operations[toolID] = operations
+		}
 		out.Agents[index] = agent
 	}
 	return out, nil
