@@ -22,12 +22,13 @@ const (
 )
 
 type Task struct {
-	ID        string   `json:"id"`
-	AgentID   string   `json:"agent_id"`
-	DependsOn []string `json:"depends_on,omitempty"`
-	Mutating  bool     `json:"mutating"`
-	Scopes    []string `json:"scopes,omitempty"`
-	Status    Status   `json:"status"`
+	ID             string              `json:"id"`
+	AgentID        string              `json:"agent_id"`
+	DependsOn      []string            `json:"depends_on,omitempty"`
+	Mutating       bool                `json:"mutating"`
+	Scopes         []string            `json:"scopes,omitempty"`
+	ToolOperations map[string][]string `json:"tool_operations,omitempty"`
+	Status         Status              `json:"status"`
 }
 
 type Progress struct {
@@ -77,6 +78,7 @@ func New(tasks []Task) (*Scheduler, error) {
 		task.AgentID = agent
 		task.DependsOn = uniqueSorted(input.DependsOn)
 		task.Scopes = normalizedScopes
+		task.ToolOperations = cloneToolOperations(input.ToolOperations)
 		task.Status = status
 		if task.Mutating && len(task.Scopes) == 0 {
 			return nil, fmt.Errorf("mutating task %s requires at least one file scope", id)
@@ -353,7 +355,30 @@ func uniqueSorted(values []string) []string {
 func cloneTask(task Task) Task {
 	task.DependsOn = append([]string(nil), task.DependsOn...)
 	task.Scopes = append([]string(nil), task.Scopes...)
+	task.ToolOperations = cloneToolOperations(task.ToolOperations)
 	return task
+}
+
+func cloneToolOperations(values map[string][]string) map[string][]string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make(map[string][]string, len(values))
+	for toolID, operations := range values {
+		toolID = strings.TrimSpace(toolID)
+		if toolID == "" {
+			continue
+		}
+		normalized := uniqueSorted(operations)
+		if len(normalized) == 0 {
+			continue
+		}
+		out[toolID] = normalized
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func (s *Scheduler) validateAcyclic() error {
