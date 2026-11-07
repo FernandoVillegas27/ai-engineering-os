@@ -21,8 +21,9 @@ type Tool struct {
 	Operations       []string      `yaml:"operations"`
 	Access           []string      `yaml:"access"`
 	Risk             string        `yaml:"risk"`
-	RequiresApproval bool          `yaml:"requires_approval"`
-	AvailabilityCheck *string      `yaml:"availability_check"`
+	RequiresApproval            bool     `yaml:"requires_approval"`
+	ApprovalRequiredOperations []string `yaml:"approval_required_operations,omitempty"`
+	AvailabilityCheck          *string      `yaml:"availability_check"`
 	Status           string        `yaml:"status"`
 }
 
@@ -86,6 +87,29 @@ func validateTool(tool Tool) error {
 			return fmt.Errorf("operations must not contain empty values")
 		}
 	}
+	if len(tool.ApprovalRequiredOperations) > 0 {
+		declared := map[string]bool{}
+		for _, operation := range tool.Operations {
+			declared[operation] = true
+		}
+		seenApproval := map[string]bool{}
+		for _, operation := range tool.ApprovalRequiredOperations {
+			operation = strings.TrimSpace(operation)
+			if operation == "" {
+				return fmt.Errorf("approval_required_operations must not contain empty values")
+			}
+			if seenApproval[operation] {
+				return fmt.Errorf("duplicate approval-required operation %q", operation)
+			}
+			seenApproval[operation] = true
+			if !declared[operation] {
+				return fmt.Errorf(
+					"approval-required operation %q is not declared in operations",
+					operation,
+				)
+			}
+		}
+	}
 	if len(tool.Access) == 0 {
 		return fmt.Errorf("at least one access mode is required")
 	}
@@ -107,4 +131,21 @@ func validateTool(tool Tool) error {
 		return fmt.Errorf("status must be enabled or disabled")
 	}
 	return nil
+}
+
+
+func OperationRequiresApproval(tool Tool, operation string) bool {
+	operation = strings.TrimSpace(operation)
+	if operation == "" {
+		return false
+	}
+	if len(tool.ApprovalRequiredOperations) > 0 {
+		for _, candidate := range tool.ApprovalRequiredOperations {
+			if strings.TrimSpace(candidate) == operation {
+				return true
+			}
+		}
+		return false
+	}
+	return tool.RequiresApproval
 }
