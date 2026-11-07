@@ -244,9 +244,9 @@ func nodeTestCheck(packagePath string) (*plannedCheck, error) {
 func safeVerificationEnvironment() []string {
 	allowed := []string{
 		"PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "COMSPEC",
-		"TEMP", "TMP", "TMPDIR", "HOME", "USERPROFILE",
-		"JAVA_HOME", "GOROOT", "GOPATH", "GOMODCACHE",
-		"NPM_CONFIG_CACHE", "LANG", "LC_ALL", "TERM",
+		"TEMP", "TMP", "TMPDIR",
+		"JAVA_HOME", "GOROOT", "GOMODCACHE",
+		"LANG", "LC_ALL", "TERM",
 	}
 	env := make([]string, 0, len(allowed)+1)
 	for _, key := range allowed {
@@ -270,17 +270,33 @@ func prepareVerificationEnvironment(root string) ([]string, func(), error) {
 	}
 
 	goCache := filepath.Join(cacheRoot, "go-build")
-	if err := os.MkdirAll(goCache, 0o755); err != nil {
-		cleanup()
-		return nil, func() {}, fmt.Errorf("create verification cache directory: %w", err)
+	home := filepath.Join(cacheRoot, "home")
+	goPath := filepath.Join(cacheRoot, "go-path")
+	npmCache := filepath.Join(cacheRoot, "npm-cache")
+	gradleHome := filepath.Join(cacheRoot, "gradle-home")
+	mavenRepo := filepath.Join(cacheRoot, "maven-repository")
+	for _, dir := range []string{goCache, home, goPath, npmCache, gradleHome, mavenRepo} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			cleanup()
+			return nil, func() {}, fmt.Errorf("create verification isolation directory: %w", err)
+		}
 	}
 
-	// Keep the build cache isolated, but deliberately reuse the caller's
-	// module cache/GOPATH when available. Replacing GOMODCACHE/GOPATH with
-	// empty temporary directories forces Go to redownload every dependency
-	// on each verification run, which is both slow and network-dependent.
+	// Project-owned verification commands are explicitly trusted by the caller,
+	// but they still receive an isolated user/cache home so normal tool lookup
+	// cannot discover developer dotfiles or credential configuration through
+	// HOME/USERPROFILE/GOPATH/npm/Gradle/Maven defaults.
 	env := safeVerificationEnvironment()
-	env = append(env, "GOCACHE="+goCache)
+	env = append(
+		env,
+		"GOCACHE="+goCache,
+		"GOPATH="+goPath,
+		"HOME="+home,
+		"USERPROFILE="+home,
+		"NPM_CONFIG_CACHE="+npmCache,
+		"GRADLE_USER_HOME="+gradleHome,
+		"MAVEN_OPTS=-Duser.home="+home+" -Dmaven.repo.local="+mavenRepo,
+	)
 	return env, cleanup, nil
 }
 
