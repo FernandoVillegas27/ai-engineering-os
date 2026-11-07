@@ -52,6 +52,7 @@ tools:
     operations:
       - resolve-library-id
       - query-docs
+      - search-docs
     access:
       - read
       - network
