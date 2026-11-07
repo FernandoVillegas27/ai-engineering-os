@@ -199,6 +199,41 @@ func TestGitHubPRCreateUsesExactApprovalAndAuditsMutation(t *testing.T) {
 	t.Cleanup(func() { newGitHubPRCreator = originalFactory })
 
 	args := append(githubPRArgs(run.ID, stateDir, eventsDir), "--approval-dir", approvalDir)
+	// Evidence alone is never enough: a missing durable resolution event
+	// must fail closed without invoking the external mutation adapter.
+	if err := runRunGitHubPRCreate(args); err == nil {
+		t.Fatal("orphan grant without audit trail must be rejected")
+	}
+	if fake.calls != 0 {
+		t.Fatalf("orphan approval invoked adapter: %d", fake.calls)
+	}
+	// Append the matching request and resolution event to complete the chain.
+	eventStore, err := controlplane.NewEventStore(eventsDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		typ controlplane.EventType
+		evidenceID string
+	}{
+		{controlplane.EventApprovalRequested, ""},
+		{controlplane.EventApprovalGranted, evidence.ID},
+	} {
+		event, eventErr := controlplane.NewEvent(controlplane.NewEventRequest{
+			RunID: run.ID, TaskID: "reviewer-1", Type: tc.typ,
+			Data: map[string]any{
+				"kind": "tool-operation", "tool_id": "github",
+				"operation": "create-pull-request", "request_digest": digest,
+				"evidence_id": tc.evidenceID,
+			},
+		}, time.Now().UTC())
+		if eventErr != nil {
+			t.Fatal(eventErr)
+		}
+		if _, eventErr = eventStore.Append(context.Background(), event); eventErr != nil {
+			t.Fatal(eventErr)
+		}
+	}
 	if err := runRunGitHubPRCreate(args); err != nil {
 		t.Fatal(err)
 	}
@@ -212,17 +247,13 @@ func TestGitHubPRCreateUsesExactApprovalAndAuditsMutation(t *testing.T) {
 		t.Fatalf("approval=%#v", fake.approval)
 	}
 
-	eventStore, err := controlplane.NewEventStore(eventsDir)
-	if err != nil {
-		t.Fatal(err)
-	}
 	events, err := eventStore.List(run.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 3 ||
-		events[1].Type != controlplane.EventToolStarted ||
-		events[2].Type != controlplane.EventToolCompleted {
+	if len(events) != 5 ||
+		events[3].Type != controlplane.EventToolStarted ||
+		events[4].Type != controlplane.EventToolCompleted {
 		t.Fatalf("events=%#v", events)
 	}
 }
@@ -280,5 +311,42 @@ func TestGitHubPRCreateDoesNotInvokeAdapterForChangedRequest(t *testing.T) {
 	}
 	if fake.calls != 0 {
 		t.Fatalf("adapter invoked without matching request approval: %d", fake.calls)
+	}
+}
+
+
+func TestGitHubPRApprovalRecordedRejectsUnrelatedAndRejectedGrants(t *testing.T) {
+	now := time.Now().UTC()
+	makeEvent := func(typ controlplane.EventType, digest, evidenceID string) controlplane.Event {
+		t.Helper()
+		event, err := controlplane.NewEvent(controlplane.NewEventRequest{
+			RunID: "run-1", TaskID: "task-1", Type: typ,
+			Data: map[string]any{
+				"kind": "tool-operation", "tool_id": "github",
+				"operation": "create-pull-request", "request_digest": digest,
+				"evidence_id": evidenceID,
+			},
+		}, now)
+		if err != nil { t.Fatal(err) }
+		return event
+	}
+	request := makeEvent(controlplane.EventApprovalRequested, "digest-a", "")
+	grant := makeEvent(controlplane.EventApprovalGranted, "digest-a", "approval-1")
+	if githubPRApprovalRecorded([]controlplane.Event{grant}, "task-1", "digest-a", "approval-1") {
+		t.Fatal("grant without request must not authorize")
+	}
+	if githubPRApprovalRecorded([]controlplane.Event{request, grant}, "task-1", "digest-b", "approval-1") {
+		t.Fatal("unrelated request digest must not authorize")
+	}
+	if githubPRApprovalRecorded([]controlplane.Event{request, grant}, "task-1", "digest-a", "approval-2") {
+		t.Fatal("unrelated evidence ID must not authorize")
+	}
+	if !githubPRApprovalRecorded([]controlplane.Event{request, grant}, "task-1", "digest-a", "approval-1") {
+		t.Fatal("exactly recorded grant should authorize")
+	}
+	if githubPRApprovalRecorded([]controlplane.Event{
+		request, grant, makeEvent(controlplane.EventApprovalRejected, "digest-a", "approval-3"),
+	}, "task-1", "digest-a", "approval-1") {
+		t.Fatal("later rejection must invalidate recorded grant")
 	}
 }

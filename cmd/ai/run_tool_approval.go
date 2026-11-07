@@ -157,15 +157,18 @@ func runRunToolApprovalResolve(args []string, granted bool) error {
 	if err != nil {
 		return err
 	}
-	if _, err := eventStore.Append(context.Background(), event); err != nil {
-		return err
-	}
+	// Persist evidence first. A resolution event must never advertise a grant
+	// whose immutable evidence could not be written. Consumers must additionally
+	// verify the matching event before accepting a stored grant.
 	store, err := openToolApprovalStore(options.approvalDir)
 	if err != nil {
 		return err
 	}
 	if err := store.Save(evidence); err != nil {
-		return fmt.Errorf("persist approval evidence after audit event: %w", err)
+		return fmt.Errorf("persist approval evidence before audit event: %w", err)
+	}
+	if _, err := eventStore.Append(context.Background(), event); err != nil {
+		return fmt.Errorf("approval evidence %s persisted but resolution audit event failed: %w", evidence.ID, err)
 	}
 	return printToolApprovalView(toolApprovalView{
 		RunID: run.ID, TaskID: options.taskID, ToolID: options.toolID,
