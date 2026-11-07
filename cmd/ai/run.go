@@ -60,6 +60,8 @@ func runRun(args []string) error {
 		return runRunArchive(args[1:])
 	case "compact":
 		return runRunCompact(args[1:])
+	case "tool-approval":
+		return runRunToolApproval(args[1:])
 	default:
 		return fmt.Errorf("subcomando run desconocido: %s", args[0])
 	}
@@ -543,6 +545,9 @@ func printRunUsage() {
 	fmt.Println("  ai run snapshot <run-id> [--events-dir ruta] [--snapshot-dir ruta] [--json]")
 	fmt.Println("  ai run archive <run-id> [--events-dir ruta] [--snapshot-dir ruta] [--archive-dir ruta] [--json]")
 	fmt.Println("  ai run compact <run-id> [--events-dir ruta] [--snapshot-dir ruta] [--archive-dir ruta] [--json]")
+	fmt.Println("  ai run tool-approval request <run-id> --task <task-id> --tool <tool-id> --operation <operation> [--state-dir ruta] [--events-dir ruta] [--json]")
+	fmt.Println("  ai run tool-approval grant <run-id> --task <task-id> --tool <tool-id> --operation <operation> [--expires-in 15m] [--approval-dir ruta] [--state-dir ruta] [--events-dir ruta] [--json]")
+	fmt.Println("  ai run tool-approval reject <run-id> --task <task-id> --tool <tool-id> --operation <operation> [--approval-dir ruta] [--state-dir ruta] [--events-dir ruta] [--json]")
 	fmt.Println()
 	fmt.Println("Sin --state-dir usa AI_ENGINEERING_OS_STATE_DIR o el directorio de configuración del usuario.")
 	fmt.Println("Sin --events-dir usa AI_ENGINEERING_OS_EVENTS_DIR o el directorio de configuración del usuario.")
