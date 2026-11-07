@@ -248,50 +248,77 @@ The repository already has the foundation for:
 
 ### Latest verified checkpoint — 2026-11-07
 
-Latest merged implementation: PR #152, `fix(coordinator): keep run cancellations out of failed task counts`.
+Latest merged implementation: PR #160, `fix(runcontrol): harden lease IO against transient Windows sharing violations`.
 
-Master commit:
+Master now includes the RC-ready backend plus the first post-RC product evolution milestones.
 
-~~~text
-cd819c783860b70df50159d84c48dd35f95418a8
-~~~
-
-Release-hardening milestones after #134:
+Key release-hardening / product milestones now on master:
 
 - #138: embedded read-only Control Plane web client;
 - #139: promotion adversarial boundaries and Linux/Windows/macOS CI matrix;
 - #140: coordinated multi-agent + explicit-promotion E2E;
 - #142: provider-independent per-run invocation/runtime budgets;
 - #143: governed, inspectable, reversible project memory;
-- #145: `ai version`, quickstart, compatibility, troubleshooting, migration and releasing docs;
-- #146: R1 threat hardening — project-code trust, process-tree cancellation, diagnostic redaction, prompt-injection tests, traversal/reparse hardening, isolated verification home/caches;
-- #149: fixed the lease shutdown race discovered by release CI;
-- #150: reproducible RC packages and SHA-256 evidence for linux/amd64, windows/amd64, darwin/amd64 and darwin/arm64;
-- #152: coordinator cancellation classification fixed after the final race gate exposed failed-vs-cancelled timing ambiguity; full Linux/Windows/macOS matrix and Linux race tests passed.
+- #145: version identity, quickstart, compatibility, troubleshooting, migration and releasing docs;
+- #146: threat-model hardening, process-tree cancellation, diagnostic redaction, prompt-injection/traversal/reparse tests and isolated verification homes;
+- #149: lease shutdown race fix;
+- #150: reproducible four-target RC packages and SHA-256 evidence;
+- #152: cancellation failed-vs-cancelled race semantics fix;
+- #153: final documented `0.1.0-rc.1` readiness checkpoint;
+- #154: dedicated read-only VS Code Control Plane client;
+- #155: dedicated read-only IntelliJ IDEA Control Plane client;
+- #156: structured pytest and Angular unit-test failure reports;
+- #157: privacy-preserving local observability and Prometheus endpoint;
+- #158: fail-closed required-tool planning;
+- #159: provider-independent runtime availability evidence and explicit tool binding;
+- #160: bounded Windows lease-IO retry for sharing/lock violations.
 
-The complete R1 hardening matrix passed on Linux, Windows and macOS; Linux passed `go test -race ./...`.
+The documented `0.1.0-rc.1` implementation/readiness scope is complete.
 
-The final packaging PR also passed the normal multi-OS matrix and successfully produced all four release packages/checksums while correctly skipping publication on a pull request.
+The exact public tag/release publication remains a separate operation. At the current checkpoint the repository contains the tag-only release workflow, but the public `v0.1.0-rc.1` tag has not been created through ChatGPT because the connected GitHub capability available here does not expose tag/release creation.
 
-### Current release milestone
+### Current post-RC product level
 
-**The documented `0.1.0-rc.1` implementation/readiness scope is complete and ready for exact-tag publication.**
+The following long-term product areas are now implemented far beyond the original roadmap checkpoint:
 
-See [RELEASE_READINESS.md](RELEASE_READINESS.md) for the evidence ledger and [THREAT_MODEL.md](THREAT_MODEL.md) for the explicit autonomy scope.
+- baseline-aware cross-language Quality for Go, Java/Maven/Gradle, Jest/Vitest, pytest and supported Angular unit-test builders;
+- deterministic OpenAPI/architecture gates;
+- long-run recovery/compaction soak evidence;
+- governed project memory/team learning;
+- normalized external tool/MCP health;
+- embedded visual Control Plane;
+- dedicated VS Code and IntelliJ clients;
+- privacy-preserving local observability;
+- strict required-tool planning;
+- runtime availability + explicit binding evidence;
+- multi-OS and race verification;
+- reproducible release packaging.
 
-Immediate release operation:
+### Immediate next milestone
 
-1. validate this checkpoint PR;
-2. merge it to `master`;
-3. create exact tag `v0.1.0-rc.1` from the green master commit;
-4. allow the tag-only release workflow to build/verify/publish artifacts and `SHA256SUMS`;
-5. verify the published release metadata/checksums.
+**Installable IDE client artifacts and release integration.**
 
-Do not confuse RC-scope completion with exhaustion of the long-term product vision.
+The dedicated IDE clients exist and pass their own CI, but the release line should make them directly installable and independently verifiable.
 
-Post-RC evolution may include dedicated VS Code/IntelliJ clients, broader Quality/toolchain coverage, additional connectors/MCP integrations and UX/observability improvements.
+Required behavior:
 
-Provider/model policy remains provider-independent. Do not hard-code a model per agent role. Promotion, integrity, approvals, recovery, budgets, memory governance and permission boundaries remain mandatory.
+1. build a deterministic VS Code `.vsix` artifact from the extension source;
+2. build the IntelliJ plugin distribution ZIP;
+3. generate SHA-256 evidence for both IDE artifacts;
+4. upload them as workflow artifacts on pull requests;
+5. attach them to tagged GitHub releases alongside CLI packages;
+6. keep IDE clients read-only and loopback-only;
+7. never make IDE packaging a new coordination/promotion authority.
+
+After that, the remaining work toward the broadest product vision is primarily:
+
+- explicit runtime adapters/bindings for selected external tools/connectors;
+- broader language/toolchain coverage where real demand exists;
+- UX polish and richer IDE-native views/actions;
+- release feedback fixes before stable `v0.1.0`;
+- public RC/stable publication operations.
+
+Do not reintroduce role-specific model pinning or weaken promotion, integrity, approvals, recovery, budgets, memory governance, explicit tool binding, or permission boundaries.
 
 ---
 
