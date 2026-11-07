@@ -184,6 +184,9 @@ func injectRuntimeToolContext(
 	out := append([]execution.WorkUnit(nil), units...)
 	for i := range out {
 		for _, toolID := range out[i].Tools {
+			if len(out[i].ToolOperations[toolID]) == 0 {
+				continue
+			}
 			if toolID == "context7" && !hasBoundOperation(out[i], toolID, "search-docs") {
 				continue
 			}
