@@ -22,7 +22,7 @@ Current evidence sources:
 - native tools: locally available by construction when enabled;
 - Engram: provider health is probed through the existing Engram adapter;
 - Context7: local MCP launcher health can be probed, but remote MCP-host connectivity remains unverified;
-- GitHub connector: unknown until a connector/runtime binding can be verified;
+- GitHub: AI Engineering OS-owned read-only binding through the local `gh` CLI when authentication and individual read operations are verified;
 - Codegraph MCP: unknown until a runtime adapter can verify it;
 - Playwright MCP: unknown until a runtime adapter can verify it.
 
@@ -208,7 +208,7 @@ It does not claim that the runtime exposes Context7's MCP-native `resolve-librar
 A future GitHub adapter may prove read-only operations such as:
 
 ~~~text
-read-repo
+read-repository
 read-issues
 read-pull-requests
 ~~~
@@ -250,3 +250,96 @@ Rules:
 - pause/resume, mutation resume and targeted retry restore the durable operation map rather than inferring new authority.
 
 This propagation still does not make Cursor or Codex call the external provider directly. It records and presents only the AI Engineering OS-owned capability that was already proven and materialized before the model invocation.
+
+
+## GitHub AI Engineering OS-owned read binding
+
+GitHub has an AI Engineering OS-owned read-only runtime binding based on the local GitHub CLI.
+
+The adapter never grants general GitHub authority to the model runtime. AI Engineering OS executes a fixed allowlist of non-mutating commands itself and injects only bounded JSON evidence.
+
+Current bindable operations:
+
+~~~text
+read-repository
+read-issues
+read-pull-requests
+~~~
+
+Fixed command shapes:
+
+~~~text
+gh auth status
+gh repo view --json nameWithOwner,url,defaultBranchRef,isPrivate
+gh issue list --state open --limit 20 --json number,title,state,updatedAt,url,labels
+gh pr list --state open --limit 20 --json number,title,state,isDraft,updatedAt,url,headRefName,baseRefName
+~~~
+
+The adapter does not construct or expose commands for:
+
+~~~text
+create-branch
+create-commit
+create-pull-request
+review-pull-request
+merge
+edit
+delete
+~~~
+
+### Credential boundary
+
+The trusted adapter may forward only GitHub-specific authentication/config required by `gh` plus the minimal process environment.
+
+Allowed credential variables include:
+
+- `GH_TOKEN`;
+- `GITHUB_TOKEN`;
+- `GH_HOST`.
+
+Unrelated secrets are not forwarded. The token itself is never included in model context.
+
+The process is explicitly non-interactive:
+
+~~~text
+GH_PROMPT_DISABLED=1
+GH_PAGER=cat
+NO_COLOR=1
+~~~
+
+### Partial binding
+
+Read operations are independent.
+
+If repository metadata and pull requests are readable but issue listing is forbidden, the availability evidence binds only the successful operations. The unavailable operation is not inferred from provider health.
+
+If authentication fails, `gh` is absent, or no read operation produces valid JSON, GitHub remains unavailable/unbound and optional GitHub access is removed from the plan.
+
+### Operation-scoped approvals
+
+GitHub keeps high-risk mutation/review operations in the canonical Tool Registry, but approval is scoped to:
+
+- `create-branch`;
+- `create-commit`;
+- `create-pull-request`;
+- `review-pull-request`.
+
+Read operations do not require mutation approval.
+
+Runtime availability validation rejects approval-required operations if they appear bound without a future explicit approval-evidence layer. Therefore an authenticated high-privilege token cannot make write operations executable merely because the read-only binding succeeds.
+
+### Evidence trust and durable propagation
+
+Repository metadata, issue titles, PR titles, labels, and other GitHub fields are labeled **untrusted external data** before entering work-unit context.
+
+After #169's durable operation propagation, only the successfully bound GitHub read operations flow into:
+
+~~~text
+ToolPlan.Operations
+  -> WorkUnit.ToolOperations
+  -> durable run tool_operations
+  -> resume/retry reconstruction
+  -> prompt-visible bound operations
+~~~
+
+They cannot change the task, permission envelope, model/runtime policy, or promotion approval.
