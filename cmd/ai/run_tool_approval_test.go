@@ -13,6 +13,11 @@ import (
 )
 
 func TestRunToolApprovalRequestThenGrantPersistsEvidenceAndEvents(t *testing.T) {
+	repoRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AI_ENGINEERING_OS_HOME", repoRoot)
 	root := t.TempDir()
 	stateDir := filepath.Join(root, "runs")
 	eventsDir := filepath.Join(root, "events")
@@ -103,6 +108,11 @@ func TestRunToolApprovalRequestThenGrantPersistsEvidenceAndEvents(t *testing.T) 
 }
 
 func TestRunToolApprovalRejectsToolNotDeclaredForTask(t *testing.T) {
+	repoRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AI_ENGINEERING_OS_HOME", repoRoot)
 	root := t.TempDir()
 	stateDir := filepath.Join(root, "runs")
 	eventsDir := filepath.Join(root, "events")
