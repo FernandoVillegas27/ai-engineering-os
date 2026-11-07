@@ -492,3 +492,52 @@ Legacy operation-only approval evidence remains readable for compatibility, but 
 The CLI supports `--request-digest <sha256>` on tool-operation request/grant/reject flows. The Control Plane projects the digest as audit metadata without exposing the underlying mutation payload.
 
 Future GitHub write or browser side-effect adapters must use request-bound approval for concrete mutations/side effects rather than relying only on an operation-name grant.
+
+
+## Approved GitHub pull-request creation workflow
+
+GitHub `create-pull-request` now has a deliberately narrow operator workflow.
+
+Prepare the exact request:
+
+~~~text
+ai run github-pr prepare <run-id> \
+  --task <task-id> \
+  --repository owner/name \
+  --head feature-branch \
+  --base main \
+  --title "Reviewed title" \
+  --body "Reviewed body"
+~~~
+
+Preparation performs no GitHub mutation. It validates the run/task/tool boundary, computes the request SHA-256 digest, and appends the exact `approval.requested` event.
+
+The operator then grants that exact digest through the existing tool approval command:
+
+~~~text
+ai run tool-approval grant <run-id> \
+  --task <task-id> \
+  --tool github \
+  --operation create-pull-request \
+  --request-digest <sha256>
+~~~
+
+Only then can the exact request be executed:
+
+~~~text
+ai run github-pr create <run-id> \
+  --task <task-id> \
+  --repository owner/name \
+  --head feature-branch \
+  --base main \
+  --title "Reviewed title" \
+  --body "Reviewed body"
+~~~
+
+Execution reconstructs the digest, loads immutable approval evidence, and refuses to invoke the GitHub adapter unless the grant matches the exact request and is still valid.
+
+Before the remote mutation, a `tool.started` event must be persisted successfully. The trusted adapter then re-verifies GitHub authentication and repository identity and uses one fixed `gh pr create` command with direct argv, never a shell.
+
+Success/failure is recorded through `tool.completed` / `tool.failed`.
+
+This workflow does not grant branch creation, commit, push, merge, edit, close or delete authority.

@@ -62,6 +62,8 @@ func runRun(args []string) error {
 		return runRunCompact(args[1:])
 	case "tool-approval":
 		return runRunToolApproval(args[1:])
+	case "github-pr":
+		return runRunGitHubPR(args[1:])
 	default:
 		return fmt.Errorf("subcomando run desconocido: %s", args[0])
 	}
@@ -548,6 +550,8 @@ func printRunUsage() {
 	fmt.Println("  ai run tool-approval request <run-id> --task <task-id> --tool <tool-id> --operation <operation> [--request-digest sha256] [--state-dir ruta] [--events-dir ruta] [--json]")
 	fmt.Println("  ai run tool-approval grant <run-id> --task <task-id> --tool <tool-id> --operation <operation> [--request-digest sha256] [--expires-in 15m] [--approval-dir ruta] [--state-dir ruta] [--events-dir ruta] [--json]")
 	fmt.Println("  ai run tool-approval reject <run-id> --task <task-id> --tool <tool-id> --operation <operation> [--request-digest sha256] [--approval-dir ruta] [--state-dir ruta] [--events-dir ruta] [--json]")
+	fmt.Println("  ai run github-pr prepare <run-id> --task <task-id> --repository owner/name --head rama --base rama --title texto [--body texto] [--state-dir ruta] [--events-dir ruta] [--json]")
+	fmt.Println("  ai run github-pr create <run-id> --task <task-id> --repository owner/name --head rama --base rama --title texto [--body texto] [--approval-dir ruta] [--state-dir ruta] [--events-dir ruta] [--json]")
 	fmt.Println()
 	fmt.Println("Sin --state-dir usa AI_ENGINEERING_OS_STATE_DIR o el directorio de configuración del usuario.")
 	fmt.Println("Sin --events-dir usa AI_ENGINEERING_OS_EVENTS_DIR o el directorio de configuración del usuario.")
