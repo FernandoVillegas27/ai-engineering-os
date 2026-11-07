@@ -26,6 +26,15 @@ type githubPROptions struct {
 	json        bool
 }
 
+type githubPRCreator interface {
+	CreatePullRequest(context.Context, githubintegration.CreatePullRequestRequest, toolapproval.Evidence) (githubintegration.CreatePullRequestResult, error)
+}
+
+var newGitHubPRCreator = func() githubPRCreator {
+	client := githubintegration.New()
+	return client
+}
+
 type githubPRView struct {
 	RunID         string `json:"run_id"`
 	TaskID        string `json:"task_id"`
@@ -70,20 +79,38 @@ func runRunGitHubPRPrepare(args []string) error {
 	if err != nil {
 		return err
 	}
-	approvalArgs := []string{
-		options.runID,
-		"--task", options.taskID,
-		"--tool", "github",
-		"--operation", "create-pull-request",
-		"--request-digest", digest,
+	approvalOptions := runToolApprovalOptions{
+		runID: options.runID,
+		taskID: options.taskID,
+		toolID: "github",
+		operation: "create-pull-request",
+		requestDigest: digest,
+		stateDir: options.stateDir,
+		eventsDir: options.eventsDir,
 	}
-	if options.stateDir != "" {
-		approvalArgs = append(approvalArgs, "--state-dir", options.stateDir)
+	events, eventStore, err := loadToolApprovalEvents(approvalOptions)
+	if err != nil {
+		return err
 	}
-	if options.eventsDir != "" {
-		approvalArgs = append(approvalArgs, "--events-dir", options.eventsDir)
+	if toolApprovalPending(events, options.taskID, "github", "create-pull-request", digest) {
+		return errors.New("approval is already pending for this exact pull-request request")
 	}
-	if err := runRunToolApprovalRequest(approvalArgs); err != nil {
+	approvalEvent, err := controlplane.NewEvent(controlplane.NewEventRequest{
+		RunID: options.runID,
+		TaskID: options.taskID,
+		Type: controlplane.EventApprovalRequested,
+		Summary: "github/create-pull-request requires human approval",
+		Data: map[string]any{
+			"kind": "tool-operation",
+			"tool_id": "github",
+			"operation": "create-pull-request",
+			"request_digest": digest,
+		},
+	}, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	if _, err := eventStore.Append(context.Background(), approvalEvent); err != nil {
 		return err
 	}
 	return printGitHubPRView(githubPRView{
@@ -148,7 +175,7 @@ func runRunGitHubPRCreate(args []string) error {
 		return fmt.Errorf("persist pre-mutation audit event: %w", err)
 	}
 
-	client := githubintegration.New()
+	client := newGitHubPRCreator()
 	result, mutationErr := client.CreatePullRequest(context.Background(), request, approval)
 	if mutationErr != nil {
 		failed, eventErr := controlplane.NewEvent(controlplane.NewEventRequest{
