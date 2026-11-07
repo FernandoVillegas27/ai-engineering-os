@@ -154,8 +154,9 @@ func (s *RunCoordinatorSink) appendTaskCreated(ctx context.Context, task schedul
 		Data: map[string]any{
 			"source":     "coordinator",
 			"depends_on": task.DependsOn,
-			"mutating":   task.Mutating,
-			"scopes":     task.Scopes,
+			"mutating":        task.Mutating,
+			"scopes":          task.Scopes,
+			"tool_operations": task.ToolOperations,
 		},
 	}, now)
 	if err != nil {

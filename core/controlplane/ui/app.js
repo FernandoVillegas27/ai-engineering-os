@@ -293,10 +293,20 @@
     els.taskList.innerHTML = tasks.map((task) => {
       const deps = Array.isArray(task.depends_on) && task.depends_on.length ? " · depends " + task.depends_on.join(", ") : "";
       const scopes = Array.isArray(task.scopes) && task.scopes.length ? " · " + task.scopes.length + " scope(s)" : "";
+      const toolOps = formatToolOperations(task.tool_operations);
       return '<div class="task-row"><div><div class="task-title">' + escapeHTML(task.id || "task") +
         '</div><div class="task-meta">' + escapeHTML(task.agent_id || "unassigned") + escapeHTML(deps + scopes) +
-        '</div></div><div class="task-status ' + statusClass(task.status) + '">' + escapeHTML(task.status || "queued") + '</div></div>';
+        '</div>' + (toolOps ? '<div class="task-meta">tools · ' + escapeHTML(toolOps) + '</div>' : '') +
+        '</div><div class="task-status ' + statusClass(task.status) + '">' + escapeHTML(task.status || "queued") + '</div></div>';
     }).join("");
+  }
+
+  function formatToolOperations(value) {
+    if (!value || typeof value !== "object") return "";
+    return Object.keys(value).sort().map((tool) => {
+      const operations = Array.isArray(value[tool]) ? [...new Set(value[tool].map(String))].sort() : [];
+      return operations.length ? tool + "[" + operations.join(",") + "]" : "";
+    }).filter(Boolean).join("; ");
   }
 
   function initials(value) {

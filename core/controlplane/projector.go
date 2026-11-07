@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 )
 
 type RunStatus string
@@ -50,8 +51,9 @@ type TaskState struct {
 	Summary      string     `json:"summary,omitempty"`
 	DependsOn    []string   `json:"depends_on,omitempty"`
 	Mutating     bool       `json:"mutating"`
-	Scopes       []string   `json:"scopes,omitempty"`
-	LastSequence uint64     `json:"last_sequence"`
+	Scopes         []string              `json:"scopes,omitempty"`
+	ToolOperations map[string][]string    `json:"tool_operations,omitempty"`
+	LastSequence   uint64                `json:"last_sequence"`
 }
 
 type TaskEdge struct {
@@ -241,9 +243,10 @@ func applyProjectionEvent(state *State, event Event) error {
 		return fmt.Errorf("task %s already exists", event.TaskID)
 		}
 		var metadata struct {
-		DependsOn []string `json:"depends_on"`
-		Mutating  bool     `json:"mutating"`
-		Scopes    []string `json:"scopes"`
+		DependsOn      []string            `json:"depends_on"`
+		Mutating       bool                `json:"mutating"`
+		Scopes         []string            `json:"scopes"`
+		ToolOperations map[string][]string `json:"tool_operations"`
 		}
 		if err := json.Unmarshal(event.Data, &metadata); err != nil {
 		return fmt.Errorf("decode task metadata for %s: %w", event.TaskID, err)
@@ -255,8 +258,9 @@ func applyProjectionEvent(state *State, event Event) error {
 		Summary:      event.Summary,
 		DependsOn:    sortedStrings(metadata.DependsOn),
 		Mutating:     metadata.Mutating,
-		Scopes:       sortedStrings(metadata.Scopes),
-		LastSequence: event.Sequence,
+		Scopes:         sortedStrings(metadata.Scopes),
+		ToolOperations: normalizedToolOperations(metadata.ToolOperations),
+		LastSequence:   event.Sequence,
 		}
 	case EventTaskAssigned:
 		task := state.task(event.TaskID)
@@ -496,4 +500,42 @@ func allowedAfterTerminal(eventType EventType) bool {
 	default:
 		return false
 	}
+}
+
+
+func normalizedToolOperations(values map[string][]string) map[string][]string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make(map[string][]string, len(values))
+	for toolID, operations := range values {
+		toolID = strings.TrimSpace(toolID)
+		if toolID == "" {
+			continue
+		}
+		normalized := sortedUniqueStrings(operations)
+		if len(normalized) == 0 {
+			continue
+		}
+		out[toolID] = normalized
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func sortedUniqueStrings(values []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
 }

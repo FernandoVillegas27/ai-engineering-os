@@ -133,3 +133,23 @@ func TestBuildRejectsEmptyInput(t *testing.T) {
 		t.Fatal("expected empty graph rejection")
 	}
 }
+
+
+func TestBuildCarriesToolOperationAuditMetadata(t *testing.T) {
+	unit := testUnit("work-research", "researcher")
+	unit.ToolOperations = map[string][]string{
+		"github": {"read-repository", "read-pull-requests"},
+	}
+	tasks, err := Build([]execution.WorkUnit{unit})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := tasks[0].ToolOperations["github"]
+	if !reflect.DeepEqual(got, []string{"read-pull-requests", "read-repository"}) {
+		t.Fatalf("tool operations=%#v", tasks[0].ToolOperations)
+	}
+	unit.ToolOperations["github"][0] = "create-commit"
+	if tasks[0].ToolOperations["github"][0] != "read-pull-requests" {
+		t.Fatalf("taskgraph metadata aliased input: %#v", tasks[0].ToolOperations)
+	}
+}

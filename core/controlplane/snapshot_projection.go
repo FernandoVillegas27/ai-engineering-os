@@ -175,6 +175,7 @@ func cloneProjectionState(state State) State {
 	for id, task := range state.Tasks {
 		task.DependsOn = append([]string(nil), task.DependsOn...)
 		task.Scopes = append([]string(nil), task.Scopes...)
+		task.ToolOperations = normalizedToolOperations(task.ToolOperations)
 		clone.Tasks[id] = task
 	}
 	clone.Agents = make(map[string]AgentState, len(state.Agents))
