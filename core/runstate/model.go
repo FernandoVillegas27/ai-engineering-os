@@ -67,8 +67,9 @@ type WorkUnit struct {
 	Status       WorkUnitStatus               `json:"status"`
 	Capabilities []string                     `json:"capabilities,omitempty"`
 	Skills       []string                     `json:"skills,omitempty"`
-	Tools        []string                     `json:"tools,omitempty"`
-	Permissions  execution.PermissionEnvelope `json:"permissions"`
+	Tools          []string                     `json:"tools,omitempty"`
+	ToolOperations map[string][]string            `json:"tool_operations,omitempty"`
+	Permissions    execution.PermissionEnvelope   `json:"permissions"`
 	Mutating     bool                         `json:"mutating,omitempty"`
 	MutationKind string                       `json:"mutation_kind,omitempty"`
 	Scopes       []string                     `json:"scopes,omitempty"`
@@ -160,8 +161,9 @@ func New(request NewRunRequest, now time.Time) (Run, error) {
 			Status:       WorkUnitQueued,
 			Capabilities: sortedUnique(unit.Capabilities),
 			Skills:       sortedUnique(unit.Skills),
-			Tools:        sortedUnique(unit.Tools),
-			Permissions:  unit.Permissions,
+			Tools:          sortedUnique(unit.Tools),
+			ToolOperations: cloneOperationMap(unit.ToolOperations),
+			Permissions:    unit.Permissions,
 		})
 	}
 	if err := Validate(run); err != nil {
@@ -313,5 +315,17 @@ func sortedUnique(values []string) []string {
 		out = append(out, value)
 	}
 	sort.Strings(out)
+	return out
+}
+
+
+func cloneOperationMap(values map[string][]string) map[string][]string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make(map[string][]string, len(values))
+	for toolID, operations := range values {
+		out[toolID] = sortedUnique(operations)
+	}
 	return out
 }
