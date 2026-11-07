@@ -77,8 +77,9 @@ func Build(units []execution.WorkUnit) ([]scheduler.Task, error) {
 		tasks = append(tasks, scheduler.Task{
 			ID:        unit.ID,
 			AgentID:   unit.AgentID,
-			DependsOn: dependencies,
-			Mutating:  false,
+			DependsOn:      dependencies,
+			Mutating:       false,
+			ToolOperations: execution.CloneToolOperations(unit.ToolOperations),
 		})
 	}
 
