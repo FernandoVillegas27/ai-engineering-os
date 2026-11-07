@@ -433,7 +433,7 @@ func applyToolApprovalProjection(state *State, event Event, status string) error
 	expiresAt := ""
 	if metadata.ExpiresAt != nil {
 		if raw, err := json.Marshal(metadata.ExpiresAt); err == nil && string(raw) != "null" {
-			expiresAt = strings.Trim(string(raw), """)
+			expiresAt = strings.Trim(string(raw), "\"")
 		}
 	}
 	value := ToolApprovalState{
