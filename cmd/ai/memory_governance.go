@@ -93,6 +93,9 @@ func runMemoryList(args []string) error {
 		if record.TopicKey != "" {
 			fmt.Printf("  topic: %s\n", record.TopicKey)
 		}
+		if record.Content != "" {
+			fmt.Printf("  content: %s\n", record.Content)
+		}
 		if record.Provenance.RunID != "" {
 			fmt.Printf(
 				"  provenance: run=%s task=%s agent=%s source=%s\n",
