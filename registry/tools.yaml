@@ -29,6 +29,8 @@ tools:
       provider: github
     operations:
       - read-repository
+      - read-issues
+      - read-pull-requests
       - create-branch
       - create-commit
       - create-pull-request
@@ -39,6 +41,11 @@ tools:
       - network
     risk: high
     requires_approval: true
+    approval_required_operations:
+      - create-branch
+      - create-commit
+      - create-pull-request
+      - review-pull-request
     availability_check: github-connection-available
     status: enabled
 
