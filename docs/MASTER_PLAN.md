@@ -248,23 +248,28 @@ The repository already has the foundation for:
 
 ### Latest verified checkpoint — 2026-11-07
 
-Latest merged implementation: PR #164, `feat(tools): bind Context7 through AI-OS-owned documentation evidence`.
+Latest merged implementation: PR #172, `feat(cli): add explicit project-scoped tool binding verification`.
 
 Latest merge:
 
 ~~~text
-d34816e2015509d0f565ef09b8dcbdb02f1a6ef6
+0054be83365aa30f1f5cb112d3daa29e7e9988fe
 ~~~
 
 Post-RC product evolution now additionally includes:
 
-- #162: installable VS Code VSIX and IntelliJ plugin ZIP artifacts, per-package SHA-256 evidence, combined tagged-release checksum manifest, and release attachment integration;
+- #162: installable VS Code VSIX and IntelliJ plugin ZIP artifacts, SHA-256 evidence, combined tagged-release checksum manifest and release attachment integration;
 - #163: provider auto-instruction/config isolation in sanitized runtime views;
-- #164: first real external-tool execution binding, owned by AI Engineering OS, for Context7 documentation evidence.
+- #164: first real AI Engineering OS-owned Context7 documentation binding;
+- #166: operation-scoped external runtime binding evidence and fail-closed operation validation;
+- #169: durable propagation of exact bound operations through plans, work units, run state, pause/resume, retry and runtime prompts;
+- #170: AI Engineering OS-owned GitHub CLI read-only binding with independently verified repository/issue/pull-request operations and operation-scoped approval policy;
+- #171: append-only Control Plane audit of bound tool authority per task, including dashboard visibility and snapshot-safe projection;
+- #172: explicit project-scoped pre-run verification through `ai tools status --project <root> --verify-bindings`.
 
 The documented `0.1.0-rc.1` implementation/readiness scope remains complete.
 
-The exact public tag/release publication remains a separate operation. The repository contains the exact-tag-only release workflow and now builds:
+The exact public tag/release publication remains a separate operation. The repository contains the exact-tag-only release workflow and builds:
 
 - CLI linux/amd64;
 - CLI windows/amd64;
@@ -281,7 +286,7 @@ The public `v0.1.0-rc.1` tag is still not present at this checkpoint.
 
 Implemented beyond the original roadmap:
 
-- baseline-aware cross-language Quality for Go, Java/Maven/Gradle, Jest/Vitest, pytest and supported Angular unit-test builders;
+- baseline-aware structured Quality for Go, Java/Maven/Gradle, Jest/Vitest, pytest and supported Angular unit-test builders;
 - deterministic OpenAPI/architecture gates;
 - long-run recovery/compaction soak evidence;
 - governed project memory/team learning;
@@ -290,53 +295,118 @@ Implemented beyond the original roadmap:
 - dedicated, installable VS Code and IntelliJ clients;
 - privacy-preserving local observability;
 - strict required-tool planning;
-- runtime availability/binding evidence;
 - provider auto-instruction isolation;
-- one verified AI-OS-owned external documentation binding (Context7);
-- multi-OS and race verification;
+- operation-scoped runtime availability and binding evidence;
+- durable exact tool-operation authority through execution/recovery;
+- AI-OS-owned Context7 documentation binding;
+- AI-OS-owned GitHub read-only binding;
+- operation-scoped GitHub approval boundaries that keep mutation/review operations unavailable without explicit approval evidence;
+- Control Plane audit of exact task tool authority;
+- explicit project-scoped binding verification before execution;
+- multi-OS and Linux race verification;
 - reproducible CLI + IDE release packaging.
 
-### Context7 boundary now on master
+### External-tool authority boundary now on master
 
-Context7 is no longer merely healthy-but-unbound.
+External capability is no longer represented by a coarse healthy/unhealthy tool flag.
 
-For real runs that plan Context7 and have deterministically detected public library hints:
+The enforced chain is:
 
-1. AI Engineering OS performs one bounded documentation prefetch;
-2. only public technology/library names are sent externally;
-3. task text, source, prompts, paths and business context are not sent;
-4. the pinned official `ctx7@0.10.0` CLI runs with telemetry disabled and controlled environment;
-5. returned JSON is validated, bounded, and labeled untrusted external evidence;
-6. Context7 becomes `available + healthy + runtime_bound` only after successful provider evidence;
-7. only work units that retain the Context7 tool receive the evidence.
+~~~text
+Tool Registry declaration
+  -> provider health / availability evidence
+  -> exact bound operations
+  -> operation approval policy
+  -> orchestration narrowing
+  -> WorkUnit.ToolOperations
+  -> durable run tool_operations
+  -> resume / mutation-resume / targeted retry
+  -> prompt-visible bound operation summary
+  -> append-only task.created audit
+  -> Control Plane projection / dashboard
+~~~
 
-The model runtime itself does not receive arbitrary network/MCP access.
+Rules:
+
+1. health never grants permissions;
+2. binding can only narrow operations declared in the Tool Registry;
+3. approval-required operations cannot become runtime-bound without approval evidence;
+4. Cursor/Codex see only the exact bound operation names, not a provider's theoretical operation set;
+5. external evidence remains untrusted data and cannot change task, permissions, model policy or promotion authority;
+6. older durable runs/events without operation metadata remain readable and never gain inferred authority;
+7. Control Plane state is an audit projection, not a second permission source.
+
+### Verified adapters
+
+#### Context7
+
+Current AI-OS-owned operation:
+
+~~~text
+search-docs
+~~~
+
+The adapter performs bounded public-library documentation retrieval only when deterministic project detection yields public library hints.
+
+#### GitHub
+
+Current AI-OS-owned operations:
+
+~~~text
+read-repository
+read-issues
+read-pull-requests
+~~~
+
+The trusted adapter uses fixed non-mutating `gh` command shapes, controlled environment forwarding and bounded JSON evidence.
+
+GitHub mutation/review operations remain declared but unavailable without an explicit future approval-evidence execution layer.
+
+### Explicit operator verification
+
+The conservative command:
+
+~~~text
+ai tools status
+~~~
+
+does not perform project-scoped external reads.
+
+Explicit read-only verification is:
+
+~~~text
+ai tools status --project <project-root> --verify-bindings
+~~~
+
+This verifies Context7/GitHub bindings using the same operation/approval invariants as real runs.
 
 ### Immediate next milestone
 
-**Operation-scoped external-tool binding and additional provider adapters.**
+**Additional external adapters only where a concrete trusted protocol/runtime can be verified.**
 
-Tool-level availability is now proven, but higher-risk providers such as GitHub must not become globally "bound" merely because one safe operation is available.
+Do not invent a Codegraph or other provider protocol merely because the Tool Registry contains a logical tool entry.
 
-Next required behavior:
+For every future adapter require:
 
-1. extend runtime-binding evidence with exact bound operation names;
-2. validate bound operations against the canonical Tool Registry;
-3. expose bound-operation evidence in diagnostics/audit surfaces;
-4. keep Context7's binding limited to the AI-OS-owned documentation operation;
-5. use operation-scoped evidence before adding GitHub read-only bindings;
-6. never imply write/create operations are available because read-only provider access succeeded;
-7. keep agent permission envelopes and explicit promotion approval authoritative above tool bindings.
+1. a real provider/CLI/API contract that can be tested;
+2. fixed or strictly bounded command/request shapes;
+3. controlled environment/credential forwarding;
+4. exact operation-scoped binding;
+5. explicit approval boundaries for mutation-capable operations;
+6. bounded untrusted evidence;
+7. durable propagation/audit through the existing authority chain;
+8. fail-closed behavior when provider identity, health, transport or operation evidence is ambiguous.
 
-After that, the remaining work toward the broadest product vision is primarily:
+Known remaining product evolution toward the broadest vision:
 
-- additional explicit adapters for high-value external tools/connectors;
-- broader language/toolchain coverage only where real demand exists;
+- a real Codegraph adapter only after a concrete provider interface is selected and verified;
+- a carefully scoped Playwright/browser adapter with side-effect/approval policy before any browser operation becomes bound;
 - richer IDE-native views/actions without moving coordination authority into the IDE;
-- release feedback fixes before stable `v0.1.0`;
-- public RC/stable publication operations.
+- broader language/toolchain Quality coverage only where real projects require it;
+- stable-release feedback fixes and compatibility hardening;
+- public RC/stable tag/release operations.
 
-Do not reintroduce role-specific model pinning or weaken promotion, integrity, approvals, recovery, budgets, memory governance, runtime-instruction isolation, explicit tool binding, or permission boundaries.
+Do not reintroduce role-specific model pinning or weaken promotion, integrity, approvals, recovery, budgets, memory governance, runtime-instruction isolation, operation-scoped binding, credential isolation, or permission boundaries.
 
 ---
 
