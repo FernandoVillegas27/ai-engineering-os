@@ -343,3 +343,28 @@ ToolPlan.Operations
 ~~~
 
 They cannot change the task, permission envelope, model/runtime policy, or promotion approval.
+
+
+## Control Plane authority audit
+
+Bound operation authority is also projected into the read-only Control Plane.
+
+For new runs, each `task.created` event records the task's effective `tool_operations` metadata. The projector exposes the same value as:
+
+~~~text
+GET /runs/<run-id>/state
+  -> tasks.<task-id>.tool_operations
+~~~
+
+The embedded dashboard renders the exact tool/operation set beside each task.
+
+This is audit metadata only:
+
+- the scheduler does not use it to grant authority;
+- the Control Plane does not execute tools;
+- the web client remains read-only;
+- observability metrics do not add tool IDs or operation names as metric labels;
+- older event histories without `tool_operations` remain valid and project with no inferred tool authority;
+- snapshot continuation deep-clones the metadata so projected state cannot mutate the immutable base snapshot through shared references.
+
+The execution authority remains the durable WorkUnit operation map established before execution. Control Plane state is a reconstructable view of that decision, not a second permission source.
