@@ -18,25 +18,27 @@ const (
 )
 
 type Evidence struct {
-	ToolID    string                 `json:"tool_id"`
-	Provider  string                 `json:"provider,omitempty"`
-	State     State                  `json:"state"`
-	Healthy      bool                   `json:"healthy"`
-	RuntimeBound bool                   `json:"runtime_bound"`
-	Failure      toolhealth.Failure     `json:"failure,omitempty"`
-	Details   string                 `json:"details,omitempty"`
+	ToolID          string             `json:"tool_id"`
+	Provider        string             `json:"provider,omitempty"`
+	State           State              `json:"state"`
+	Healthy         bool               `json:"healthy"`
+	RuntimeBound    bool               `json:"runtime_bound"`
+	BoundOperations []string           `json:"bound_operations,omitempty"`
+	Failure         toolhealth.Failure `json:"failure,omitempty"`
+	Details         string             `json:"details,omitempty"`
 }
 
 type Snapshot map[string]Evidence
 
 func Native(tool registry.Tool) Evidence {
 	return Evidence{
-		ToolID:   tool.ID,
-		Provider: providerID(tool),
-		State:        StateAvailable,
-		Healthy:      true,
-		RuntimeBound: true,
-		Details:      "native tool declared enabled",
+		ToolID:          tool.ID,
+		Provider:        providerID(tool),
+		State:           StateAvailable,
+		Healthy:         true,
+		RuntimeBound:    true,
+		BoundOperations: normalizeOperations(tool.Operations),
+		Details:         "native tool declared enabled",
 	}
 }
 
@@ -149,9 +151,35 @@ func ResolvePlan(
 	return requiredOut, recommendedOut, nil
 }
 
-func Bound(evidence Evidence) Evidence {
-	evidence.RuntimeBound = true
+func BindOperations(evidence Evidence, operations ...string) Evidence {
+	evidence.BoundOperations = normalizeOperations(operations)
+	evidence.RuntimeBound = len(evidence.BoundOperations) > 0
 	return evidence
+}
+
+func OperationsFor(tool registry.Tool, evidence Evidence) []string {
+	if tool.Interface.Type == "native" {
+		return normalizeOperations(tool.Operations)
+	}
+	if evidence.State != StateAvailable || !evidence.Healthy || !evidence.RuntimeBound {
+		return nil
+	}
+	return append([]string(nil), evidence.BoundOperations...)
+}
+
+func normalizeOperations(values []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func ValidateSnapshot(tools registry.ToolRegistry, snapshot Snapshot) error {
@@ -174,6 +202,30 @@ func ValidateSnapshot(tools registry.ToolRegistry, snapshot Snapshot) error {
 				id,
 				evidence.Provider,
 				providerID(tool),
+			)
+		}
+		allowed := map[string]bool{}
+		for _, operation := range tool.Operations {
+			allowed[strings.TrimSpace(operation)] = true
+		}
+		seenOperations := map[string]bool{}
+		for _, operation := range evidence.BoundOperations {
+			operation = strings.TrimSpace(operation)
+			if operation == "" {
+				return fmt.Errorf("tool %q bound operations contain an empty value", id)
+			}
+			if !allowed[operation] {
+				return fmt.Errorf("tool %q binds undeclared operation %q", id, operation)
+			}
+			if seenOperations[operation] {
+				return fmt.Errorf("tool %q binds duplicate operation %q", id, operation)
+			}
+			seenOperations[operation] = true
+		}
+		if evidence.RuntimeBound != (len(evidence.BoundOperations) > 0) {
+			return fmt.Errorf(
+				"tool %q runtime_bound must match presence of bound_operations",
+				id,
 			)
 		}
 	}
