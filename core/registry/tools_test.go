@@ -123,3 +123,48 @@ tools:
 		})
 	}
 }
+
+
+func TestOperationRequiresApprovalSupportsScopedAndLegacyPolicies(t *testing.T) {
+	scoped := Tool{
+		Operations: []string{"read-repository", "create-commit"},
+		RequiresApproval: true,
+		ApprovalRequiredOperations: []string{"create-commit"},
+	}
+	if OperationRequiresApproval(scoped, "read-repository") {
+		t.Fatal("read-repository should not require approval under scoped policy")
+	}
+	if !OperationRequiresApproval(scoped, "create-commit") {
+		t.Fatal("create-commit must require approval")
+	}
+
+	legacy := Tool{
+		Operations: []string{"read"},
+		RequiresApproval: true,
+	}
+	if !OperationRequiresApproval(legacy, "read") {
+		t.Fatal("legacy whole-tool approval policy must remain compatible")
+	}
+}
+
+func TestLoadToolsRejectsUndeclaredApprovalRequiredOperation(t *testing.T) {
+	path := writeToolsFixture(t, `schema_version: 1
+tools:
+  github:
+    id: github
+    description: GitHub
+    category: version-control
+    interface: {type: connector, provider: github}
+    operations: [read-repository]
+    access: [read, network]
+    risk: high
+    requires_approval: true
+    approval_required_operations: [create-commit]
+    availability_check: github-connection-available
+    status: enabled
+`)
+	_, err := LoadTools(path)
+	if err == nil || !strings.Contains(err.Error(), "is not declared in operations") {
+		t.Fatalf("err=%v", err)
+	}
+}
