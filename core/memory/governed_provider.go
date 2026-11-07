@@ -55,14 +55,40 @@ func (g GovernedProjectMemory) Save(ctx context.Context, request SaveRequest) (S
 	if g.Now != nil {
 		now = g.Now().UTC()
 	}
-	record, err := g.Store.Save(GovernedSaveRequest{
+	governedRequest := GovernedSaveRequest{
 		SaveRequest: request,
 		Provider:    mirrorID(g.Mirror),
 		Provenance:  request.Provenance,
 		Retention:   request.Retention,
-	}, now)
-	if err != nil {
-		return SaveResult{}, err
+	}
+	var record Record
+	if existing, ok, lookupErr := g.Store.ActiveByTopic(request.Project, request.TopicKey, now); lookupErr != nil {
+		return SaveResult{}, lookupErr
+	} else if ok {
+		title, _ := RedactSensitive(request.Title)
+		content, _ := RedactSensitive(request.Content)
+		if existing.Title == title &&
+			existing.Content == content &&
+			existing.Type == request.Type {
+			record = existing
+			return SaveResult{
+				Provider: g.ID(),
+				Project:  record.Project,
+				Saved:    true,
+				Summary:  "governed record already current " + record.ID,
+			}, nil
+		}
+		_, replacement, supersedeErr := g.Store.Supersede(request.Project, existing.ID, governedRequest, now)
+		if supersedeErr != nil {
+			return SaveResult{}, supersedeErr
+		}
+		record = replacement
+	} else {
+		var saveErr error
+		record, saveErr = g.Store.Save(governedRequest, now)
+		if saveErr != nil {
+			return SaveResult{}, saveErr
+		}
 	}
 
 	summary := "governed record " + record.ID
