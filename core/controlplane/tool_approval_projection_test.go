@@ -7,6 +7,7 @@ import (
 
 func TestProjectorExposesExactToolApprovalLifecycle(t *testing.T) {
 	now := time.Date(2026, 11, 7, 19, 0, 0, 0, time.UTC)
+	requestDigest := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	makeEvent := func(sequence uint64, typ EventType, taskID string, data any) Event {
 		t.Helper()
 		event, err := NewEvent(NewEventRequest{
@@ -26,12 +27,14 @@ func TestProjectorExposesExactToolApprovalLifecycle(t *testing.T) {
 		makeEvent(1, EventRunStarted, "", map[string]any{"source": "test"}),
 		makeEvent(2, EventApprovalRequested, "task-a", map[string]any{
 			"kind": "tool-operation", "tool_id": "github", "operation": "create-pull-request",
+			"request_digest": requestDigest,
 		}),
 		makeEvent(3, EventApprovalRequested, "task-a", map[string]any{
 			"kind": "tool-operation", "tool_id": "github", "operation": "create-commit",
 		}),
 		makeEvent(4, EventApprovalGranted, "task-a", map[string]any{
 			"kind": "tool-operation", "tool_id": "github", "operation": "create-pull-request",
+			"request_digest": requestDigest,
 			"evidence_id": "approval-11111111111111111111111111111111",
 			"expires_at": "2026-11-07T19:15:00Z",
 		}),
@@ -58,6 +61,7 @@ func TestProjectorExposesExactToolApprovalLifecycle(t *testing.T) {
 		}
 	}
 	if granted == nil || granted.Status != "granted" ||
+		granted.RequestDigest != requestDigest ||
 		granted.EvidenceID != "approval-11111111111111111111111111111111" ||
 		granted.ExpiresAt != "2026-11-07T19:15:00Z" {
 		t.Fatalf("granted=%#v", granted)
