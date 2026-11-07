@@ -20,7 +20,7 @@ type toolProbe func(context.Context, registry.Tool) toolavailability.Evidence
 
 func runTools(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("uso: ai tools status [--json]")
+		return fmt.Errorf("uso: ai tools status [--json] [--project ruta --verify-bindings]")
 	}
 	switch args[0] {
 	case "status":
@@ -106,6 +106,10 @@ func runToolsStatus(args []string) error {
 		return printJSON(snapshot)
 	}
 	printToolAvailability(tools, snapshot)
+	if strings.TrimSpace(options.projectRoot) != "" && !options.verifyBindings {
+		fmt.Println()
+		fmt.Println("Project path provided, but external project bindings were not verified. Add --verify-bindings to perform bounded read-only verification.")
+	}
 	return nil
 }
 
