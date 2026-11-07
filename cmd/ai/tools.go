@@ -30,30 +30,42 @@ func runTools(args []string) error {
 	}
 }
 
-func runToolsStatus(args []string) error {
-	asJSON := false
-	projectRoot := ""
-	verifyBindings := false
+type toolsStatusOptions struct {
+	asJSON         bool
+	options.projectRoot    string
+	options.verifyBindings bool
+}
+
+func parseToolsStatusArgs(args []string) (toolsStatusOptions, error) {
+	var options toolsStatusOptions
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--json":
-			asJSON = true
+			options.asJSON = true
 		case "--project":
 			if i+1 >= len(args) {
-				return fmt.Errorf("--project requiere una ruta")
+				return toolsStatusOptions{}, fmt.Errorf("--project requiere una ruta")
 			}
 			i++
-			projectRoot = args[i]
+			options.options.projectRoot = args[i]
 		case "--verify-bindings":
-			verifyBindings = true
+			options.options.verifyBindings = true
 		case "-h", "--help":
-			return fmt.Errorf("uso: ai tools status [--json] [--project ruta --verify-bindings]")
+			return toolsStatusOptions{}, fmt.Errorf("uso: ai tools status [--json] [--project ruta --verify-bindings]")
 		default:
-			return fmt.Errorf("opción desconocida: %s", args[i])
+			return toolsStatusOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
 		}
 	}
-	if verifyBindings && strings.TrimSpace(projectRoot) == "" {
-		return fmt.Errorf("--verify-bindings requiere --project")
+	if options.options.verifyBindings && strings.TrimSpace(options.options.projectRoot) == "" {
+		return toolsStatusOptions{}, fmt.Errorf("--verify-bindings requiere --project")
+	}
+	return options, nil
+}
+
+func runToolsStatus(args []string) error {
+	options, err := parseToolsStatusArgs(args)
+	if err != nil {
+		return err
 	}
 
 	path, err := resolveRegistryFile("tools.yaml")
@@ -67,8 +79,8 @@ func runToolsStatus(args []string) error {
 
 	ctx := context.Background()
 	snapshot := collectToolAvailability(ctx, tools, defaultToolProbes())
-	if strings.TrimSpace(projectRoot) != "" && verifyBindings {
-		absoluteRoot, err := filepath.Abs(projectRoot)
+	if strings.TrimSpace(options.projectRoot) != "" && options.verifyBindings {
+		absoluteRoot, err := filepath.Abs(options.projectRoot)
 		if err != nil {
 			return fmt.Errorf("resolver ruta del proyecto: %w", err)
 		}
@@ -90,7 +102,7 @@ func runToolsStatus(args []string) error {
 		return err
 	}
 
-	if asJSON {
+	if options.asJSON {
 		return printJSON(snapshot)
 	}
 	printToolAvailability(tools, snapshot)
