@@ -1,6 +1,8 @@
 package localverify
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -70,5 +72,25 @@ func TestParseNodeJSONDetectsMissingFailures(t *testing.T) {
 	failed := parseNodeTestJSON("not json", "", true)
 	if failed.Confidence != verification.ParseFailed {
 		t.Fatalf("failed=%#v", failed)
+	}
+}
+
+
+func TestParseNodeJSONFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "report.json")
+	if err := os.WriteFile(path, []byte(nodeJSONFixture), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := parseNodeTestJSONFile(path, true, "C:/workspace")
+	if got.Confidence != verification.ParseComplete || len(got.Failures) != 1 {
+		t.Fatalf("got=%#v", got)
+	}
+	failureByID(t, got.Failures, "src/calc.test.ts#calc adds")
+}
+
+func TestParseNodeJSONFileMissingFailsClosed(t *testing.T) {
+	got := parseNodeTestJSONFile(filepath.Join(t.TempDir(), "missing.json"), true)
+	if got.Confidence != verification.ParseFailed {
+		t.Fatalf("got=%#v", got)
 	}
 }

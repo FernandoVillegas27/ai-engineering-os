@@ -62,7 +62,7 @@ func TestVerifyReportsFailure(t *testing.T) {
 	}
 }
 
-func TestPlanNodeVitest(t *testing.T) {
+func TestPlanNodeVitestUsesIsolatedJSONReport(t *testing.T) {
 	root := t.TempDir()
 	manifest := []byte(`{"scripts":{"test":"vitest"}}`)
 	if err := os.WriteFile(filepath.Join(root, "package.json"), manifest, 0o600); err != nil {
@@ -72,7 +72,10 @@ func TestPlanNodeVitest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(checks) != 1 || strings.Join(checks[0].args, " ") != "test -- --run --reporter=json" || checks[0].parser != parserNodeJSON {
+	if len(checks) != 1 ||
+		strings.Join(checks[0].args, " ") != "test -- --run --reporter=json --outputFile="+verifyReportToken ||
+		checks[0].parser != parserNodeJSON ||
+		checks[0].reportFile != "node-test-report.json" {
 		t.Fatalf("checks=%#v", checks)
 	}
 }
@@ -227,4 +230,112 @@ func envValue(env []string, key string) string {
 		}
 	}
 	return ""
+}
+
+
+func TestPlanPytestUsesJUnitReport(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "pyproject.toml"), []byte("[tool.pytest.ini_options]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	checks, err := planChecks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(checks) != 1 {
+		t.Fatalf("checks=%#v", checks)
+	}
+	check := checks[0]
+	if check.parser != parserPytestJUnit || check.reportFile != "pytest-junit.xml" {
+		t.Fatalf("check=%#v", check)
+	}
+	if got := strings.Join(check.args, " "); got != "-m pytest -r fE --junitxml="+verifyReportToken {
+		t.Fatalf("args=%q", got)
+	}
+}
+
+func TestPlanAngularUnitTestBuilderUsesJSONReporter(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"scripts":{"test":"ng test"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	angular := `{
+	  "projects": {
+	    "app": {
+	      "architect": {
+	        "test": {"builder": "@angular/build:unit-test"}
+	      }
+	    }
+	  }
+	}`
+	if err := os.WriteFile(filepath.Join(root, "angular.json"), []byte(angular), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	checks, err := planChecks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(checks) != 1 {
+		t.Fatalf("checks=%#v", checks)
+	}
+	check := checks[0]
+	if check.parser != parserNodeJSON || check.reportFile != "angular-test-report.json" {
+		t.Fatalf("check=%#v", check)
+	}
+	if got := strings.Join(check.args, " "); got != "test -- --watch=false --reporters=json --output-file="+verifyReportToken {
+		t.Fatalf("args=%q", got)
+	}
+}
+
+func TestPlanAngularKarmaDoesNotClaimStructuredParsing(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"scripts":{"test":"ng test"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	angular := `{
+	  "projects": {
+	    "app": {
+	      "architect": {
+	        "test": {"builder": "@angular-devkit/build-angular:karma"}
+	      }
+	    }
+	  }
+	}`
+	if err := os.WriteFile(filepath.Join(root, "angular.json"), []byte(angular), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	checks, err := planChecks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := checks[0]
+	if check.parser != parserNone || check.reportFile != "" {
+		t.Fatalf("check=%#v", check)
+	}
+	if got := strings.Join(check.args, " "); got != "test -- --watch=false" {
+		t.Fatalf("args=%q", got)
+	}
+}
+
+func TestMaterializedReportPathLivesOutsideWorkspace(t *testing.T) {
+	root := t.TempDir()
+	cacheRoot := filepath.Join(filepath.Dir(root), "verify-cache")
+	check := plannedCheck{
+		args: []string{"--outputFile=" + verifyReportToken},
+		reportFile: "report.json",
+	}
+	args, reportPath := materializeCheckArgs(check, cacheRoot)
+	if reportPath != filepath.Join(cacheRoot, "report.json") {
+		t.Fatalf("reportPath=%q", reportPath)
+	}
+	if len(args) != 1 || args[0] != "--outputFile="+reportPath {
+		t.Fatalf("args=%#v", args)
+	}
+	rel, err := filepath.Rel(root, reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rel == "." || !strings.HasPrefix(filepath.ToSlash(rel), "../") {
+		t.Fatalf("report path should be outside workspace: root=%q report=%q", root, reportPath)
+	}
 }
