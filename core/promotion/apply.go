@@ -215,13 +215,17 @@ func verifyTargetState(root string, change staging.WorkspaceChange, preImage sta
 }
 
 func ensureSafeParent(root, relative string, create bool) error {
-	parts := strings.Split(filepath.ToSlash(relative), "/")
+	if err := validatePromotionRelativePath(relative); err != nil {
+		return err
+	}
+	clean := filepath.Clean(filepath.FromSlash(relative))
+	parts := strings.Split(filepath.ToSlash(clean), "/")
 	current := root
 	for _, part := range parts[:len(parts)-1] {
 		current = filepath.Join(current, filepath.FromSlash(part))
 		info, err := os.Lstat(current)
 		if err == nil {
-			if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			if unsafeFileIdentity(info) || !info.IsDir() {
 				return fmt.Errorf("destination parent is not a regular directory")
 			}
 			continue
@@ -234,6 +238,39 @@ func ensureSafeParent(root, relative string, create bool) error {
 		}
 		if err := os.Mkdir(current, 0o755); err != nil && !os.IsExist(err) {
 			return err
+		}
+		info, err = os.Lstat(current)
+		if err != nil || unsafeFileIdentity(info) || !info.IsDir() {
+			if err != nil {
+				return err
+			}
+			return fmt.Errorf("created destination parent is not a regular directory")
+		}
+	}
+	return nil
+}
+
+func validatePromotionRelativePath(relative string) error {
+	relative = strings.TrimSpace(relative)
+	if relative == "" {
+		return fmt.Errorf("promotion path is empty")
+	}
+	slash := strings.ReplaceAll(relative, "\\", "/")
+	if strings.HasPrefix(slash, "/") || strings.HasPrefix(slash, "//") {
+		return fmt.Errorf("promotion path must be relative")
+	}
+	if len(slash) >= 3 &&
+		((slash[0] >= 'A' && slash[0] <= 'Z') || (slash[0] >= 'a' && slash[0] <= 'z')) &&
+		slash[1] == ':' && slash[2] == '/' {
+		return fmt.Errorf("promotion path must not contain a volume")
+	}
+	clean := filepath.ToSlash(filepath.Clean(filepath.FromSlash(slash)))
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
+		return fmt.Errorf("promotion path escapes project root")
+	}
+	for _, part := range strings.Split(slash, "/") {
+		if part == ".." {
+			return fmt.Errorf("promotion path contains parent traversal")
 		}
 	}
 	return nil
@@ -376,7 +413,7 @@ func openPinnedRegularFile(path string) (*os.File, os.FileInfo, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() {
+	if unsafeFileIdentity(before) || !before.Mode().IsRegular() {
 		return nil, nil, fmt.Errorf("path is not a regular file")
 	}
 	if !os.SameFile(before, before) {
@@ -451,7 +488,7 @@ func removeRegularIfPresent(path string) error {
 	if err != nil {
 		return err
 	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+	if unsafeFileIdentity(info) || !info.Mode().IsRegular() {
 		return fmt.Errorf("rollback target is not a regular file")
 	}
 	return os.Remove(path)
