@@ -140,7 +140,7 @@ func runRunExecute(args []string) error {
 		// tools are bound locally. Context7 may be bound by an AI Engineering
 		// OS-owned documentation prefetch; other external tools remain
 		// unknown/unbound until their own adapter exists.
-		bindings = collectRuntimeToolBindings(runCtx, tools, plan, detection)
+		bindings = collectRuntimeToolBindings(runCtx, tools, plan, detection, root)
 		if err := toolavailability.ValidateSnapshot(tools, bindings.Availability); err != nil {
 			return fmt.Errorf("validate runtime tool availability: %w", err)
 		}
