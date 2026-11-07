@@ -135,6 +135,9 @@ func (s *GovernanceStore) Save(request GovernedSaveRequest, now time.Time) (Reco
 	if err := os.MkdirAll(projectDir, 0o700); err != nil {
 		return Record{}, err
 	}
+	if err := ensureRegularDirectory(projectDir); err != nil {
+		return Record{}, err
+	}
 	if err := writeRecordExclusive(filepath.Join(projectDir, record.ID+".json"), record); err != nil {
 		return Record{}, err
 	}
@@ -153,6 +156,9 @@ func (s *GovernanceStore) List(project string, includeInactive bool, now time.Ti
 	}
 	dir, err := s.projectDir(project)
 	if err != nil {
+		return nil, err
+	}
+	if err := ensureRegularDirectoryIfPresent(dir); err != nil {
 		return nil, err
 	}
 	entries, err := os.ReadDir(dir)
@@ -197,6 +203,9 @@ func (s *GovernanceStore) Load(project, id string) (Record, error) {
 	}
 	dir, err := s.projectDir(project)
 	if err != nil {
+		return Record{}, err
+	}
+	if err := ensureRegularDirectoryIfPresent(dir); err != nil {
 		return Record{}, err
 	}
 	record, err := s.loadPath(filepath.Join(dir, id+".json"))
@@ -397,6 +406,25 @@ func (s *GovernanceStore) projectDir(project string) (string, error) {
 func projectDirectoryName(project string) string {
 	sum := sha256.Sum256([]byte(strings.TrimSpace(project)))
 	return hex.EncodeToString(sum[:12])
+}
+
+func ensureRegularDirectory(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return errors.New("memory project directory must be a regular directory")
+	}
+	return nil
+}
+
+func ensureRegularDirectoryIfPresent(path string) error {
+	err := ensureRegularDirectory(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
 }
 
 func writeRecordExclusive(path string, record Record) error {
