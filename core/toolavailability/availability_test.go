@@ -280,3 +280,41 @@ func TestValidateSnapshotAllowsReadOnlyGitHubOperationsButRejectsApprovalRequire
 		t.Fatalf("err=%v", err)
 	}
 }
+
+
+func TestValidateSnapshotPlaywrightAllowsOnlyNonApprovalInspectionWithoutApprovalEvidence(t *testing.T) {
+	provider := "playwright"
+	check := "playwright-available"
+	playwright := registry.Tool{
+		ID: "playwright",
+		Description: "browser",
+		Interface: registry.ToolInterface{Type: "mcp", Provider: &provider},
+		Operations: []string{"inspect-ui", "navigate-browser", "interact-browser", "run-browser-checks"},
+		Access: []string{"read", "execute", "network"},
+		Risk: "high",
+		RequiresApproval: true,
+		ApprovalRequiredOperations: []string{"navigate-browser", "interact-browser", "run-browser-checks"},
+		AvailabilityCheck: &check,
+		Status: "enabled",
+	}
+	tools := registry.ToolRegistry{SchemaVersion: 1, Tools: map[string]registry.Tool{"playwright": playwright}}
+
+	inspect := BindOperations(Evidence{
+		ToolID: "playwright", Provider: "playwright",
+		State: StateAvailable, Healthy: true,
+	}, "inspect-ui")
+	if err := ValidateSnapshot(tools, Snapshot{"playwright": inspect}); err != nil {
+		t.Fatalf("inspect-ui binding rejected: %v", err)
+	}
+
+	for _, operation := range []string{"navigate-browser", "interact-browser", "run-browser-checks"} {
+		evidence := BindOperations(Evidence{
+			ToolID: "playwright", Provider: "playwright",
+			State: StateAvailable, Healthy: true,
+		}, operation)
+		err := ValidateSnapshot(tools, Snapshot{"playwright": evidence})
+		if err == nil || !strings.Contains(err.Error(), "requires explicit approval") {
+			t.Fatalf("%s err=%v", operation, err)
+		}
+	}
+}
