@@ -3,6 +3,7 @@ package coordinator
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -222,41 +223,45 @@ func TestCoordinatorMissingWorkerFailsTaskWithoutPreventingIndependentWork(t *te
 }
 
 func TestCoordinatorCancellationCancelsRemainingGraph(t *testing.T) {
-	graph, err := scheduler.New([]scheduler.Task{
-		{ID: "backend", AgentID: "backend-engineer"},
-		{ID: "qa", AgentID: "qa-engineer", DependsOn: []string{"backend"}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	started := make(chan struct{})
-	worker := workerFunc(func(ctx context.Context, task scheduler.Task) (WorkResult, error) {
-		close(started)
-		<-ctx.Done()
-		return WorkResult{}, ctx.Err()
-	})
-	done := make(chan Result, 1)
-	errs := make(chan error, 1)
-	go func() {
-		result, runErr := (Coordinator{
-			Workers: map[string]Worker{"backend-engineer": worker, "qa-engineer": worker},
-		}).Run(ctx, graph)
-		done <- result
-		errs <- runErr
-	}()
-	<-started
-	cancel()
-	result := <-done
-	runErr := <-errs
-	if runErr == nil || !errors.Is(runErr, context.Canceled) {
-		t.Fatalf("err = %#v", runErr)
-	}
-	if !result.Cancelled {
-		t.Fatalf("result = %#v", result)
-	}
-	if result.Progress.Cancelled != 2 {
-		t.Fatalf("progress = %#v", result.Progress)
+	for iteration := 0; iteration < 24; iteration++ {
+		t.Run(fmt.Sprintf("iteration-%02d", iteration), func(t *testing.T) {
+			graph, err := scheduler.New([]scheduler.Task{
+				{ID: "backend", AgentID: "backend-engineer"},
+				{ID: "qa", AgentID: "qa-engineer", DependsOn: []string{"backend"}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			started := make(chan struct{})
+			worker := workerFunc(func(ctx context.Context, task scheduler.Task) (WorkResult, error) {
+				close(started)
+				<-ctx.Done()
+				return WorkResult{}, ctx.Err()
+			})
+			done := make(chan Result, 1)
+			errs := make(chan error, 1)
+			go func() {
+				result, runErr := (Coordinator{
+					Workers: map[string]Worker{"backend-engineer": worker, "qa-engineer": worker},
+				}).Run(ctx, graph)
+				done <- result
+				errs <- runErr
+			}()
+			<-started
+			cancel()
+			result := <-done
+			runErr := <-errs
+			if runErr == nil || !errors.Is(runErr, context.Canceled) {
+				t.Fatalf("err = %#v", runErr)
+			}
+			if !result.Cancelled {
+				t.Fatalf("result = %#v", result)
+			}
+			if result.Progress.Cancelled != 2 || result.Progress.Failed != 0 {
+				t.Fatalf("progress = %#v", result.Progress)
+			}
+		})
 	}
 }
 
