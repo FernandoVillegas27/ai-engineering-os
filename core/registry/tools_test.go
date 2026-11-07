@@ -168,3 +168,29 @@ tools:
 		t.Fatalf("err=%v", err)
 	}
 }
+
+
+func TestPlaywrightOperationPolicyKeepsPassiveInspectionSeparateFromBrowserActions(t *testing.T) {
+	tool := Tool{
+		Operations: []string{
+			"inspect-ui",
+			"navigate-browser",
+			"interact-browser",
+			"run-browser-checks",
+		},
+		RequiresApproval: true,
+		ApprovalRequiredOperations: []string{
+			"navigate-browser",
+			"interact-browser",
+			"run-browser-checks",
+		},
+	}
+	if OperationRequiresApproval(tool, "inspect-ui") {
+		t.Fatal("passive inspect-ui should remain separately approvable/bindable")
+	}
+	for _, operation := range []string{"navigate-browser", "interact-browser", "run-browser-checks"} {
+		if !OperationRequiresApproval(tool, operation) {
+			t.Fatalf("%s must require explicit approval", operation)
+		}
+	}
+}
