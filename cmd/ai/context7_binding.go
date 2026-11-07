@@ -13,6 +13,7 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/toolavailability"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/toolhealth"
 	context7integration "github.com/FernandoVillegas27/ai-engineering-os/integrations/context7"
+	githubintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/githubcli"
 )
 
 const context7DocumentationQuery = "Current API usage, compatibility notes, and recommended patterns for the detected public project libraries."
@@ -23,15 +24,19 @@ type runtimeToolBindings struct {
 }
 
 type context7SearchFunc func(context.Context, context7integration.SearchRequest) (context7integration.SearchResult, error)
+type githubSnapshotFunc func(context.Context, string) (githubintegration.Snapshot, error)
 
 func collectRuntimeToolBindings(
 	ctx context.Context,
 	tools registry.ToolRegistry,
 	plan orchestration.Plan,
 	detection detector.Detection,
+	root string,
 ) runtimeToolBindings {
-	client := context7integration.New()
-	return collectRuntimeToolBindingsWithSearch(ctx, tools, plan, detection, client.Search)
+	context7Client := context7integration.New()
+	bindings := collectRuntimeToolBindingsWithSearch(ctx, tools, plan, detection, context7Client.Search)
+	githubClient := githubintegration.New()
+	return bindGitHubReadOnly(ctx, tools, plan, root, bindings, githubClient.Snapshot)
 }
 
 func collectRuntimeToolBindingsWithSearch(
@@ -104,6 +109,71 @@ func collectRuntimeToolBindingsWithSearch(
 	)
 	bindings.Availability["context7"] = toolavailability.BindOperations(evidence, "search-docs")
 	bindings.Context["context7"] = result.Context
+	return bindings
+}
+
+func bindGitHubReadOnly(
+	ctx context.Context,
+	tools registry.ToolRegistry,
+	plan orchestration.Plan,
+	root string,
+	bindings runtimeToolBindings,
+	snapshot githubSnapshotFunc,
+) runtimeToolBindings {
+	tool, exists := tools.Tools["github"]
+	if !exists || tool.Status != "enabled" || !planUsesTool(plan, "github") {
+		return bindings
+	}
+	if strings.TrimSpace(root) == "" || snapshot == nil {
+		bindings.Availability["github"] = toolavailability.Unknown(
+			tool,
+			"GitHub read-only binding requires a project root and adapter",
+		)
+		return bindings
+	}
+
+	result, err := snapshot(ctx, root)
+	if err != nil {
+		failure := toolhealth.Classify(err, "")
+		available := failure.Kind != toolhealth.FailureUnavailable
+		bindings.Availability["github"] = toolavailability.FromHealth(
+			tool,
+			toolhealth.Status{
+				Provider: githubintegration.ProviderID,
+				Available: available,
+				Healthy: false,
+				Details: err.Error(),
+				Failure: failure,
+			},
+			false,
+		)
+		return bindings
+	}
+
+	details := fmt.Sprintf(
+		"AI Engineering OS-owned GitHub read binding verified %d operation(s)",
+		len(result.BoundOperations),
+	)
+	if len(result.Warnings) > 0 {
+		details += fmt.Sprintf("; %d read operation(s) unavailable", len(result.Warnings))
+	}
+	evidence := toolavailability.FromHealth(
+		tool,
+		toolhealth.Status{
+			Provider: githubintegration.ProviderID,
+			Available: true,
+			Healthy: true,
+			Details: details,
+		},
+		true,
+	)
+	bindings.Availability["github"] = toolavailability.BindOperations(
+		evidence,
+		result.BoundOperations...,
+	)
+	if strings.TrimSpace(result.Context) != "" {
+		bindings.Context["github"] = result.Context
+	}
 	return bindings
 }
 
