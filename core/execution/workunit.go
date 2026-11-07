@@ -86,7 +86,7 @@ func BuildWorkUnits(
 			Capabilities: uniqueSorted(agentPlan.Capabilities),
 			Skills:         uniqueSorted(agentPlan.Skills.Enabled),
 			Tools:          uniqueSorted(tools),
-			ToolOperations: cloneToolOperations(agentPlan.Tools.Operations),
+			ToolOperations: CloneToolOperations(agentPlan.Tools.Operations),
 			Permissions:    readOnlyEnvelope(agent.Permissions),
 			Mutation:     mutationCapability(agent.Permissions),
 			Mode:         ModeReadOnly,
@@ -143,7 +143,7 @@ func (u WorkUnit) CanMutate() bool {
 }
 
 
-func cloneToolOperations(values map[string][]string) map[string][]string {
+func CloneToolOperations(values map[string][]string) map[string][]string {
 	if len(values) == 0 {
 		return nil
 	}
