@@ -36,6 +36,9 @@ type CreatePullRequestResult struct {
 }
 
 func (request CreatePullRequestRequest) RequestDigest() (string, error) {
+	if _, err := validateCreatePullRequest(request); err != nil {
+		return "", err
+	}
 	payload, err := canonicalPullRequestPayload(request)
 	if err != nil {
 		return "", err
