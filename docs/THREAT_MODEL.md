@@ -63,6 +63,7 @@ This document is not an independent third-party security audit. It records the s
 | Agent/model self-approval | promotion rejected without explicit approval | #140 promotion E2E + promotion approval gate | covered |
 | Crash/pause/restart loses run state | resume from durable state/checkpoints; stale takeover explicit | runcontrol/checkpoint/recovery tests + #132 soak | covered |
 | Control Plane UI mutates source of truth | UI remains read-only client of existing API/state | #138 embedded UI architecture | covered by scope |
+| Browser automation turns read intent into navigation/form/network side effects | no browser action can bind without operation-scoped approval evidence; passive inspection remains separately declared | Playwright registry approval policy + toolavailability negative tests | policy covered; adapter not yet implemented |
 
 ## Repository-owned verification code: explicit release scope
 
@@ -130,6 +131,7 @@ A model, memory item, MCP response or repository file cannot set the explicit ap
 - Arbitrary untrusted repository test code is outside unattended mutating scope unless explicitly trusted by the operator.
 - OS and third-party runtime sandboxes may differ; Cursor native sandbox parity is not claimed on Windows.
 - External provider/network services remain outside the trust boundary and can be unavailable or malicious; outputs stay untrusted.
+- Playwright/browser automation is not currently runtime-bound. Navigation, interaction and browser-check execution remain unavailable until a concrete adapter supplies verified operation evidence plus explicit approval evidence.
 - Local users/processes with sufficient host privileges can still tamper with the filesystem outside the application's control. Integrity checks aim to detect relevant durable-state/source changes, not replace host OS security.
 - A credential already exfiltrated outside AI Engineering OS cannot be revoked by log redaction.
 
