@@ -380,39 +380,7 @@ func runPlan(args []string) error {
 }
 
 func runMemory(args []string) error {
-	if len(args) == 0 || args[0] == "status" {
-		client := engramintegration.New()
-		status, err := client.Status(context.Background())
-		if err != nil {
-			return err
-		}
-
-		fmt.Println("Memoria persistente")
-		fmt.Printf("Proveedor: %s\n", status.Provider)
-
-		if !status.Available {
-			fmt.Println("Estado: no instalado")
-			fmt.Println("Engram no fue encontrado en PATH.")
-			return nil
-		}
-
-		fmt.Println("Estado: instalado")
-		if status.Version != "" {
-			fmt.Printf("Versión: %s\n", status.Version)
-		}
-		if status.Healthy {
-			fmt.Println("Diagnóstico: OK")
-			return nil
-		}
-
-		fmt.Println("Diagnóstico: requiere atención")
-		if status.Details != "" {
-			fmt.Printf("Detalle: %s\n", status.Details)
-		}
-		return nil
-	}
-
-	return fmt.Errorf("subcomando de memoria desconocido: %s", args[0])
+	return runMemoryCommand(args)
 }
 
 func runDocs(args []string) error {
@@ -870,6 +838,10 @@ func printUsage() {
 	fmt.Println("  ai run status <run-id> [--state-dir ruta] [--json]")
 	fmt.Println("  ai run list [--state-dir ruta] [--json]")
 	fmt.Println("  ai memory status")
+	fmt.Println("  ai memory list --project <id> [--all] [--json]")
+	fmt.Println("  ai memory show <memory-id> --project <id> [--json]")
+	fmt.Println("  ai memory delete <memory-id> --project <id> [--reason texto] [--json]")
+	fmt.Println("  ai memory supersede <memory-id> --project <id> --content <texto> [--title texto] [--type tipo] [--retention 2160h] [--json]")
 	fmt.Println("  ai docs status")
 	fmt.Println("  ai doctor [ruta-del-proyecto] [--registry ruta]")
 	fmt.Println("  ai classify [--ai] <tarea>")
@@ -886,7 +858,7 @@ func printUsage() {
 	fmt.Println("Comandos:")
 	fmt.Println("  inspect   Detecta el stack y resuelve skills para un proyecto")
 	fmt.Println("  run       Crea e inspecciona estado durable de ejecuciones")
-	fmt.Println("  memory    Verifica el proveedor de memoria persistente")
+	fmt.Println("  memory    Inspecciona y gobierna memoria persistente por proyecto")
 	fmt.Println("  docs      Verifica el proveedor de documentación externa")
 	fmt.Println("  doctor    Diagnostica el entorno local de AI Engineering OS")
 	fmt.Println("  classify  Convierte una tarea natural en intent + capabilities; --ai habilita fallback Codex")
