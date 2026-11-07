@@ -22,11 +22,24 @@ type runtimeToolBindings struct {
 	Context      map[string]string
 }
 
+type context7SearchFunc func(context.Context, context7integration.SearchRequest) (context7integration.SearchResult, error)
+
 func collectRuntimeToolBindings(
 	ctx context.Context,
 	tools registry.ToolRegistry,
 	plan orchestration.Plan,
 	detection detector.Detection,
+) runtimeToolBindings {
+	client := context7integration.New()
+	return collectRuntimeToolBindingsWithSearch(ctx, tools, plan, detection, client.Search)
+}
+
+func collectRuntimeToolBindingsWithSearch(
+	ctx context.Context,
+	tools registry.ToolRegistry,
+	plan orchestration.Plan,
+	detection detector.Detection,
+	search context7SearchFunc,
 ) runtimeToolBindings {
 	bindings := runtimeToolBindings{
 		Availability: collectToolAvailability(ctx, tools, nil),
@@ -47,8 +60,15 @@ func collectRuntimeToolBindings(
 		return bindings
 	}
 
-	client := context7integration.New()
-	result, err := client.Search(ctx, context7integration.SearchRequest{
+	if search == nil {
+		bindings.Availability["context7"] = toolavailability.Unknown(
+			tool,
+			"Context7 binding search adapter is not configured",
+		)
+		return bindings
+	}
+
+	result, err := search(ctx, context7integration.SearchRequest{
 		Query:     context7DocumentationQuery,
 		Libraries: libraries,
 		Language:  language,
