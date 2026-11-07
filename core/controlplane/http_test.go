@@ -481,3 +481,63 @@ func TestHTTPStateFailsClosedWhenSnapshotPrefixChanged(t *testing.T) {
 		t.Fatalf("body=%s", rec.Body.String())
 	}
 }
+
+
+func TestHTTPObservabilityAndMetricsAreReadOnlyAggregates(t *testing.T) {
+	store, runID := testHTTPStore(t)
+	handler := (HTTPServer{Store: store}).Handler()
+
+	req := httptest.NewRequest(http.MethodGet, "/observability", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("observability status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var snapshot ObservabilitySnapshot
+	if err := json.Unmarshal(rec.Body.Bytes(), &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.RunCount != 1 || snapshot.EventCount != 3 || snapshot.TaskCount != 1 ||
+		snapshot.Tasks[string(TaskCompleted)] != 1 {
+		t.Fatalf("snapshot=%#v", snapshot)
+	}
+	if strings.Contains(rec.Body.String(), runID) {
+		t.Fatalf("aggregate endpoint leaked run id: %s", rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("metrics status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Header().Get("Content-Type"), "text/plain") {
+		t.Fatalf("content type=%q", rec.Header().Get("Content-Type"))
+	}
+	if strings.Contains(rec.Body.String(), runID) {
+		t.Fatalf("metrics leaked run id: %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "ai_engineering_os_events_total 3") {
+		t.Fatalf("metrics=%s", rec.Body.String())
+	}
+
+	for _, path := range []string{"/observability", "/metrics"} {
+		req = httptest.NewRequest(http.MethodPost, path, nil)
+		rec = httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusMethodNotAllowed || rec.Header().Get("Allow") != http.MethodGet {
+			t.Fatalf("%s status=%d headers=%#v", path, rec.Code, rec.Header())
+		}
+	}
+}
+
+func TestHTTPObservabilityRequiresConfiguredStore(t *testing.T) {
+	for _, path := range []string{"/observability", "/metrics"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		(HTTPServer{}).Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("%s status=%d body=%s", path, rec.Code, rec.Body.String())
+		}
+	}
+}
