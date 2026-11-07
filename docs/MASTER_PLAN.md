@@ -248,38 +248,38 @@ The repository already has the foundation for:
 
 ### Latest verified checkpoint — 2026-11-07
 
-Latest merged implementation: PR #160, `fix(runcontrol): harden lease IO against transient Windows sharing violations`.
+Latest merged implementation: PR #164, `feat(tools): bind Context7 through AI-OS-owned documentation evidence`.
 
-Master now includes the RC-ready backend plus the first post-RC product evolution milestones.
+Latest merge:
 
-Key release-hardening / product milestones now on master:
+~~~text
+d34816e2015509d0f565ef09b8dcbdb02f1a6ef6
+~~~
 
-- #138: embedded read-only Control Plane web client;
-- #139: promotion adversarial boundaries and Linux/Windows/macOS CI matrix;
-- #140: coordinated multi-agent + explicit-promotion E2E;
-- #142: provider-independent per-run invocation/runtime budgets;
-- #143: governed, inspectable, reversible project memory;
-- #145: version identity, quickstart, compatibility, troubleshooting, migration and releasing docs;
-- #146: threat-model hardening, process-tree cancellation, diagnostic redaction, prompt-injection/traversal/reparse tests and isolated verification homes;
-- #149: lease shutdown race fix;
-- #150: reproducible four-target RC packages and SHA-256 evidence;
-- #152: cancellation failed-vs-cancelled race semantics fix;
-- #153: final documented `0.1.0-rc.1` readiness checkpoint;
-- #154: dedicated read-only VS Code Control Plane client;
-- #155: dedicated read-only IntelliJ IDEA Control Plane client;
-- #156: structured pytest and Angular unit-test failure reports;
-- #157: privacy-preserving local observability and Prometheus endpoint;
-- #158: fail-closed required-tool planning;
-- #159: provider-independent runtime availability evidence and explicit tool binding;
-- #160: bounded Windows lease-IO retry for sharing/lock violations.
+Post-RC product evolution now additionally includes:
 
-The documented `0.1.0-rc.1` implementation/readiness scope is complete.
+- #162: installable VS Code VSIX and IntelliJ plugin ZIP artifacts, per-package SHA-256 evidence, combined tagged-release checksum manifest, and release attachment integration;
+- #163: provider auto-instruction/config isolation in sanitized runtime views;
+- #164: first real external-tool execution binding, owned by AI Engineering OS, for Context7 documentation evidence.
 
-The exact public tag/release publication remains a separate operation. At the current checkpoint the repository contains the tag-only release workflow, but the public `v0.1.0-rc.1` tag has not been created through ChatGPT because the connected GitHub capability available here does not expose tag/release creation.
+The documented `0.1.0-rc.1` implementation/readiness scope remains complete.
+
+The exact public tag/release publication remains a separate operation. The repository contains the exact-tag-only release workflow and now builds:
+
+- CLI linux/amd64;
+- CLI windows/amd64;
+- CLI darwin/amd64;
+- CLI darwin/arm64;
+- VS Code VSIX;
+- IntelliJ plugin ZIP;
+
+with individual SHA-256 sidecars and one combined release manifest.
+
+The public `v0.1.0-rc.1` tag is still not present at this checkpoint.
 
 ### Current post-RC product level
 
-The following long-term product areas are now implemented far beyond the original roadmap checkpoint:
+Implemented beyond the original roadmap:
 
 - baseline-aware cross-language Quality for Go, Java/Maven/Gradle, Jest/Vitest, pytest and supported Angular unit-test builders;
 - deterministic OpenAPI/architecture gates;
@@ -287,38 +287,56 @@ The following long-term product areas are now implemented far beyond the origina
 - governed project memory/team learning;
 - normalized external tool/MCP health;
 - embedded visual Control Plane;
-- dedicated VS Code and IntelliJ clients;
+- dedicated, installable VS Code and IntelliJ clients;
 - privacy-preserving local observability;
 - strict required-tool planning;
-- runtime availability + explicit binding evidence;
+- runtime availability/binding evidence;
+- provider auto-instruction isolation;
+- one verified AI-OS-owned external documentation binding (Context7);
 - multi-OS and race verification;
-- reproducible release packaging.
+- reproducible CLI + IDE release packaging.
+
+### Context7 boundary now on master
+
+Context7 is no longer merely healthy-but-unbound.
+
+For real runs that plan Context7 and have deterministically detected public library hints:
+
+1. AI Engineering OS performs one bounded documentation prefetch;
+2. only public technology/library names are sent externally;
+3. task text, source, prompts, paths and business context are not sent;
+4. the pinned official `ctx7@0.10.0` CLI runs with telemetry disabled and controlled environment;
+5. returned JSON is validated, bounded, and labeled untrusted external evidence;
+6. Context7 becomes `available + healthy + runtime_bound` only after successful provider evidence;
+7. only work units that retain the Context7 tool receive the evidence.
+
+The model runtime itself does not receive arbitrary network/MCP access.
 
 ### Immediate next milestone
 
-**Installable IDE client artifacts and release integration.**
+**Operation-scoped external-tool binding and additional provider adapters.**
 
-The dedicated IDE clients exist and pass their own CI, but the release line should make them directly installable and independently verifiable.
+Tool-level availability is now proven, but higher-risk providers such as GitHub must not become globally "bound" merely because one safe operation is available.
 
-Required behavior:
+Next required behavior:
 
-1. build a deterministic VS Code `.vsix` artifact from the extension source;
-2. build the IntelliJ plugin distribution ZIP;
-3. generate SHA-256 evidence for both IDE artifacts;
-4. upload them as workflow artifacts on pull requests;
-5. attach them to tagged GitHub releases alongside CLI packages;
-6. keep IDE clients read-only and loopback-only;
-7. never make IDE packaging a new coordination/promotion authority.
+1. extend runtime-binding evidence with exact bound operation names;
+2. validate bound operations against the canonical Tool Registry;
+3. expose bound-operation evidence in diagnostics/audit surfaces;
+4. keep Context7's binding limited to the AI-OS-owned documentation operation;
+5. use operation-scoped evidence before adding GitHub read-only bindings;
+6. never imply write/create operations are available because read-only provider access succeeded;
+7. keep agent permission envelopes and explicit promotion approval authoritative above tool bindings.
 
 After that, the remaining work toward the broadest product vision is primarily:
 
-- explicit runtime adapters/bindings for selected external tools/connectors;
-- broader language/toolchain coverage where real demand exists;
-- UX polish and richer IDE-native views/actions;
+- additional explicit adapters for high-value external tools/connectors;
+- broader language/toolchain coverage only where real demand exists;
+- richer IDE-native views/actions without moving coordination authority into the IDE;
 - release feedback fixes before stable `v0.1.0`;
 - public RC/stable publication operations.
 
-Do not reintroduce role-specific model pinning or weaken promotion, integrity, approvals, recovery, budgets, memory governance, explicit tool binding, or permission boundaries.
+Do not reintroduce role-specific model pinning or weaken promotion, integrity, approvals, recovery, budgets, memory governance, runtime-instruction isolation, explicit tool binding, or permission boundaries.
 
 ---
 
