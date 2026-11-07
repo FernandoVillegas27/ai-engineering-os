@@ -389,3 +389,41 @@ func TestBindMutationKindsRejectsMutatingUnitWithoutWriteCapability(t *testing.T
 		t.Fatal("expected missing write capability rejection")
 	}
 }
+
+
+func TestProjectCodeTrustPersistsAcrossStoreRoundTrip(t *testing.T) {
+	now := time.Now().UTC()
+	run, err := New(NewRunRequest{
+		Task: "trusted mutation",
+		ProjectID: "project",
+		ProjectRoot: ".",
+		ProjectCodeTrusted: true,
+		WorkUnits: []execution.WorkUnit{{
+			ID: "backend", AgentID: "backend-engineer", Task: "trusted mutation",
+			Permissions: execution.PermissionEnvelope{
+				SourceCode: "write", Tests: "write", GitCommit: "deny",
+				GitPush: "deny", Secrets: "deny", Production: "deny",
+			},
+		}},
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !run.ProjectCodeTrusted {
+		t.Fatal("trust evidence was not persisted in new run")
+	}
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(run); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Load(run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !loaded.ProjectCodeTrusted {
+		t.Fatalf("loaded run lost project-code trust: %#v", loaded)
+	}
+}
