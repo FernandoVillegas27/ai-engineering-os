@@ -140,10 +140,10 @@ func printToolAvailability(tools registry.ToolRegistry, snapshot toolavailabilit
 			provider = "-"
 		}
 		health := "unknown"
-		if evidence.State == toolavailability.StateAvailable {
+		if evidence.Healthy {
 			health = "healthy"
 		} else if evidence.State == toolavailability.StateUnavailable {
-			health = "unavailable"
+			health = "unhealthy"
 		}
 		binding := "no"
 		if evidence.RuntimeBound {
