@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -156,6 +157,13 @@ func runRunGitHubPRCreate(args []string) error {
 	if err != nil {
 		return err
 	}
+	events, err := eventStore.List(options.runID)
+	if err != nil {
+		return fmt.Errorf("load approval audit trail: %w", err)
+	}
+	if !githubPRApprovalRecorded(events, options.taskID, digest, approval.ID) {
+		return errors.New("matching approval evidence has no resolved human grant in the Control Plane audit trail")
+	}
 	started, err := controlplane.NewEvent(controlplane.NewEventRequest{
 		RunID: options.runID,
 		TaskID: options.taskID,
@@ -224,6 +232,44 @@ func runRunGitHubPRCreate(args []string) error {
 		Repository: options.repository, Head: options.head, Base: options.base,
 		Title: options.title, RequestDigest: digest, Status: "created", URL: result.URL,
 	}, options.json)
+}
+
+
+ // githubPRApprovalRecorded requires both a pending request and the exact
+ // resolution event that references the stored immutable evidence. An orphan
+ // evidence file (e.g. an audit append failure) cannot authorize a mutation.
+func githubPRApprovalRecorded(events []controlplane.Event, taskID, digest, evidenceID string) bool {
+	pending := false
+	approved := false
+	for _, event := range events {
+		if event.TaskID != taskID {
+			continue
+		}
+		var data struct {
+			Kind string `json:"kind"`
+			ToolID string `json:"tool_id"`
+			Operation string `json:"operation"`
+			RequestDigest string `json:"request_digest"`
+			EvidenceID string `json:"evidence_id"`
+		}
+		if err := json.Unmarshal(event.Data, &data); err != nil ||
+			data.Kind != "tool-operation" || data.ToolID != "github" ||
+			data.Operation != "create-pull-request" || data.RequestDigest != digest {
+			continue
+		}
+		switch event.Type {
+		case controlplane.EventApprovalRequested:
+			pending = true
+			approved = false
+		case controlplane.EventApprovalGranted:
+			approved = pending && data.EvidenceID == evidenceID
+			pending = false
+		case controlplane.EventApprovalRejected:
+			approved = false
+			pending = false
+		}
+	}
+	return approved
 }
 
 func githubPRRequest(options githubPROptions, root string) githubintegration.CreatePullRequestRequest {
