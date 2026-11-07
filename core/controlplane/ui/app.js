@@ -231,7 +231,8 @@
     [
       "run.started", "run.completed", "run.failed", "run.cancelled", "run.paused", "run.resumed",
       "task.queued", "task.assigned", "task.started", "task.completed", "task.failed", "task.blocked",
-      "message.sent", "artifact.created", "quality.updated", "review.updated", "promotion.updated"
+      "message.sent", "artifact.created", "quality.updated", "review.updated", "promotion.updated",
+      "approval.requested", "approval.granted", "approval.rejected"
     ].forEach((eventName) => {
       source.addEventListener(eventName, () => {
         if (state.runId === runId) refreshSelected();
@@ -406,13 +407,26 @@
       ["Can retry", c.can_retry],
       ["Can recover", c.can_recover],
     ];
+    const approvals = Array.isArray(state.runState?.tool_approvals) ? state.runState.tool_approvals : [];
+    const approvalRows = approvals.length
+      ? '<div style="margin-top:12px">' + approvals.map((approval) =>
+          '<article class="detail-card"><div class="detail-card-head"><div class="detail-card-title">' +
+          escapeHTML((approval.tool_id || "tool") + "/" + (approval.operation || "operation")) +
+          '</div><span class="mini-status ' + statusClass(approval.status) + '">' +
+          escapeHTML(approval.status || "unknown") + '</span></div><div class="detail-card-meta">' +
+          escapeHTML("task=" + (approval.task_id || "—") +
+            (approval.evidence_id ? " · evidence=" + shortId(approval.evidence_id, 24) : "") +
+            (approval.expires_at ? " · expires=" + formatTime(approval.expires_at) : "")) +
+          '</div></article>'
+        ).join("") + '</div>'
+      : '<div class="notice" style="margin-top:12px">No tool-operation approval decisions recorded for this run.</div>';
     els.controls.innerHTML =
       '<div class="notice">These are deterministic capabilities only. This web client does not issue mutation/control commands.</div>' +
       '<div class="kv-grid" style="margin-top:10px">' +
       flags.map(([label,value]) => kv(label, value ? "Yes" : "No")).join("") +
       kv("Pause boundary", c.pause_boundary || "—") +
       kv("Recovery", c.recovery_reason || c.recovery_status || "—") +
-      '</div>';
+      '</div>' + approvalRows;
   }
 
   function kv(label, value) {
