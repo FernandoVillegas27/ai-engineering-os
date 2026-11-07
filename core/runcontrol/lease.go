@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -135,7 +136,7 @@ func (s *Store) ReleaseLease(runID, ownerID string) error {
 	if strings.TrimSpace(ownerID) == "" || lease.OwnerID != ownerID {
 		return errors.New("run lease owner mismatch")
 	}
-	return os.Remove(s.leasePath(runID))
+	return removeLeaseFile(s.leasePath(runID))
 }
 
 func (s *Store) ClaimStaleLease(
@@ -159,14 +160,14 @@ func (s *Store) ClaimStaleLease(
 		s.root,
 		fmt.Sprintf(".%s.reclaim-%d", runID, time.Now().UTC().UnixNano()),
 	)
-	if err := os.Rename(path, quarantine); err != nil {
+	if err := renameLeaseFile(path, quarantine); err != nil {
 		return Lease{}, Lease{}, fmt.Errorf("capture stale run lease: %w", err)
 	}
 	restore := true
 	defer func() {
 		if restore {
 			if _, err := os.Lstat(path); os.IsNotExist(err) {
-				_ = os.Rename(quarantine, path)
+				_ = renameLeaseFile(quarantine, path)
 			}
 		}
 	}()
@@ -185,7 +186,7 @@ func (s *Store) ClaimStaleLease(
 	if err != nil {
 		return Lease{}, Lease{}, fmt.Errorf("acquire recovery lease: %w", err)
 	}
-	if err := os.Remove(quarantine); err != nil {
+	if err := removeLeaseFile(quarantine); err != nil {
 		_ = s.ReleaseLease(runID, recovery.OwnerID)
 		return Lease{}, Lease{}, fmt.Errorf("remove captured stale lease: %w", err)
 	}
@@ -254,7 +255,7 @@ func (s *Store) replaceLease(lease Lease) error {
 	if current.OwnerID != lease.OwnerID {
 		return errors.New("run lease owner changed before heartbeat commit")
 	}
-	if err := os.Rename(tempPath, path); err != nil {
+	if err := renameLeaseFile(tempPath, path); err != nil {
 		return err
 	}
 	cleanup = false
@@ -269,7 +270,7 @@ func loadLeaseFile(path, runID string) (Lease, error) {
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 		return Lease{}, errors.New("run lease must be a regular file")
 	}
-	data, err := os.ReadFile(path)
+	data, err := readLeaseFile(path)
 	if err != nil {
 		return Lease{}, err
 	}
@@ -283,6 +284,60 @@ func loadLeaseFile(path, runID string) (Lease, error) {
 		return Lease{}, err
 	}
 	return lease, nil
+}
+
+const (
+	leaseIOAttempts = 25
+	leaseIORetryDelay = 10 * time.Millisecond
+)
+
+func readLeaseFile(path string) ([]byte, error) {
+	var data []byte
+	err := retryLeaseIO(func() error {
+		value, err := os.ReadFile(path)
+		if err == nil {
+			data = value
+		}
+		return err
+	})
+	return data, err
+}
+
+func renameLeaseFile(oldPath, newPath string) error {
+	return retryLeaseIO(func() error {
+		return os.Rename(oldPath, newPath)
+	})
+}
+
+func removeLeaseFile(path string) error {
+	return retryLeaseIO(func() error {
+		return os.Remove(path)
+	})
+}
+
+func retryLeaseIO(operation func() error) error {
+	var err error
+	for attempt := 0; attempt < leaseIOAttempts; attempt++ {
+		err = operation()
+		if err == nil || !isTransientLeaseSharingError(err) {
+			return err
+		}
+		if attempt+1 < leaseIOAttempts {
+			time.Sleep(leaseIORetryDelay)
+		}
+	}
+	return err
+}
+
+func isTransientLeaseSharingError(err error) bool {
+	var errno syscall.Errno
+	if !errors.As(err, &errno) {
+		return false
+	}
+	// Windows ERROR_SHARING_VIOLATION (32) and ERROR_LOCK_VIOLATION (33).
+	// These numeric values are intentionally used instead of Windows-only
+	// constants so the package remains portable and testable on all platforms.
+	return errno == syscall.Errno(32) || errno == syscall.Errno(33)
 }
 
 func validateLease(lease Lease, runID string) error {
