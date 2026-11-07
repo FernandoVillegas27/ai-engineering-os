@@ -2,6 +2,7 @@ package orchestration
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/detector"
@@ -245,5 +246,157 @@ func TestUnknownIntentFails(t *testing.T) {
 	)
 	if err == nil {
 		t.Fatal("expected unsupported intent error")
+	}
+}
+
+
+func TestBuildFailsWhenSelectedAgentRequiredToolIsMissing(t *testing.T) {
+	agents := registry.AgentRegistry{Agents: map[string]registry.Agent{
+		"backend-engineer": {
+			ID: "backend-engineer", Role: "backend-engineer",
+			Capabilities: []string{"backend-development"},
+			Tools: registry.AgentTools{Required: []string{"filesystem"}},
+			Permissions: registry.AgentPermissions{SourceCode: "write", Tests: "write"},
+			Status: "active",
+		},
+	}}
+	_, err := Build(
+		Request{Capabilities: []string{"backend-development"}, Intent: IntentImplement},
+		detector.Detection{},
+		agents,
+		registry.SkillRegistry{SchemaVersion: 1, Skills: map[string]registry.Skill{}},
+		registry.ToolRegistry{SchemaVersion: 1, Tools: map[string]registry.Tool{}},
+	)
+	if err == nil || !strings.Contains(err.Error(), `agent "backend-engineer" requires tool "filesystem"`) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestBuildFailsWhenSelectedAgentRequiredToolIsDisabled(t *testing.T) {
+	agents := registry.AgentRegistry{Agents: map[string]registry.Agent{
+		"backend-engineer": {
+			ID: "backend-engineer", Role: "backend-engineer",
+			Capabilities: []string{"backend-development"},
+			Tools: registry.AgentTools{Required: []string{"filesystem"}},
+			Permissions: registry.AgentPermissions{SourceCode: "write", Tests: "write"},
+			Status: "active",
+		},
+	}}
+	tools := registry.ToolRegistry{SchemaVersion: 1, Tools: map[string]registry.Tool{
+		"filesystem": {ID: "filesystem", Status: "disabled"},
+	}}
+	_, err := Build(
+		Request{Capabilities: []string{"backend-development"}, Intent: IntentImplement},
+		detector.Detection{},
+		agents,
+		registry.SkillRegistry{SchemaVersion: 1, Skills: map[string]registry.Skill{}},
+		tools,
+	)
+	if err == nil || !strings.Contains(err.Error(), `tool "filesystem"`) || !strings.Contains(err.Error(), `status is "disabled"`) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestBuildOmitsUnavailableOptionalToolsWithoutBlocking(t *testing.T) {
+	agents := registry.AgentRegistry{Agents: map[string]registry.Agent{
+		"researcher": {
+			ID: "researcher", Role: "researcher",
+			Capabilities: []string{"technical-research"},
+			Tools: registry.AgentTools{
+				Required: []string{},
+				Optional: []string{"context7", "missing-optional", "disabled-optional"},
+			},
+			Permissions: registry.AgentPermissions{SourceCode: "read", Tests: "read"},
+			Status: "active",
+		},
+	}}
+	tools := registry.ToolRegistry{SchemaVersion: 1, Tools: map[string]registry.Tool{
+		"context7": {ID: "context7", Status: "enabled"},
+		"disabled-optional": {ID: "disabled-optional", Status: "disabled"},
+	}}
+	plan, err := Build(
+		Request{Capabilities: []string{"technical-research"}, Intent: IntentResearch},
+		detector.Detection{},
+		agents,
+		registry.SkillRegistry{SchemaVersion: 1, Skills: map[string]registry.Skill{}},
+		tools,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Agents) != 1 {
+		t.Fatalf("agents=%#v", plan.Agents)
+	}
+	if !reflect.DeepEqual(plan.Agents[0].Tools.Recommended, []string{"context7"}) {
+		t.Fatalf("recommended=%#v", plan.Agents[0].Tools.Recommended)
+	}
+}
+
+func TestBuildFailsWhenEnabledSkillRequiredToolIsMissing(t *testing.T) {
+	agents := registry.AgentRegistry{Agents: map[string]registry.Agent{
+		"backend-engineer": {
+			ID: "backend-engineer", Role: "backend-engineer",
+			Capabilities: []string{"backend-development"},
+			Permissions: registry.AgentPermissions{SourceCode: "write", Tests: "write"},
+			Status: "active",
+		},
+	}}
+	skills := registry.SkillRegistry{SchemaVersion: 1, Skills: map[string]registry.Skill{
+		"go-backend": {
+			ID: "go-backend",
+			Capabilities: []string{"backend-development"},
+			Technologies: []registry.Technology{{Name: "go"}},
+			CompatibleAgents: []string{"backend-engineer"},
+			Tools: registry.SkillTools{Required: []string{"codegraph"}},
+			Status: "enabled",
+		},
+	}}
+	detection := detector.Detection{
+		Backend: []detector.Technology{{Name: "go"}},
+	}
+	_, err := Build(
+		Request{Capabilities: []string{"backend-development"}, Intent: IntentImplement},
+		detection,
+		agents,
+		skills,
+		registry.ToolRegistry{SchemaVersion: 1, Tools: map[string]registry.Tool{}},
+	)
+	if err == nil || !strings.Contains(err.Error(), `requires tool "codegraph"`) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestBuildDeduplicatesEnabledRequiredAndRecommendedTools(t *testing.T) {
+	agents := registry.AgentRegistry{Agents: map[string]registry.Agent{
+		"backend-engineer": {
+			ID: "backend-engineer", Role: "backend-engineer",
+			Capabilities: []string{"backend-development"},
+			Tools: registry.AgentTools{
+				Required: []string{"filesystem", "filesystem"},
+				Optional: []string{"context7", "filesystem", "context7"},
+			},
+			Permissions: registry.AgentPermissions{SourceCode: "write", Tests: "write"},
+			Status: "active",
+		},
+	}}
+	tools := registry.ToolRegistry{SchemaVersion: 1, Tools: map[string]registry.Tool{
+		"filesystem": {ID: "filesystem", Status: "enabled"},
+		"context7": {ID: "context7", Status: "enabled"},
+	}}
+	plan, err := Build(
+		Request{Capabilities: []string{"backend-development"}, Intent: IntentImplement},
+		detector.Detection{},
+		agents,
+		registry.SkillRegistry{SchemaVersion: 1, Skills: map[string]registry.Skill{}},
+		tools,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(plan.Agents[0].Tools.Required, []string{"filesystem"}) {
+		t.Fatalf("required=%#v", plan.Agents[0].Tools.Required)
+	}
+	if !reflect.DeepEqual(plan.Agents[0].Tools.Recommended, []string{"context7"}) {
+		t.Fatalf("recommended=%#v", plan.Agents[0].Tools.Recommended)
 	}
 }
