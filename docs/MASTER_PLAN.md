@@ -248,12 +248,12 @@ The repository already has the foundation for:
 
 ### Latest verified checkpoint — 2026-11-07
 
-Latest merged implementation: PR #172, `feat(cli): add explicit project-scoped tool binding verification`.
+Latest merged implementation: PR #180, `feat(cli): add approved GitHub pull request prepare/create workflow`.
 
 Latest merge:
 
 ~~~text
-0054be83365aa30f1f5cb112d3daa29e7e9988fe
+71aed0fde566d24127a1811773d980719af32504
 ~~~
 
 Post-RC product evolution now additionally includes:
@@ -265,7 +265,15 @@ Post-RC product evolution now additionally includes:
 - #169: durable propagation of exact bound operations through plans, work units, run state, pause/resume, retry and runtime prompts;
 - #170: AI Engineering OS-owned GitHub CLI read-only binding with independently verified repository/issue/pull-request operations and operation-scoped approval policy;
 - #171: append-only Control Plane audit of bound tool authority per task, including dashboard visibility and snapshot-safe projection;
-- #172: explicit project-scoped pre-run verification through `ai tools status --project <root> --verify-bindings`.
+- #172: explicit project-scoped pre-run verification through `ai tools status --project <root> --verify-bindings`;
+- #173: roadmap checkpoint through durable external-tool authority audit;
+- #174: high-risk Playwright operation policy separating passive inspection from approval-required navigation/interaction/browser checks;
+- #175: immutable human approval evidence scoped to run + task + tool + operation;
+- #176: durable `ai run tool-approval request|grant|reject` lifecycle with append-only audit/evidence;
+- #177: Control Plane projection/dashboard audit of exact tool-operation approval state;
+- #178: request-bound approvals using an exact SHA-256 digest of the concrete side-effect request;
+- #179: first trusted GitHub mutation adapter, limited to request-approved `create-pull-request`;
+- #180: usable `ai run github-pr prepare|create` operator workflow with pre-mutation audit and exact request reconstruction.
 
 The documented `0.1.0-rc.1` implementation/readiness scope remains complete.
 
@@ -301,7 +309,10 @@ Implemented beyond the original roadmap:
 - AI-OS-owned Context7 documentation binding;
 - AI-OS-owned GitHub read-only binding;
 - operation-scoped GitHub approval boundaries that keep mutation/review operations unavailable without explicit approval evidence;
-- Control Plane audit of exact task tool authority;
+- immutable human approval evidence scoped to run + task + tool + operation, with optional expiry;
+- request-bound approval digests that prevent parameter substitution after human approval;
+- first request-approved GitHub mutation path for pull-request creation only;
+- Control Plane audit of exact task tool authority and exact pending/granted/rejected tool-operation approvals;
 - explicit project-scoped binding verification before execution;
 - multi-OS and Linux race verification;
 - reproducible CLI + IDE release packaging.
@@ -360,7 +371,26 @@ read-pull-requests
 
 The trusted adapter uses fixed non-mutating `gh` command shapes, controlled environment forwarding and bounded JSON evidence.
 
-GitHub mutation/review operations remain declared but unavailable without an explicit future approval-evidence execution layer.
+GitHub read operations remain independently verified as before.
+
+The first mutation operation is now implemented:
+
+~~~text
+create-pull-request
+~~~
+
+It is not generally runtime-bound to models. It is available only through the AI Engineering OS-owned operator workflow:
+
+~~~text
+github-pr prepare
+  -> exact request digest
+  -> human tool-approval grant
+  -> immutable approval evidence
+  -> github-pr create
+  -> fixed gh pr create adapter
+~~~
+
+The approved digest covers repository, head, base, title and body. Any changed mutation-relevant field requires a new approval. Branch creation, commit, push, review, merge, edit, close and delete remain unavailable.
 
 ### Explicit operator verification
 
@@ -382,9 +412,19 @@ This verifies Context7/GitHub bindings using the same operation/approval invaria
 
 ### Immediate next milestone
 
-**Additional external adapters only where a concrete trusted protocol/runtime can be verified.**
+**Continue external side-effect adapters only where a concrete trusted protocol/runtime and exact request boundary can be verified.**
 
-Do not invent a Codegraph or other provider protocol merely because the Tool Registry contains a logical tool entry.
+The approval foundation and first GitHub write path are now complete enough to reuse.
+
+Next candidate work, in safe order:
+
+1. harden/reuse the request-bound approval primitive for any additional GitHub mutation selected as genuinely necessary;
+2. define a concrete trusted Playwright/browser runtime contract before binding any browser operation;
+3. add Playwright passive/read behavior first if the chosen protocol can prove that it does not silently navigate/interact;
+4. add navigation/interactions/browser checks only behind exact request-bound human approval;
+5. keep Codegraph unimplemented until a real provider interface is selected and verified.
+
+Do not invent a Codegraph, Playwright, or other provider protocol merely because the Tool Registry contains a logical tool entry.
 
 For every future adapter require:
 
