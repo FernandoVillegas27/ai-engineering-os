@@ -67,6 +67,7 @@ func executionUnitFixture(root string) execution.WorkUnit {
 		Capabilities: []string{"code-review", "security-review"},
 		Skills:       []string{"security-review-skill"},
 		Tools:        []string{"filesystem"},
+		ToolOperations: map[string][]string{"filesystem": {"read-files"}},
 		Mode:         execution.ModeReadOnly,
 		Permissions: execution.PermissionEnvelope{
 			SourceCode: "read",
@@ -130,7 +131,8 @@ func TestExecutionRuntimeRunsCodexReadOnlyInProject(t *testing.T) {
 		}
 	}
 	if !strings.Contains(runner.invocation.Stdin, "READ-ONLY") ||
-		!strings.Contains(runner.invocation.Stdin, "sanitized project view") {
+		!strings.Contains(runner.invocation.Stdin, "sanitized project view") ||
+		!strings.Contains(runner.invocation.Stdin, "filesystem[read-files]") {
 		t.Fatalf("prompt = %q", runner.invocation.Stdin)
 	}
 	if len(result.Findings) != 1 || len(result.Evidence) != 1 {
