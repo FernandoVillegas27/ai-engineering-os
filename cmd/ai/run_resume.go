@@ -306,8 +306,9 @@ func reconstructPausedReadOnlyRun(run runstate.Run) ([]execution.WorkUnit, []sch
 			ID:        durable.ID,
 			AgentID:   durable.AgentID,
 			DependsOn: append([]string(nil), durable.DependsOn...),
-			Mutating:  false,
-			Status:    status,
+			Mutating:       false,
+			ToolOperations: execution.CloneToolOperations(durable.ToolOperations),
+			Status:         status,
 		})
 	}
 	return units, tasks, nil
