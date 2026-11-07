@@ -50,7 +50,7 @@ func TestSnapshotBindsOnlyReadOperations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(result.BoundOperations, ","); got != "read-issues,read-pull-requests,read-repo" {
+	if got := strings.Join(result.BoundOperations, ","); got != "read-issues,read-pull-requests,read-repositorysitory" {
 		t.Fatalf("operations=%q", got)
 	}
 	if !strings.Contains(result.Context, "untrusted external data") ||
