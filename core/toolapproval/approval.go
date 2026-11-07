@@ -2,6 +2,7 @@ package toolapproval
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -25,6 +26,7 @@ type Evidence struct {
 	TaskID        string    `json:"task_id"`
 	ToolID        string    `json:"tool_id"`
 	Operation     string    `json:"operation"`
+	RequestDigest string    `json:"request_digest,omitempty"`
 	Status        Status    `json:"status"`
 	Actor         string    `json:"actor"`
 	CreatedAt     time.Time `json:"created_at"`
@@ -36,6 +38,7 @@ type Request struct {
 	TaskID    string
 	ToolID    string
 	Operation string
+	RequestDigest string
 	Status    Status
 	Actor     string
 	ExpiresAt *time.Time
@@ -56,6 +59,7 @@ func New(request Request, now time.Time) (Evidence, error) {
 		TaskID:        strings.TrimSpace(request.TaskID),
 		ToolID:        strings.TrimSpace(request.ToolID),
 		Operation:     strings.TrimSpace(request.Operation),
+		RequestDigest: normalizeDigest(request.RequestDigest),
 		Status:        request.Status,
 		Actor:         strings.TrimSpace(request.Actor),
 		CreatedAt:     now.UTC(),
@@ -79,6 +83,9 @@ func Validate(evidence Evidence) error {
 	}
 	if strings.TrimSpace(evidence.Operation) == "" {
 		return errors.New("tool approval operation is required")
+	}
+	if evidence.RequestDigest != "" && !validDigest(evidence.RequestDigest) {
+		return errors.New("tool approval request_digest must be a lowercase sha256 hex digest")
 	}
 	if evidence.Status != StatusGranted && evidence.Status != StatusRejected {
 		return fmt.Errorf("unsupported tool approval status: %q", evidence.Status)
@@ -109,6 +116,31 @@ func Grants(evidence Evidence, runID, taskID, toolID, operation string, now time
 		now = time.Now().UTC()
 	}
 	return evidence.ExpiresAt == nil || now.UTC().Before(*evidence.ExpiresAt)
+}
+
+func GrantsRequest(evidence Evidence, runID, taskID, toolID, operation, requestDigest string, now time.Time) bool {
+	requestDigest = normalizeDigest(requestDigest)
+	if requestDigest == "" || evidence.RequestDigest == "" || evidence.RequestDigest != requestDigest {
+		return false
+	}
+	return Grants(evidence, runID, taskID, toolID, operation, now)
+}
+
+func DigestRequest(payload []byte) string {
+	hash := sha256.Sum256(payload)
+	return hex.EncodeToString(hash[:])
+}
+
+func normalizeDigest(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func validDigest(value string) bool {
+	if len(value) != sha256.Size*2 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil && value == strings.ToLower(value)
 }
 
 func newID() (string, error) {
