@@ -45,6 +45,15 @@ func (f *fakeRunner) Run(ctx context.Context, name string, args ...string) (stri
 	if len(args) > 0 && args[0] == "doctor" {
 		return f.doctorOutput, f.doctorErr
 	}
+	if len(args) > 0 && args[0] == "save" {
+		return "Memory saved: #42 \"test\" (decision)", nil
+	}
+	if len(args) > 0 && args[0] == "timeline" {
+		return "Timeline for observation #42", nil
+	}
+	if len(args) > 0 && args[0] == "delete" {
+		return "Observation #42 soft-deleted", nil
+	}
 	return "", nil
 }
 
@@ -125,7 +134,7 @@ func TestSaveUsesExplicitProjectAndCuratedType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !result.Saved || result.Project != "ai-engineering-os" {
+	if !result.Saved || result.Project != "ai-engineering-os" || result.MemoryID != "42" {
 		t.Fatalf("result = %#v", result)
 	}
 	want := []string{
@@ -237,5 +246,42 @@ func TestRecallOperationTimeoutIsClassified(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "[timeout]") {
 		t.Fatalf("err=%v", err)
+	}
+}
+
+
+func TestDeleteVerifiesProjectBeforeDeletingObservation(t *testing.T) {
+	runner := &fakeRunner{path: "/usr/local/bin/engram"}
+	client := Client{Binary: "engram", Runner: runner}
+
+	result, err := client.Delete(context.Background(), memory.DeleteRequest{
+		Project: "ai-engineering-os",
+		MemoryID: "42",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Deleted || result.Project != "ai-engineering-os" || result.MemoryID != "42" {
+		t.Fatalf("result=%#v", result)
+	}
+	wantOwnership := []string{
+		"/usr/local/bin/engram", "timeline", "42",
+		"--before", "0", "--after", "0",
+		"--project", "ai-engineering-os",
+	}
+	wantDelete := []string{"/usr/local/bin/engram", "delete", "42"}
+	if len(runner.calls) != 2 ||
+		!reflect.DeepEqual(runner.calls[0], wantOwnership) ||
+		!reflect.DeepEqual(runner.calls[1], wantDelete) {
+		t.Fatalf("calls=%#v", runner.calls)
+	}
+}
+
+func TestParseSavedMemoryID(t *testing.T) {
+	if got := parseSavedMemoryID(`Memory saved: #123 "Architecture" (architecture)`); got != "123" {
+		t.Fatalf("got=%q", got)
+	}
+	if got := parseSavedMemoryID("unexpected output"); got != "" {
+		t.Fatalf("got=%q", got)
 	}
 }
