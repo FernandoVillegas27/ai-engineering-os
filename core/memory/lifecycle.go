@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/artifact"
 )
@@ -35,6 +36,7 @@ type PersistReport struct {
 }
 
 type RunLearning struct {
+	RunID         string
 	Task          string
 	Intent        string
 	TaskSummaries []TaskLearning
@@ -204,11 +206,19 @@ func curatedArtifactCandidates(project string, values []artifact.Artifact) []Sav
 		seen[topic] = true
 		content := curatedArtifactContent(value)
 		out = append(out, SaveRequest{
-			Project:  project,
-			Title:    truncateRunes(summary, 200),
-			Content:  content,
-			Type:     memoryType,
-			TopicKey: topic,
+			Project:   project,
+			Title:     truncateRunes(summary, 200),
+			Content:   content,
+			Type:      memoryType,
+			TopicKey:  topic,
+			Retention: retentionForType(memoryType),
+			Provenance: Provenance{
+				RunID:         value.RunID,
+				ArtifactID:    value.ID,
+				TaskID:        value.TaskID,
+				ProducerAgent: value.ProducerAgent,
+				Source:        "artifact",
+			},
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -288,12 +298,30 @@ func runLearningCandidate(project string, learning RunLearning) (SaveRequest, bo
 	}
 	content := truncateUTF8Bytes(b.String(), 12*1024)
 	return SaveRequest{
-		Project:  project,
-		Title:    truncateRunes("Run learning: "+task, 200),
-		Content:  content,
-		Type:     TypeLearning,
-		TopicKey: "run-learning/" + stableTopic(task+"\x00"+strings.TrimSpace(learning.Intent)),
+		Project:   project,
+		Title:     truncateRunes("Run learning: "+task, 200),
+		Content:   content,
+		Type:      TypeLearning,
+		TopicKey:  "run-learning/" + stableTopic(task+"\x00"+strings.TrimSpace(learning.Intent)),
+		Retention: retentionForType(TypeLearning),
+		Provenance: Provenance{
+			RunID:  strings.TrimSpace(learning.RunID),
+			Source: "run-learning",
+		},
 	}, true
+}
+
+func retentionForType(value Type) time.Duration {
+	switch value {
+	case TypeArchitecture, TypeDecision:
+		return 365 * 24 * time.Hour
+	case TypeDiscovery, TypeBugfix, TypePattern, TypeConfig:
+		return 180 * 24 * time.Hour
+	case TypeLearning:
+		return 90 * 24 * time.Hour
+	default:
+		return 90 * 24 * time.Hour
+	}
 }
 
 func formatMemoryContext(value string) string {

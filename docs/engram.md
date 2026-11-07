@@ -236,3 +236,21 @@ Memory is an optional context provider, never the coordination source of truth.
 Provider unavailable/unhealthy, recall errors, and save errors become observable warnings. They do not turn an otherwise valid engineering run into a failed run.
 
 The durable run state, Control Plane events, Quality gates, permission envelopes, checkpoints, and promotion approval remain authoritative.
+
+
+## Governed memory authority
+
+Automatic run memory now passes through the AI Engineering OS governance ledger before any optional Engram mirror write.
+
+The governed local ledger is the authority for automatic recall. Engram is an optional mirror/integration, not the lifecycle authority.
+
+This means:
+
+- governed memories are inspectable with `ai memory list/show`;
+- delete and supersede affect future automatic recall immediately;
+- expired/superseded/deleted records are excluded from automatic context;
+- common secrets are redacted before local persistence and before the Engram mirror receives content;
+- provenance and retention are stored independently of Engram capabilities;
+- provider-native records that are not present in the governed ledger are not injected automatically.
+
+See [memory-governance.md](memory-governance.md) for the lifecycle and retention policy.

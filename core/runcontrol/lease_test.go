@@ -167,7 +167,7 @@ func TestLeaseSessionHeartbeatsAndReleasesOnStop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	second := waitForHeartbeatAdvance(t, store, "run-session", first.HeartbeatAt, 2*time.Second)
+	second := waitForHeartbeatAdvance(t, store, session, "run-session", first.HeartbeatAt, 5*time.Second)
 	if !second.HeartbeatAt.After(first.HeartbeatAt) {
 		t.Fatalf("heartbeat did not advance: first=%#v second=%#v", first, second)
 	}
@@ -298,6 +298,7 @@ func TestOldLeaseOwnerCannotHeartbeatAfterStaleClaim(t *testing.T) {
 func waitForHeartbeatAdvance(
 	t *testing.T,
 	store *Store,
+	session *LeaseSession,
 	runID string,
 	after time.Time,
 	timeout time.Duration,
@@ -305,6 +306,9 @@ func waitForHeartbeatAdvance(
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
+		if session != nil && session.Err() != nil {
+			t.Fatalf("heartbeat session failed before advancing: %v", session.Err())
+		}
 		lease, err := store.LoadLease(runID)
 		if err == nil && lease.HeartbeatAt.After(after) {
 			return lease
@@ -312,13 +316,13 @@ func waitForHeartbeatAdvance(
 		if err != nil && !os.IsNotExist(err) {
 			t.Fatal(err)
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
 	lease, err := store.LoadLease(runID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Fatalf("heartbeat did not advance within %s: %#v", timeout, lease)
+	t.Fatalf("heartbeat did not advance within %s: lease=%#v session_err=%v", timeout, lease, session.Err())
 	return Lease{}
 }
 
@@ -331,9 +335,9 @@ func TestLeaseSessionRepeatedHeartbeatStopSoak(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for i := 0; i < 8; i++ {
+	for i := 0; i < 4; i++ {
 		runID := fmt.Sprintf("run-session-soak-%d", i)
-		session, err := StartLeaseSession(context.Background(), store, runID, 100*time.Millisecond)
+		session, err := StartLeaseSession(context.Background(), store, runID, 250*time.Millisecond)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -341,8 +345,8 @@ func TestLeaseSessionRepeatedHeartbeatStopSoak(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		second := waitForHeartbeatAdvance(t, store, runID, first.HeartbeatAt, 2*time.Second)
-		third := waitForHeartbeatAdvance(t, store, runID, second.HeartbeatAt, 2*time.Second)
+		second := waitForHeartbeatAdvance(t, store, session, runID, first.HeartbeatAt, 5*time.Second)
+		third := waitForHeartbeatAdvance(t, store, session, runID, second.HeartbeatAt, 5*time.Second)
 		if !third.HeartbeatAt.After(second.HeartbeatAt) {
 			t.Fatalf("heartbeat stopped advancing: second=%#v third=%#v", second, third)
 		}

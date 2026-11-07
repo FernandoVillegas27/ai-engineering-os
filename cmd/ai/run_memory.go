@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/artifact"
@@ -21,13 +23,35 @@ type runMemoryReport struct {
 func runMemoryProvider(mode string) (memory.ProjectMemory, error) {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "", "auto", "engram":
+		root, err := resolveMemoryGovernanceDir("")
+		if err != nil {
+			return nil, err
+		}
+		store, err := memory.NewGovernanceStore(root)
+		if err != nil {
+			return nil, err
+		}
 		client := engramintegration.New()
-		return client, nil
+		return memory.GovernedProjectMemory{Store: store, Mirror: client}, nil
 	case "off":
 		return nil, nil
 	default:
 		return nil, fmt.Errorf("memory provider no soportado: %s", mode)
 	}
+}
+
+func resolveMemoryGovernanceDir(explicit string) (string, error) {
+	if strings.TrimSpace(explicit) != "" {
+		return explicit, nil
+	}
+	if value := strings.TrimSpace(os.Getenv("AI_ENGINEERING_OS_MEMORY_DIR")); value != "" {
+		return value, nil
+	}
+	configRoot, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("resolver directorio de configuración de memoria: %w", err)
+	}
+	return filepath.Join(configRoot, "ai-engineering-os", "memory"), nil
 }
 
 func injectRunMemory(
@@ -95,6 +119,7 @@ func persistReadOnlyRunMemory(
 		result.Progress.Blocked == 0 &&
 		result.Progress.Cancelled == 0 {
 		learning := memory.RunLearning{
+			RunID:  runID,
 			Task:   task,
 			Intent: intent,
 		}
@@ -149,6 +174,7 @@ func persistMutationRunMemory(
 		provider,
 		projectID,
 		memory.RunLearning{
+			RunID:  runID,
 			Task:   task,
 			Intent: intent,
 			TaskSummaries: []memory.TaskLearning{{
