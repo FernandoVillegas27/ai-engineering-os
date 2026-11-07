@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.fernandovillegas"
-version = "0.1.0"
+version = providers.gradleProperty("releaseVersion").orElse("0.1.0").get()
 
 repositories {
     mavenCentral()
