@@ -35,6 +35,7 @@ type PersistReport struct {
 }
 
 type RunLearning struct {
+	RunID         string
 	Task          string
 	Intent        string
 	TaskSummaries []TaskLearning
@@ -209,6 +210,12 @@ func curatedArtifactCandidates(project string, values []artifact.Artifact) []Sav
 			Content:  content,
 			Type:     memoryType,
 			TopicKey: topic,
+			Provenance: Provenance{
+				RunID: value.RunID,
+				TaskID: value.TaskID,
+				AgentID: value.ProducerAgent,
+				Source: "artifact",
+			},
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -293,6 +300,10 @@ func runLearningCandidate(project string, learning RunLearning) (SaveRequest, bo
 		Content:  content,
 		Type:     TypeLearning,
 		TopicKey: "run-learning/" + stableTopic(task+"\x00"+strings.TrimSpace(learning.Intent)),
+		Provenance: Provenance{
+			RunID: learning.RunID,
+			Source: "run-learning",
+		},
 	}, true
 }
 
