@@ -92,6 +92,7 @@ type Run struct {
 	Status        Status           `json:"status"`
 	Capabilities  []string         `json:"capabilities,omitempty"`
 	Runtime       RuntimeSelection `json:"runtime,omitempty"`
+	ProjectCodeTrusted bool     `json:"project_code_trusted,omitempty"`
 	WorkUnits     []WorkUnit       `json:"work_units,omitempty"`
 	Quality       *QualitySnapshot `json:"quality,omitempty"`
 	Approvals     []Approval       `json:"approvals,omitempty"`
@@ -111,6 +112,7 @@ type NewRunRequest struct {
 	ProjectRoot  string
 	Capabilities []string
 	Runtime      RuntimeSelection
+	ProjectCodeTrusted bool
 	WorkUnits    []execution.WorkUnit
 }
 
@@ -146,6 +148,7 @@ func New(request NewRunRequest, now time.Time) (Run, error) {
 		Status:        StatusPlanned,
 		Capabilities:  sortedUnique(request.Capabilities),
 		Runtime:       request.Runtime,
+		ProjectCodeTrusted: request.ProjectCodeTrusted,
 		CreatedAt:     now.UTC(),
 		UpdatedAt:     now.UTC(),
 	}
