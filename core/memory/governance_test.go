@@ -191,3 +191,80 @@ func TestGovernedProviderMirrorFailureDoesNotLoseGovernedSave(t *testing.T) {
 		t.Fatalf("values=%#v err=%v", values, err)
 	}
 }
+
+
+func TestGovernanceStableTopicConvergesAndSupersedes(t *testing.T) {
+	store, _ := NewGovernanceStore(t.TempDir())
+	mirror := healthyFakeMemory()
+	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
+	provider := GovernedProjectMemory{Store: store, Mirror: mirror, Now: func() time.Time { return now }}
+
+	first, err := provider.Save(context.Background(), SaveRequest{
+		Project: "project-a", Title: "Architecture", Content: "Use SQLite.",
+		Type: TypeArchitecture, TopicKey: "architecture/db",
+	})
+	if err != nil { t.Fatal(err) }
+	second, err := provider.Save(context.Background(), SaveRequest{
+		Project: "project-a", Title: "Architecture", Content: "Use SQLite.",
+		Type: TypeArchitecture, TopicKey: "architecture/db",
+	})
+	if err != nil { t.Fatal(err) }
+	if !strings.Contains(second.Summary, "already current") {
+		t.Fatalf("second=%#v", second)
+	}
+	if len(mirror.saves) != 1 {
+		t.Fatalf("identical topic mirrored more than once: %d", len(mirror.saves))
+	}
+
+	now = now.Add(time.Hour)
+	third, err := provider.Save(context.Background(), SaveRequest{
+		Project: "project-a", Title: "Architecture", Content: "Use PostgreSQL.",
+		Type: TypeArchitecture, TopicKey: "architecture/db",
+	})
+	if err != nil { t.Fatal(err) }
+	if first.Summary == third.Summary {
+		t.Fatalf("replacement did not create new governed record")
+	}
+	active, err := store.List("project-a", false, now)
+	if err != nil { t.Fatal(err) }
+	if len(active) != 1 || active[0].Content != "Use PostgreSQL." {
+		t.Fatalf("active=%#v", active)
+	}
+	all, err := store.List("project-a", true, now)
+	if err != nil { t.Fatal(err) }
+	if len(all) != 2 {
+		t.Fatalf("all=%#v", all)
+	}
+	var superseded bool
+	for _, record := range all {
+		if record.Status == RecordSuperseded {
+			superseded = true
+		}
+	}
+	if !superseded {
+		t.Fatalf("expected superseded historical record: %#v", all)
+	}
+}
+
+func TestGovernanceRejectsSymlinkedProjectDirectory(t *testing.T) {
+	root := t.TempDir()
+	store, _ := NewGovernanceStore(root)
+	outside := t.TempDir()
+	projectDir := filepath.Join(root, projectDirectoryName("project-a"))
+	if err := os.Symlink(outside, projectDir); err != nil {
+		t.Skipf("symlink creation unavailable: %v", err)
+	}
+	_, err := store.Save(GovernedSaveRequest{
+		SaveRequest: SaveRequest{
+			Project: "project-a", Title: "Decision", Content: "Do not escape root.", Type: TypeDecision,
+		},
+	}, time.Now().UTC())
+	if err == nil || !strings.Contains(err.Error(), "regular directory") {
+		t.Fatalf("err=%v", err)
+	}
+	entries, readErr := os.ReadDir(outside)
+	if readErr != nil { t.Fatal(readErr) }
+	if len(entries) != 0 {
+		t.Fatalf("outside directory was modified: %#v", entries)
+	}
+}
