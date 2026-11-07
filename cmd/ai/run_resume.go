@@ -28,6 +28,7 @@ type runResumeOptions struct {
 	checkpointDir  string
 	promotionDir   string
 	maxConcurrency int
+	trustProjectCode bool
 	json           bool
 }
 
@@ -64,6 +65,15 @@ func runRunResume(args []string) error {
 		}
 	}
 	if mutating {
+		if !run.ProjectCodeTrusted {
+			if !options.trustProjectCode {
+				return fmt.Errorf("run %s has no durable project-code trust evidence; review the repository and resume with --trust-project-code explicitly", run.ID)
+			}
+			run.ProjectCodeTrusted = true
+			if err := runStore.Save(run); err != nil {
+				return fmt.Errorf("persist project-code trust before mutation resume: %w", err)
+			}
+		}
 		return runRunResumeMutation(options, run, runStore)
 	}
 
@@ -349,6 +359,8 @@ func parseRunResumeArgs(args []string) (runResumeOptions, error) {
 			}
 			i++
 			options.promotionDir = args[i]
+		case "--trust-project-code":
+			options.trustProjectCode = true
 		case "--max-concurrency":
 			if i+1 >= len(args) {
 				return runResumeOptions{}, fmt.Errorf("--max-concurrency requiere un valor")
@@ -362,7 +374,7 @@ func parseRunResumeArgs(args []string) (runResumeOptions, error) {
 		case "--json":
 			options.json = true
 		case "-h", "--help":
-			return runResumeOptions{}, fmt.Errorf("uso: ai run resume <run-id> [--state-dir ruta] [--events-dir ruta] [--artifacts-dir ruta] [--messages-dir ruta] [--control-dir ruta] [--checkpoint-dir ruta] [--promotion-dir ruta] [--max-concurrency N] [--json]")
+			return runResumeOptions{}, fmt.Errorf("uso: ai run resume <run-id> [--state-dir ruta] [--events-dir ruta] [--artifacts-dir ruta] [--messages-dir ruta] [--control-dir ruta] [--checkpoint-dir ruta] [--promotion-dir ruta] [--trust-project-code] [--max-concurrency N] [--json]")
 		default:
 			if strings.HasPrefix(args[i], "-") {
 				return runResumeOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
