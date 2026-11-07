@@ -32,8 +32,8 @@ func runTools(args []string) error {
 
 type toolsStatusOptions struct {
 	asJSON         bool
-	options.projectRoot    string
-	options.verifyBindings bool
+	projectRoot    string
+	verifyBindings bool
 }
 
 func parseToolsStatusArgs(args []string) (toolsStatusOptions, error) {
@@ -47,16 +47,16 @@ func parseToolsStatusArgs(args []string) (toolsStatusOptions, error) {
 				return toolsStatusOptions{}, fmt.Errorf("--project requiere una ruta")
 			}
 			i++
-			options.options.projectRoot = args[i]
+			options.projectRoot = args[i]
 		case "--verify-bindings":
-			options.options.verifyBindings = true
+			options.verifyBindings = true
 		case "-h", "--help":
 			return toolsStatusOptions{}, fmt.Errorf("uso: ai tools status [--json] [--project ruta --verify-bindings]")
 		default:
 			return toolsStatusOptions{}, fmt.Errorf("opción desconocida: %s", args[i])
 		}
 	}
-	if options.options.verifyBindings && strings.TrimSpace(options.options.projectRoot) == "" {
+	if options.verifyBindings && strings.TrimSpace(options.projectRoot) == "" {
 		return toolsStatusOptions{}, fmt.Errorf("--verify-bindings requiere --project")
 	}
 	return options, nil
