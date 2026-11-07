@@ -133,10 +133,13 @@ Example:
   --task "implement the requested change and add tests" \
   --runtime auto \
   --multi-agent-write \
+  --trust-project-code \
   --max-concurrency 2
 ~~~
 
 The run must pass deterministic Quality, independent review, scope/integrity checks and contract/architecture gates before a promotion candidate can be created.
+
+`--trust-project-code` is required because deterministic verification can execute repository-owned test/build code (Go tests, Maven/Gradle, npm test, pytest). Use it only for a repository you have reviewed or otherwise trust to execute locally. It does not grant source/promotion/network/secret permissions to agents.
 
 Promotion still requires explicit approval.
 
