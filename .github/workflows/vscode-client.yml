@@ -1,0 +1,32 @@
+name: VS Code client
+
+on:
+  pull_request:
+    paths:
+      - "clients/vscode/**"
+      - ".github/workflows/vscode-client.yml"
+  push:
+    branches:
+      - master
+    paths:
+      - "clients/vscode/**"
+      - ".github/workflows/vscode-client.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: false
+      - name: Syntax
+        working-directory: clients/vscode
+        run: npm run check
+      - name: Unit tests
+        working-directory: clients/vscode
+        run: npm test
