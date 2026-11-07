@@ -1,0 +1,122 @@
+name: Release artifacts
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/release-artifacts.yml"
+      - "scripts/build-release.sh"
+      - "core/buildinfo/**"
+      - "cmd/ai/**"
+      - "go.mod"
+      - "go.sum"
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: windows
+            goarch: amd64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="0.1.0-rc.1"
+          fi
+          commit="$(git rev-parse HEAD)"
+          date="$(git show -s --format=%cI "$commit")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "date=$date" >> "$GITHUB_OUTPUT"
+
+      - name: Build package and checksum
+        shell: bash
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          COMMIT: ${{ steps.meta.outputs.commit }}
+          DATE: ${{ steps.meta.outputs.date }}
+          TARGET_OS: ${{ matrix.goos }}
+          TARGET_ARCH: ${{ matrix.goarch }}
+          OUT_DIR: dist
+        run: bash scripts/build-release.sh
+
+      - name: Upload package evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-engineering-os-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish tagged release
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ai-engineering-os-*
+          path: release
+          merge-multiple: true
+
+      - name: Verify checksums and create combined manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release
+          for checksum in *.sha256; do
+            sha256sum -c "$checksum"
+          done
+          sha256sum *.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          prerelease=""
+          if [[ "$GITHUB_REF_NAME" == *"-rc."* ]]; then
+            prerelease="--prerelease"
+          fi
+          gh release create "$GITHUB_REF_NAME"             release/*.tar.gz             release/*.sha256             release/SHA256SUMS             --verify-tag             --generate-notes             $prerelease
