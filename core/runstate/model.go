@@ -206,6 +206,23 @@ func Validate(run Run) error {
 		if !validWorkUnitStatus(unit.Status) {
 			return fmt.Errorf("invalid work unit status for %s: %q", unit.ID, unit.Status)
 		}
+		declaredTools := map[string]bool{}
+		for _, toolID := range unit.Tools {
+			declaredTools[strings.TrimSpace(toolID)] = true
+		}
+		for toolID, operations := range unit.ToolOperations {
+			if !declaredTools[strings.TrimSpace(toolID)] {
+				return fmt.Errorf("work unit %s binds operations for undeclared tool %q", unit.ID, toolID)
+			}
+			if len(sortedUnique(operations)) == 0 {
+				return fmt.Errorf("work unit %s tool %q has no bound operations", unit.ID, toolID)
+			}
+			for _, operation := range operations {
+				if strings.TrimSpace(operation) == "" {
+					return fmt.Errorf("work unit %s tool %q has empty bound operation", unit.ID, toolID)
+				}
+			}
+		}
 		switch unit.MutationKind {
 		case "":
 			// Empty remains valid for backward-compatible durable records.
