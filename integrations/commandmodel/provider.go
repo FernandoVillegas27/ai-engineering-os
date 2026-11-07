@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"time"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/modelprovider"
 )
@@ -36,6 +37,11 @@ func (OSRunner) LookPath(file string) (string, error) {
 
 func (OSRunner) Run(ctx context.Context, invocation Invocation) (string, string, error) {
 	command := exec.CommandContext(ctx, invocation.Command, invocation.Args...)
+	configureProcessTree(command)
+	command.Cancel = func() error {
+		return terminateProcessTree(command)
+	}
+	command.WaitDelay = 5 * time.Second
 	command.Dir = invocation.Dir
 	if invocation.Env != nil {
 		command.Env = invocation.Env
