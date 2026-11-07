@@ -52,6 +52,10 @@ func TestBuildWorkUnitsUsesOnlyEnabledSkills(t *testing.T) {
 				Tools: orchestration.ToolPlan{
 					Required:    []string{"filesystem"},
 					Recommended: []string{"github"},
+					Operations: map[string][]string{
+						"filesystem": {"read-files"},
+						"github": {"read-repository"},
+					},
 				},
 			},
 		},
@@ -66,6 +70,9 @@ func TestBuildWorkUnitsUsesOnlyEnabledSkills(t *testing.T) {
 	}
 	if !reflect.DeepEqual(units[0].Skills, []string{"secure-review"}) {
 		t.Fatalf("skills = %#v", units[0].Skills)
+	}
+	if got := FormatToolBindings(units[0]); got != "filesystem[read-files]; github[read-repository]" {
+		t.Fatalf("tool bindings = %q", got)
 	}
 }
 
@@ -172,5 +179,15 @@ func TestBuildWorkUnitsPreservesReadOnlyAgentAsNonMutating(t *testing.T) {
 	}
 	if units[0].Mode != ModeReadOnly || units[0].Permissions.SourceCode != "read" || units[0].Permissions.Tests != "read" {
 		t.Fatalf("effective unit = %#v", units[0])
+	}
+}
+
+
+func TestFormatToolBindingsMarksMissingOperationEvidence(t *testing.T) {
+	unit := WorkUnit{
+		Tools: []string{"github"},
+	}
+	if got := FormatToolBindings(unit); got != "github[no-bound-operations]" {
+		t.Fatalf("got=%q", got)
 	}
 }
