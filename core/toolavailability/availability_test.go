@@ -210,3 +210,37 @@ func TestResolvePlanRejectsRuntimeBoundExternalWithoutOperationAuthority(t *test
 		t.Fatalf("err=%v", err)
 	}
 }
+
+
+func TestEffectiveOperationsNativeUsesDeclaredRegistryOperations(t *testing.T) {
+	tool := tool("filesystem", "native", "local")
+	tool.Operations = []string{"write-files", "read-files", "read-files"}
+	got := EffectiveOperations(tool, Evidence{})
+	if strings.Join(got, ",") != "read-files,write-files" {
+		t.Fatalf("operations=%#v", got)
+	}
+}
+
+func TestEffectiveOperationsExternalUsesOnlyBoundSubset(t *testing.T) {
+	tools := registryFixture()
+	tool := tools.Tools["engram"]
+	tool.Operations = []string{"read", "write"}
+	evidence := BindOperations(
+		FromHealth(tool, toolhealth.Status{
+			Provider: "engram", Available: true, Healthy: true,
+		}, true),
+		"read",
+	)
+	got := EffectiveOperations(tool, evidence)
+	if strings.Join(got, ",") != "read" {
+		t.Fatalf("operations=%#v", got)
+	}
+}
+
+func TestEffectiveOperationsExternalRequiresAvailableBoundEvidence(t *testing.T) {
+	tools := registryFixture()
+	tool := tools.Tools["engram"]
+	if got := EffectiveOperations(tool, Unknown(tool, "not verified")); len(got) != 0 {
+		t.Fatalf("operations=%#v", got)
+	}
+}
