@@ -108,6 +108,7 @@ func pytestCaseID(testCase junitTestCase, roots ...string) string {
 		name = "unknown-test"
 	}
 	file := normalizedFailurePath(testCase.File, roots...)
+	file = strings.TrimPrefix(file, "<workspace>/")
 	if file != "" {
 		return file + "::" + name
 	}
