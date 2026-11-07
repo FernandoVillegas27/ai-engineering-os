@@ -399,3 +399,39 @@ It does not create an execution plan, grant tool permissions, execute mutation o
 Supplying `--project` without `--verify-bindings` performs no project-scoped external binding verification and the human output says so explicitly.
 
 The returned availability snapshot is validated with the same operation and approval invariants used by real runs. Therefore a malformed adapter result or an approval-required GitHub write operation fails closed rather than appearing as usable project authority.
+
+
+## Playwright/browser operation policy before adapter implementation
+
+The logical `playwright` tool is intentionally **not runtime-bound** yet.
+
+The registry separates a future passive inspection capability from browser actions:
+
+~~~text
+inspect-ui
+navigate-browser
+interact-browser
+run-browser-checks
+~~~
+
+Current approval policy:
+
+- `inspect-ui`: not intrinsically approval-required, but still unavailable until a concrete trusted adapter exists;
+- `navigate-browser`: explicit approval required;
+- `interact-browser`: explicit approval required;
+- `run-browser-checks`: explicit approval required.
+
+This policy exists before adapter implementation so future provider health cannot accidentally convert a broad Playwright connection into browser authority.
+
+A future adapter must additionally define:
+
+1. the exact browser target/origin scope;
+2. whether it attaches to an existing page or launches a browser;
+3. which network requests/navigation are permitted;
+4. credential/cookie/storage isolation;
+5. download/upload/file-picker restrictions;
+6. bounded evidence returned to the model;
+7. timeout/cancellation/process-tree behavior;
+8. explicit approval evidence for every approval-required operation.
+
+Until those requirements are implemented and tested, `ai tools status` correctly leaves Playwright unbound/unknown and real runs omit it from executable optional tools.
