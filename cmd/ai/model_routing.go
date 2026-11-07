@@ -9,6 +9,7 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/proposal"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/quality"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/review"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/runbudget"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runtimefallback"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/staging"
 	codexintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/codex"
@@ -18,6 +19,7 @@ import (
 type modelRoutingOptions struct {
 	Policy   modelpolicy.Policy
 	Override string
+	Budget   *runbudget.Budget
 }
 
 type generatedProposal struct {
@@ -34,7 +36,7 @@ func generateProposalWithRouting(
 	options modelRoutingOptions,
 ) (generatedProposal, error) {
 	decision := modelpolicy.Resolve(options.Policy, modelpolicy.RoleProposal, options.Override, false)
-	runtime, err := proposalRuntimeFor(runtimeName, decision.Model)
+	runtime, err := proposalRuntimeFor(runtimeName, decision.Model, options.Budget)
 	if err != nil {
 		return generatedProposal{}, err
 	}
@@ -51,7 +53,10 @@ func generateProposalWithRouting(
 	}
 
 	escalated := modelpolicy.Resolve(options.Policy, modelpolicy.RoleProposal, "", true)
-	escalatedRuntime := cursorintegration.NewProposalRuntimeWithModel(escalated.Model)
+	escalatedRuntime := proposal.Runtime(cursorintegration.NewProposalRuntimeWithModel(escalated.Model))
+	if options.Budget != nil {
+		escalatedRuntime = runbudget.ProposalRuntime{Budget: options.Budget, Inner: escalatedRuntime}
+	}
 	retry, retryErr := (proposal.Generator{Runtime: escalatedRuntime}).Generate(ctx, unit)
 	if retryErr != nil {
 		return generatedProposal{}, fmt.Errorf(
@@ -67,15 +72,21 @@ func generateProposalWithRouting(
 	}, nil
 }
 
-func proposalRuntimeFor(runtimeName, cursorModel string) (proposal.Runtime, error) {
-	cursorRuntime := cursorintegration.NewProposalRuntimeWithModel(cursorModel)
+func proposalRuntimeFor(runtimeName, cursorModel string, budget ...*runbudget.Budget) (proposal.Runtime, error) {
+	var shared *runbudget.Budget
+	if len(budget) > 0 { shared = budget[0] }
+	wrap := func(inner proposal.Runtime) proposal.Runtime {
+		if shared == nil { return inner }
+		return runbudget.ProposalRuntime{Budget: shared, Inner: inner}
+	}
+	cursorRuntime := wrap(cursorintegration.NewProposalRuntimeWithModel(cursorModel))
 	switch runtimeName {
 	case "auto":
 		return runtimefallback.ProposalRuntime{
-			Primary: codexintegration.NewProposalRuntime(), Fallback: cursorRuntime,
+			Primary: wrap(codexintegration.NewProposalRuntime()), Fallback: cursorRuntime,
 		}, nil
 	case "codex":
-		return codexintegration.NewProposalRuntime(), nil
+		return wrap(codexintegration.NewProposalRuntime()), nil
 	case "cursor":
 		return cursorRuntime, nil
 	default:
@@ -85,19 +96,23 @@ func proposalRuntimeFor(runtimeName, cursorModel string) (proposal.Runtime, erro
 
 func executionRuntimeFor(runtimeName string, options modelRoutingOptions) (execution.Runtime, string, error) {
 	decision := modelpolicy.Resolve(options.Policy, modelpolicy.RoleExecution, options.Override, false)
-	cursorRuntime := cursorintegration.NewExecutionRuntimeWithModel(decision.Model)
+	wrap := func(inner execution.Runtime) execution.Runtime {
+		if options.Budget == nil { return inner }
+		return runbudget.ExecutionRuntime{Budget: options.Budget, Inner: inner}
+	}
+	cursorRuntime := wrap(cursorintegration.NewExecutionRuntimeWithModel(decision.Model))
 	switch runtimeName {
 	case "auto":
 		codexRuntime := codexintegration.NewExecutionRuntime()
 		codexRuntime.Model = decision.Model
 		return runtimefallback.ExecutionRuntime{
-			Primary: codexRuntime,
+			Primary: wrap(codexRuntime),
 			Fallback: cursorRuntime,
 		}, decision.Model, nil
 	case "codex":
 		codexRuntime := codexintegration.NewExecutionRuntime()
 		codexRuntime.Model = decision.Model
-		return codexRuntime, decision.Model, nil
+		return wrap(codexRuntime), decision.Model, nil
 	case "cursor":
 		return cursorRuntime, decision.Model, nil
 	default:
@@ -107,14 +122,18 @@ func executionRuntimeFor(runtimeName string, options modelRoutingOptions) (execu
 
 func stageRuntimeFor(runtimeName string, options modelRoutingOptions, escalated bool) (staging.Runtime, string, error) {
 	decision := modelpolicy.Resolve(options.Policy, modelpolicy.RoleStage, options.Override, escalated)
-	cursorRuntime := cursorintegration.NewStageRuntimeWithModel(decision.Model)
+	wrap := func(inner staging.Runtime) staging.Runtime {
+		if options.Budget == nil { return inner }
+		return runbudget.StageRuntime{Budget: options.Budget, Inner: inner}
+	}
+	cursorRuntime := wrap(cursorintegration.NewStageRuntimeWithModel(decision.Model))
 	switch runtimeName {
 	case "auto":
 		return runtimefallback.StageRuntime{
-			Primary: codexintegration.NewStageRuntime(), Fallback: cursorRuntime,
+			Primary: wrap(codexintegration.NewStageRuntime()), Fallback: cursorRuntime,
 		}, decision.Model, nil
 	case "codex":
-		return codexintegration.NewStageRuntime(), "", nil
+		return wrap(codexintegration.NewStageRuntime()), "", nil
 	case "cursor":
 		return cursorRuntime, decision.Model, nil
 	default:
@@ -124,14 +143,18 @@ func stageRuntimeFor(runtimeName string, options modelRoutingOptions, escalated 
 
 func reviewRuntimeFor(runtimeName string, options modelRoutingOptions, escalated bool) (review.Runtime, string, error) {
 	decision := modelpolicy.Resolve(options.Policy, modelpolicy.RoleReview, options.Override, escalated)
-	cursorRuntime := cursorintegration.NewReviewRuntimeWithModel(decision.Model)
+	wrap := func(inner review.Runtime) review.Runtime {
+		if options.Budget == nil { return inner }
+		return runbudget.ReviewRuntime{Budget: options.Budget, Inner: inner}
+	}
+	cursorRuntime := wrap(cursorintegration.NewReviewRuntimeWithModel(decision.Model))
 	switch runtimeName {
 	case "auto":
 		return runtimefallback.ReviewRuntime{
-			Primary: codexintegration.NewReviewRuntime(), Fallback: cursorRuntime,
+			Primary: wrap(codexintegration.NewReviewRuntime()), Fallback: cursorRuntime,
 		}, decision.Model, nil
 	case "codex":
-		return codexintegration.NewReviewRuntime(), "", nil
+		return wrap(codexintegration.NewReviewRuntime()), "", nil
 	case "cursor":
 		return cursorRuntime, decision.Model, nil
 	default:
@@ -141,14 +164,18 @@ func reviewRuntimeFor(runtimeName string, options modelRoutingOptions, escalated
 
 func correctorFor(runtimeName string, options modelRoutingOptions, escalated bool) (quality.Corrector, string, error) {
 	decision := modelpolicy.Resolve(options.Policy, modelpolicy.RoleCorrection, options.Override, escalated)
-	cursorRuntime := cursorintegration.NewCorrectionRuntimeWithModel(decision.Model)
+	wrap := func(inner quality.Corrector) quality.Corrector {
+		if options.Budget == nil { return inner }
+		return runbudget.Corrector{Budget: options.Budget, Inner: inner}
+	}
+	cursorRuntime := wrap(cursorintegration.NewCorrectionRuntimeWithModel(decision.Model))
 	switch runtimeName {
 	case "auto":
 		return runtimefallback.Corrector{
-			Primary: codexintegration.NewCorrectionRuntime(), Fallback: cursorRuntime,
+			Primary: wrap(codexintegration.NewCorrectionRuntime()), Fallback: cursorRuntime,
 		}, decision.Model, nil
 	case "codex":
-		return codexintegration.NewCorrectionRuntime(), "", nil
+		return wrap(codexintegration.NewCorrectionRuntime()), "", nil
 	case "cursor":
 		return cursorRuntime, decision.Model, nil
 	default:
