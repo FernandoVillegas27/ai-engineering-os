@@ -102,7 +102,7 @@ func collectRuntimeToolBindingsWithSearch(
 		},
 		true,
 	)
-	bindings.Availability["context7"] = toolavailability.Bound(evidence)
+	bindings.Availability["context7"] = toolavailability.BindOperations(evidence, "search-docs")
 	bindings.Context["context7"] = result.Context
 	return bindings
 }
