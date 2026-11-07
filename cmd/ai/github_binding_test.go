@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/FernandoVillegas27/ai-engineering-os/core/execution"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/orchestration"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/toolavailability"
@@ -110,5 +111,33 @@ func githubToolFixture() registry.Tool {
 		},
 		AvailabilityCheck: &check,
 		Status: "enabled",
+	}
+}
+
+
+func TestGitHubEvidenceInjectionRequiresDurableBoundOperations(t *testing.T) {
+	units := []execution.WorkUnit{
+		{
+			ID: "reviewer-bound",
+			Tools: []string{"github"},
+			ToolOperations: map[string][]string{
+				"github": {"read-repository", "read-pull-requests"},
+			},
+			CollaborationContext: "memory",
+		},
+		{
+			ID: "reviewer-unbound",
+			Tools: []string{"github"},
+			CollaborationContext: "memory",
+		},
+	}
+	got := injectRuntimeToolContext(units, map[string]string{
+		"github": "GitHub repository evidence",
+	})
+	if got[0].CollaborationContext != "memory\n\nGitHub repository evidence" {
+		t.Fatalf("bound context=%q", got[0].CollaborationContext)
+	}
+	if got[1].CollaborationContext != "memory" {
+		t.Fatalf("unbound context=%q", got[1].CollaborationContext)
 	}
 }
