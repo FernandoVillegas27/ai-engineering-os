@@ -198,10 +198,15 @@ func (s *GovernanceStore) Entries(project string) ([]GovernanceEntry, error) {
 		return nil, err
 	}
 	projectDir := filepath.Join(s.root, governanceProjectKey(project))
-	if _, err := os.Stat(projectDir); os.IsNotExist(err) {
+	info, err := os.Lstat(projectDir)
+	if os.IsNotExist(err) {
 		return []GovernanceEntry{}, nil
-	} else if err != nil {
+	}
+	if err != nil {
 		return nil, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return nil, errors.New("memory governance project directory must be regular")
 	}
 	return s.listUnlocked(projectDir, project)
 }
@@ -457,7 +462,7 @@ func (p GovernedProvider) Prune(ctx context.Context, project string, olderThan t
 	if err != nil {
 		return nil, err
 	}
-	cutoff := time.Now().UTC().Add(-olderThan)
+	cutoff := p.Store.now().UTC().Add(-olderThan)
 	var deleted []GovernedRecord
 	for _, record := range records {
 		if record.State != GovernanceActive || !record.CreatedAt.Before(cutoff) {
