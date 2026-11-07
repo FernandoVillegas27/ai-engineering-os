@@ -163,3 +163,62 @@ The adapter does not give Cursor, Codex, or another model runtime direct network
 Cursor can merge global and project MCP configuration. AI Engineering OS does not use blanket MCP approval as the Context7 binding because that could expose unrelated user-configured servers.
 
 Provider auto-control files are also removed from sanitized runtime views as documented in `runtime-instruction-isolation.md`.
+
+
+## Operation-scoped runtime binding
+
+Runtime binding evidence is now operation-scoped.
+
+Each availability record can expose:
+
+~~~json
+{
+  "tool_id": "context7",
+  "state": "available",
+  "healthy": true,
+  "runtime_bound": true,
+  "bound_operations": ["search-docs"]
+}
+~~~
+
+For an external tool, `runtime_bound=true` is not valid evidence by itself. A valid bound record must contain at least one exact operation that is also declared by that tool in the canonical Tool Registry.
+
+Validation fails closed when:
+
+- a bound tool has no bound operations;
+- operations exist while `runtime_bound=false`;
+- a bound operation is not declared in the Tool Registry;
+- a tool is marked bound while its availability state is not `available`;
+- duplicate/empty operation evidence is supplied.
+
+Native tools automatically bind their declared registry operations.
+
+### Context7
+
+The AI-OS-owned Context7 prefetch binds only:
+
+~~~text
+search-docs
+~~~
+
+It does not claim that the runtime exposes Context7's MCP-native `resolve-library-id` or `query-docs` operations directly to the model.
+
+### Why this matters for higher-risk providers
+
+A future GitHub adapter may prove read-only operations such as:
+
+~~~text
+read-repo
+read-issues
+read-pull-requests
+~~~
+
+without proving or granting:
+
+~~~text
+create-branch
+create-commit
+create-pull-request
+~~~
+
+Operation evidence remains subordinate to the agent permission envelope, run mode, mutation capability, and explicit promotion/approval boundaries.
