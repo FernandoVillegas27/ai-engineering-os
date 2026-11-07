@@ -3,9 +3,11 @@ package toolavailability
 import (
 	"fmt"
 	"sort"
+	"time"
 	"strings"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/toolapproval"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/toolhealth"
 )
 
@@ -209,6 +211,28 @@ func normalizedOperations(values []string) []string {
 }
 
 func ValidateSnapshot(tools registry.ToolRegistry, snapshot Snapshot) error {
+	return validateSnapshotWithApprovals(tools, snapshot, "", "", nil, time.Time{})
+}
+
+func ValidateSnapshotWithApprovals(
+	tools registry.ToolRegistry,
+	snapshot Snapshot,
+	runID string,
+	taskID string,
+	approvals []toolapproval.Evidence,
+	now time.Time,
+) error {
+	return validateSnapshotWithApprovals(tools, snapshot, runID, taskID, approvals, now)
+}
+
+func validateSnapshotWithApprovals(
+	tools registry.ToolRegistry,
+	snapshot Snapshot,
+	runID string,
+	taskID string,
+	approvals []toolapproval.Evidence,
+	now time.Time,
+) error {
 	for id, evidence := range snapshot {
 		if id != evidence.ToolID {
 			return fmt.Errorf("tool availability key %q does not match evidence id %q", id, evidence.ToolID)
@@ -260,9 +284,10 @@ func ValidateSnapshot(tools registry.ToolRegistry, snapshot Snapshot) error {
 					operation,
 				)
 			}
-			if registry.OperationRequiresApproval(tool, operation) {
+			if registry.OperationRequiresApproval(tool, operation) &&
+				!hasOperationApproval(approvals, runID, taskID, id, operation, now) {
 				return fmt.Errorf(
-					"tool %q operation %q requires explicit approval and cannot be runtime-bound without approval evidence",
+					"tool %q operation %q requires explicit approval and cannot be runtime-bound without matching approval evidence",
 					id,
 					operation,
 				)
@@ -270,6 +295,25 @@ func ValidateSnapshot(tools registry.ToolRegistry, snapshot Snapshot) error {
 		}
 	}
 	return nil
+}
+
+func hasOperationApproval(
+	approvals []toolapproval.Evidence,
+	runID string,
+	taskID string,
+	toolID string,
+	operation string,
+	now time.Time,
+) bool {
+	if strings.TrimSpace(runID) == "" || strings.TrimSpace(taskID) == "" {
+		return false
+	}
+	for _, approval := range approvals {
+		if toolapproval.Grants(approval, runID, taskID, toolID, operation, now) {
+			return true
+		}
+	}
+	return false
 }
 
 func providerID(tool registry.Tool) string {

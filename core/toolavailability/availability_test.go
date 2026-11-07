@@ -3,8 +3,10 @@ package toolavailability
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/toolapproval"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/toolhealth"
 )
 
@@ -316,5 +318,114 @@ func TestValidateSnapshotPlaywrightAllowsOnlyNonApprovalInspectionWithoutApprova
 		if err == nil || !strings.Contains(err.Error(), "requires explicit approval") {
 			t.Fatalf("%s err=%v", operation, err)
 		}
+	}
+}
+
+
+func TestValidateSnapshotWithApprovalsAllowsOnlyExactGrantedOperation(t *testing.T) {
+	provider := "github"
+	check := "github-connection-available"
+	github := registry.Tool{
+		ID: "github",
+		Description: "github",
+		Interface: registry.ToolInterface{Type: "connector", Provider: &provider},
+		Operations: []string{"read-repository", "create-commit", "create-pull-request"},
+		Access: []string{"read", "write", "network"},
+		Risk: "high",
+		RequiresApproval: true,
+		ApprovalRequiredOperations: []string{"create-commit", "create-pull-request"},
+		AvailabilityCheck: &check,
+		Status: "enabled",
+	}
+	tools := registry.ToolRegistry{SchemaVersion: 1, Tools: map[string]registry.Tool{"github": github}}
+	evidence := BindOperations(Evidence{
+		ToolID: "github", Provider: "github",
+		State: StateAvailable, Healthy: true,
+	}, "create-pull-request")
+
+	now := time.Date(2026, 11, 7, 18, 0, 0, 0, time.UTC)
+	approval, err := toolapproval.New(toolapproval.Request{
+		RunID: "run-1", TaskID: "task-1", ToolID: "github",
+		Operation: "create-pull-request", Status: toolapproval.StatusGranted, Actor: "human",
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateSnapshotWithApprovals(
+		tools, Snapshot{"github": evidence}, "run-1", "task-1",
+		[]toolapproval.Evidence{approval}, now,
+	); err != nil {
+		t.Fatalf("exact approval rejected: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name, runID, taskID string
+		approvals []toolapproval.Evidence
+	}{
+		{name: "wrong-run", runID: "run-2", taskID: "task-1", approvals: []toolapproval.Evidence{approval}},
+		{name: "wrong-task", runID: "run-1", taskID: "task-2", approvals: []toolapproval.Evidence{approval}},
+		{name: "missing", runID: "run-1", taskID: "task-1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateSnapshotWithApprovals(
+				tools, Snapshot{"github": evidence}, tc.runID, tc.taskID, tc.approvals, now,
+			)
+			if err == nil || !strings.Contains(err.Error(), "requires explicit approval") {
+				t.Fatalf("err=%v", err)
+			}
+		})
+	}
+}
+
+func TestValidateSnapshotWithApprovalsRejectsRejectedAndExpiredEvidence(t *testing.T) {
+	provider := "playwright"
+	check := "playwright-available"
+	playwright := registry.Tool{
+		ID: "playwright",
+		Description: "browser",
+		Interface: registry.ToolInterface{Type: "mcp", Provider: &provider},
+		Operations: []string{"inspect-ui", "navigate-browser"},
+		Access: []string{"read", "execute", "network"},
+		Risk: "high",
+		RequiresApproval: true,
+		ApprovalRequiredOperations: []string{"navigate-browser"},
+		AvailabilityCheck: &check,
+		Status: "enabled",
+	}
+	tools := registry.ToolRegistry{SchemaVersion: 1, Tools: map[string]registry.Tool{"playwright": playwright}}
+	bound := BindOperations(Evidence{
+		ToolID: "playwright", Provider: "playwright",
+		State: StateAvailable, Healthy: true,
+	}, "navigate-browser")
+	now := time.Date(2026, 11, 7, 18, 0, 0, 0, time.UTC)
+
+	rejected, err := toolapproval.New(toolapproval.Request{
+		RunID: "run-1", TaskID: "task-1", ToolID: "playwright",
+		Operation: "navigate-browser", Status: toolapproval.StatusRejected, Actor: "human",
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateSnapshotWithApprovals(
+		tools, Snapshot{"playwright": bound}, "run-1", "task-1",
+		[]toolapproval.Evidence{rejected}, now,
+	); err == nil {
+		t.Fatal("rejected decision must not grant authority")
+	}
+
+	expires := now.Add(time.Minute)
+	granted, err := toolapproval.New(toolapproval.Request{
+		RunID: "run-1", TaskID: "task-1", ToolID: "playwright",
+		Operation: "navigate-browser", Status: toolapproval.StatusGranted, Actor: "human",
+		ExpiresAt: &expires,
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateSnapshotWithApprovals(
+		tools, Snapshot{"playwright": bound}, "run-1", "task-1",
+		[]toolapproval.Evidence{granted}, expires.Add(time.Second),
+	); err == nil {
+		t.Fatal("expired decision must fail closed")
 	}
 }
