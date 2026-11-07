@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -162,6 +163,67 @@ func (c Client) Save(ctx context.Context, request memory.SaveRequest) (memory.Sa
 		Project:  strings.TrimSpace(request.Project),
 		Saved:    true,
 		Summary:  strings.TrimSpace(output),
+		MemoryID: parseSavedMemoryID(output),
+	}, nil
+}
+
+var savedMemoryIDPattern = regexp.MustCompile(`(?i)Memory saved:\s*#([0-9]+)`)
+
+func parseSavedMemoryID(output string) string {
+	match := savedMemoryIDPattern.FindStringSubmatch(output)
+	if len(match) != 2 {
+		return ""
+	}
+	return match[1]
+}
+
+func (c Client) Delete(ctx context.Context, request memory.DeleteRequest) (memory.DeleteResult, error) {
+	if err := memory.ValidateDeleteRequest(request); err != nil {
+		return memory.DeleteResult{}, err
+	}
+	path, runner, err := c.resolve()
+	if err != nil {
+		return memory.DeleteResult{}, err
+	}
+	timeout := c.OperationTimeout
+	if timeout <= 0 {
+		timeout = toolhealth.DefaultOperationTimeout
+	}
+
+	// Engram's CLI delete command is ID-based. Verify that the observation
+	// belongs to the caller-supplied project first; project ownership is
+	// immutable, so a successful scoped lookup establishes the delete target.
+	_, ownershipFailure, _ := toolhealth.Run(ctx, timeout, func(runCtx context.Context) (string, error) {
+		return runner.Run(
+			runCtx, path, "timeline", strings.TrimSpace(request.MemoryID),
+			"--before", "0", "--after", "0",
+			"--project", strings.TrimSpace(request.Project),
+		)
+	})
+	if ownershipFailure.Kind != toolhealth.FailureNone {
+		return memory.DeleteResult{}, fmt.Errorf(
+			"verify Engram memory ownership [%s]: %s",
+			ownershipFailure.Kind, ownershipFailure.Detail,
+		)
+	}
+
+	args := []string{"delete", strings.TrimSpace(request.MemoryID)}
+	if request.Hard {
+		args = append(args, "--hard")
+	}
+	output, failure, _ := toolhealth.Run(ctx, timeout, func(runCtx context.Context) (string, error) {
+		return runner.Run(runCtx, path, args...)
+	})
+	if failure.Kind != toolhealth.FailureNone {
+		return memory.DeleteResult{}, fmt.Errorf("delete Engram memory [%s]: %s", failure.Kind, failure.Detail)
+	}
+	return memory.DeleteResult{
+		Provider: ProviderID,
+		Project: strings.TrimSpace(request.Project),
+		MemoryID: strings.TrimSpace(request.MemoryID),
+		Deleted: true,
+		Hard: request.Hard,
+		Summary: strings.TrimSpace(output),
 	}, nil
 }
 
