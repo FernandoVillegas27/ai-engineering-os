@@ -158,6 +158,9 @@ func printToolAvailability(tools registry.ToolRegistry, snapshot toolavailabilit
 			health,
 			binding,
 		)
+		if len(evidence.BoundOperations) > 0 {
+			fmt.Printf("  operations: %s\n", strings.Join(evidence.BoundOperations, ", "))
+		}
 		if detail := strings.TrimSpace(evidence.Details); detail != "" {
 			fmt.Printf("  %s\n", toolhealth.Redact(detail))
 		}

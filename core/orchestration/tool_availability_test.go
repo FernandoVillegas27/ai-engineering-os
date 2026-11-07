@@ -34,11 +34,11 @@ func TestApplyToolAvailabilityNeverAddsTools(t *testing.T) {
 	}}}
 	snapshot := toolavailability.Snapshot{
 		"filesystem": toolavailability.Native(tools.Tools["filesystem"]),
-		"engram": toolavailability.Bound(toolavailability.FromHealth(
+		"engram": toolavailability.BindOperations(toolavailability.FromHealth(
 			tools.Tools["engram"],
 			toolhealth.Status{Provider: "engram", Available: true, Healthy: true},
 			true,
-		)),
+		), "read"),
 	}
 	got, err := ApplyToolAvailability(plan, tools, snapshot)
 	if err != nil {

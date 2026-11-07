@@ -22,22 +22,23 @@ type Evidence struct {
 	Provider  string                 `json:"provider,omitempty"`
 	State     State                  `json:"state"`
 	Healthy      bool                   `json:"healthy"`
-	RuntimeBound bool                   `json:"runtime_bound"`
-	Failure      toolhealth.Failure     `json:"failure,omitempty"`
+	RuntimeBound    bool                   `json:"runtime_bound"`
+	BoundOperations []string               `json:"bound_operations,omitempty"`
+	Failure         toolhealth.Failure     `json:"failure,omitempty"`
 	Details   string                 `json:"details,omitempty"`
 }
 
 type Snapshot map[string]Evidence
 
 func Native(tool registry.Tool) Evidence {
-	return Evidence{
+	evidence := Evidence{
 		ToolID:   tool.ID,
 		Provider: providerID(tool),
-		State:        StateAvailable,
-		Healthy:      true,
-		RuntimeBound: true,
-		Details:      "native tool declared enabled",
+		State:    StateAvailable,
+		Healthy:  true,
+		Details:  "native tool declared enabled",
 	}
+	return BindOperations(evidence, tool.Operations...)
 }
 
 func FromHealth(tool registry.Tool, health toolhealth.Status, verified bool) Evidence {
@@ -115,6 +116,12 @@ func ResolvePlan(
 				id,
 			)
 		}
+		if len(evidence.BoundOperations) == 0 {
+			return nil, nil, fmt.Errorf(
+				"required external tool %q has no bound runtime operations",
+				id,
+			)
+		}
 		requiredOut = append(requiredOut, id)
 	}
 
@@ -139,7 +146,10 @@ func ResolvePlan(
 			continue
 		}
 		evidence, exists := snapshot[id]
-		if exists && evidence.State == StateAvailable && evidence.RuntimeBound {
+		if exists &&
+			evidence.State == StateAvailable &&
+			evidence.RuntimeBound &&
+			len(evidence.BoundOperations) > 0 {
 			recommendedOut = append(recommendedOut, id)
 		}
 	}
@@ -149,8 +159,27 @@ func ResolvePlan(
 	return requiredOut, recommendedOut, nil
 }
 
+// Bound is retained for source compatibility but intentionally does not invent
+// operation authority. New runtime adapters must use BindOperations.
 func Bound(evidence Evidence) Evidence {
 	evidence.RuntimeBound = true
+	return evidence
+}
+
+func BindOperations(evidence Evidence, operations ...string) Evidence {
+	seen := map[string]bool{}
+	values := make([]string, 0, len(operations))
+	for _, operation := range operations {
+		operation = strings.TrimSpace(operation)
+		if operation == "" || seen[operation] {
+			continue
+		}
+		seen[operation] = true
+		values = append(values, operation)
+	}
+	sort.Strings(values)
+	evidence.BoundOperations = values
+	evidence.RuntimeBound = len(values) > 0
 	return evidence
 }
 
@@ -175,6 +204,37 @@ func ValidateSnapshot(tools registry.ToolRegistry, snapshot Snapshot) error {
 				evidence.Provider,
 				providerID(tool),
 			)
+		}
+		if evidence.RuntimeBound && evidence.State != StateAvailable {
+			return fmt.Errorf("tool %q cannot be runtime-bound while state=%q", id, evidence.State)
+		}
+		if evidence.RuntimeBound && len(evidence.BoundOperations) == 0 {
+			return fmt.Errorf("tool %q is runtime-bound without bound operations", id)
+		}
+		if !evidence.RuntimeBound && len(evidence.BoundOperations) > 0 {
+			return fmt.Errorf("tool %q has bound operations without runtime binding", id)
+		}
+		allowedOperations := map[string]bool{}
+		for _, operation := range tool.Operations {
+			allowedOperations[operation] = true
+		}
+		seenOperations := map[string]bool{}
+		for _, operation := range evidence.BoundOperations {
+			operation = strings.TrimSpace(operation)
+			if operation == "" {
+				return fmt.Errorf("tool %q has an empty bound operation", id)
+			}
+			if seenOperations[operation] {
+				return fmt.Errorf("tool %q has duplicate bound operation %q", id, operation)
+			}
+			seenOperations[operation] = true
+			if !allowedOperations[operation] {
+				return fmt.Errorf(
+					"tool %q bound operation %q is not declared in the Tool Registry",
+					id,
+					operation,
+				)
+			}
 		}
 	}
 	return nil
