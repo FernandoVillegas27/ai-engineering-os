@@ -322,8 +322,9 @@ type LeaseSession struct {
 	lease   Lease
 	ctx     context.Context
 	cancel  context.CancelFunc
-	done    chan struct{}
-	once    sync.Once
+	done     chan struct{}
+	loopDone chan struct{}
+	once     sync.Once
 	errMu   sync.Mutex
 	err     error
 }
@@ -353,7 +354,8 @@ func StartLeaseSession(
 		lease:  lease,
 		ctx:    ctx,
 		cancel: cancel,
-		done:   make(chan struct{}),
+		done:     make(chan struct{}),
+		loopDone: make(chan struct{}),
 	}
 	go session.heartbeatLoop(heartbeatInterval)
 	return session, nil
@@ -389,6 +391,12 @@ func (s *LeaseSession) Stop() error {
 	s.once.Do(func() {
 		close(s.done)
 		s.cancel()
+
+		// Release only after the heartbeat goroutine has stopped. Otherwise a
+		// ticker that fired concurrently with Stop can race ReleaseLease and
+		// try to renew a lease file that was just removed.
+		<-s.loopDone
+
 		releaseErr := s.store.ReleaseLease(s.lease.RunID, s.lease.OwnerID)
 		if releaseErr != nil {
 			s.setErr(releaseErr)
@@ -400,6 +408,7 @@ func (s *LeaseSession) Stop() error {
 func (s *LeaseSession) heartbeatLoop(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+	defer close(s.loopDone)
 	for {
 		select {
 		case <-s.done:
