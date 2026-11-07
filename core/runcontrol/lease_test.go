@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -355,6 +356,60 @@ func TestLeaseSessionRepeatedHeartbeatStopSoak(t *testing.T) {
 		}
 		if _, err := store.LoadLease(runID); !os.IsNotExist(err) {
 			t.Fatalf("lease %s not released: %v", runID, err)
+		}
+	}
+}
+
+
+func TestRetryLeaseIORetriesOnlyTransientSharingViolations(t *testing.T) {
+	attempts := 0
+	err := retryLeaseIO(func() error {
+		attempts++
+		if attempts < 4 {
+			return &os.PathError{
+				Op:   "read",
+				Path: "run.lease.json",
+				Err:  syscall.Errno(32),
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 4 {
+		t.Fatalf("attempts=%d want=4", attempts)
+	}
+}
+
+func TestRetryLeaseIODoesNotRetryOrdinaryErrors(t *testing.T) {
+	attempts := 0
+	expected := &os.PathError{
+		Op:   "read",
+		Path: "run.lease.json",
+		Err:  syscall.Errno(2),
+	}
+	err := retryLeaseIO(func() error {
+		attempts++
+		return expected
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if attempts != 1 {
+		t.Fatalf("attempts=%d want=1", attempts)
+	}
+}
+
+func TestTransientLeaseSharingClassification(t *testing.T) {
+	for _, errno := range []syscall.Errno{32, 33} {
+		if !isTransientLeaseSharingError(&os.PathError{Err: errno}) {
+			t.Fatalf("errno %d should be transient", errno)
+		}
+	}
+	for _, errno := range []syscall.Errno{1, 2, 13} {
+		if isTransientLeaseSharingError(&os.PathError{Err: errno}) {
+			t.Fatalf("errno %d should not be transient", errno)
 		}
 	}
 }
