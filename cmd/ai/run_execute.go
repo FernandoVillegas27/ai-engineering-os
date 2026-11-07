@@ -24,6 +24,7 @@ import (
 	"github.com/FernandoVillegas27/ai-engineering-os/core/runstate"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/scheduler"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/taskgraph"
+	"github.com/FernandoVillegas27/ai-engineering-os/core/toolavailability"
 	codexintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/codex"
 )
 
@@ -131,6 +132,21 @@ func runRunExecute(args []string) error {
 	)
 	if err != nil {
 		return err
+	}
+
+	if !options.dryRun {
+		// External tool health and execution binding are separate. The current
+		// Codex/Cursor work-unit runtimes do not expose generic MCP/connector
+		// bindings, so external tools remain unknown/unbound and cannot appear
+		// as executable capabilities. Native tools remain available.
+		availability := collectToolAvailability(runCtx, tools, nil)
+		if err := toolavailability.ValidateSnapshot(tools, availability); err != nil {
+			return fmt.Errorf("validate runtime tool availability: %w", err)
+		}
+		plan, err = orchestration.ApplyToolAvailability(plan, tools, availability)
+		if err != nil {
+			return fmt.Errorf("apply runtime tool availability: %w", err)
+		}
 	}
 
 	units, err := execution.BuildWorkUnits(options.task, root, plan, agents)
