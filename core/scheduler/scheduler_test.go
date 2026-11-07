@@ -163,3 +163,28 @@ func TestSchedulerAcquireLimitAndDeterministicOrder(t *testing.T) {
 		t.Fatalf("progress = %#v", progress)
 	}
 }
+
+
+func TestSchedulerPreservesAndClonesToolOperationMetadata(t *testing.T) {
+	input := map[string][]string{
+		"github": {"read-repository", "read-issues", "read-repository"},
+	}
+	s, err := New([]Task{{
+		ID: "research", AgentID: "researcher",
+		ToolOperations: input,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input["github"][0] = "create-commit"
+	snapshot := s.Snapshot()
+	got := snapshot[0].ToolOperations["github"]
+	if len(got) != 2 || got[0] != "read-issues" || got[1] != "read-repository" {
+		t.Fatalf("tool operations=%#v", snapshot[0].ToolOperations)
+	}
+	got[0] = "mutated"
+	again := s.Snapshot()[0].ToolOperations["github"]
+	if again[0] != "read-issues" {
+		t.Fatalf("scheduler metadata aliased through snapshot: %#v", again)
+	}
+}
