@@ -428,6 +428,15 @@ func (p GovernedProvider) Save(ctx context.Context, request SaveRequest) (SaveRe
 			Summary: "provider delivery uncertain or failed; governance record remains pending",
 		}, err
 	}
+	if strings.TrimSpace(result.Provider) == "" {
+		result.Provider = p.Inner.ID()
+	}
+	if strings.TrimSpace(result.MemoryID) == "" {
+		result.GovernanceID = pending.GovernanceID
+		result.Saved = false
+		result.Summary = "provider did not return a stable memory id; governance record remains pending"
+		return result, errors.New("memory provider did not return a stable memory id")
+	}
 	action := GovernanceSaved
 	if supersedes != "" {
 		action = GovernanceSuperseded
@@ -587,7 +596,8 @@ func validateGovernanceEntry(entry GovernanceEntry) error {
 	}
 	if entry.Action == GovernanceSaved || entry.Action == GovernanceSuperseded {
 		if strings.TrimSpace(entry.ReferenceID) == "" ||
-			strings.TrimSpace(entry.Provider) == "" {
+			strings.TrimSpace(entry.Provider) == "" ||
+			strings.TrimSpace(entry.MemoryID) == "" {
 			return errors.New("invalid governed memory commit entry")
 		}
 	}
