@@ -55,9 +55,9 @@ func TestResolvePlanAllowsVerifiedExternalAndOmitsUnknownOptional(t *testing.T) 
 		tools,
 		Snapshot{
 			"filesystem": Native(tools.Tools["filesystem"]),
-			"engram": Bound(FromHealth(tools.Tools["engram"], toolhealth.Status{
+			"engram": BindOperations(FromHealth(tools.Tools["engram"], toolhealth.Status{
 				Provider: "engram", Available: true, Healthy: true,
-			}, true)),
+			}, true), "read"),
 			"context7": Unknown(tools.Tools["context7"], "remote host connectivity not verified"),
 			"github": Unknown(tools.Tools["github"], "connector status unavailable"),
 		},
@@ -81,9 +81,9 @@ func TestResolvePlanKeepsOnlyAvailableOptionalExternalTools(t *testing.T) {
 		tools,
 		Snapshot{
 			"filesystem": Native(tools.Tools["filesystem"]),
-			"engram": Bound(FromHealth(tools.Tools["engram"], toolhealth.Status{
+			"engram": BindOperations(FromHealth(tools.Tools["engram"], toolhealth.Status{
 				Provider: "engram", Available: true, Healthy: true,
-			}, true)),
+			}, true), "read"),
 			"context7": Unknown(tools.Tools["context7"], "launcher only"),
 			"github": Unknown(tools.Tools["github"], "not connected"),
 		},
@@ -154,5 +154,67 @@ func TestResolvePlanRejectsHealthyExternalToolWithoutRuntimeBinding(t *testing.T
 	)
 	if err == nil || !strings.Contains(err.Error(), "not bound to the selected execution runtime") {
 		t.Fatalf("err=%v", err)
+	}
+}
+
+
+func TestNativeBindsAllDeclaredOperations(t *testing.T) {
+	tool := tool("filesystem", "native", "local")
+	tool.Operations = []string{"write-files", "read-files", "read-files"}
+	evidence := Native(tool)
+	if !evidence.RuntimeBound || strings.Join(evidence.BoundOperations, ",") != "read-files,write-files" {
+		t.Fatalf("evidence=%#v", evidence)
+	}
+}
+
+func TestBindOperationsIsExplicitSortedAndDeduplicated(t *testing.T) {
+	tools := registryFixture()
+	evidence := BindOperations(
+		FromHealth(tools.Tools["engram"], toolhealth.Status{
+			Provider: "engram", Available: true, Healthy: true,
+		}, true),
+		"write", "read", "write",
+	)
+	if !evidence.RuntimeBound || strings.Join(evidence.BoundOperations, ",") != "read,write" {
+		t.Fatalf("evidence=%#v", evidence)
+	}
+}
+
+func TestValidateSnapshotRejectsUndeclaredBoundOperation(t *testing.T) {
+	tools := registryFixture()
+	evidence := BindOperations(
+		FromHealth(tools.Tools["engram"], toolhealth.Status{
+			Provider: "engram", Available: true, Healthy: true,
+		}, true),
+		"delete-everything",
+	)
+	err := ValidateSnapshot(tools, Snapshot{"engram": evidence})
+	if err == nil || !strings.Contains(err.Error(), "undeclared operation") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestValidateSnapshotRejectsRuntimeBoundWithoutOperations(t *testing.T) {
+	tools := registryFixture()
+	evidence := FromHealth(tools.Tools["engram"], toolhealth.Status{
+		Provider: "engram", Available: true, Healthy: true,
+	}, true)
+	evidence.RuntimeBound = true
+	err := ValidateSnapshot(tools, Snapshot{"engram": evidence})
+	if err == nil || !strings.Contains(err.Error(), "runtime_bound must match") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestOperationsForExternalReturnsOnlyExplicitBinding(t *testing.T) {
+	tools := registryFixture()
+	tool := tools.Tools["engram"]
+	tool.Operations = []string{"read", "write"}
+	evidence := BindOperations(
+		FromHealth(tool, toolhealth.Status{Provider: "engram", Available: true, Healthy: true}, true),
+		"read",
+	)
+	if got := strings.Join(OperationsFor(tool, evidence), ","); got != "read" {
+		t.Fatalf("operations=%q", got)
 	}
 }
