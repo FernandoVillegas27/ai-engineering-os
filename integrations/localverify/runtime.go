@@ -27,13 +27,17 @@ const (
 	parserGoJSON
 	parserJava
 	parserNodeJSON
+	parserPytestJUnit
 )
 
+const verifyReportToken = "{AI_VERIFY_REPORT}"
+
 type plannedCheck struct {
-	name    string
-	command string
-	args    []string
-	parser  parserKind
+	name       string
+	command    string
+	args       []string
+	parser     parserKind
+	reportFile string
 }
 
 func New() Runtime {
@@ -81,6 +85,7 @@ func (r Runtime) Verify(ctx context.Context, workspace string) (verification.Rep
 	defer cleanupEnv()
 
 	report := verification.Report{Status: verification.StatusPassed}
+	cacheRoot := cacheRootFromEnv(env)
 	for _, planned := range checks {
 		resolved, err := runner.LookPath(planned.command)
 		if err != nil {
@@ -97,11 +102,12 @@ func (r Runtime) Verify(ctx context.Context, workspace string) (verification.Rep
 			continue
 		}
 
+		args, reportPath := materializeCheckArgs(planned, cacheRoot)
 		runCtx, cancel := context.WithTimeout(ctx, timeout)
 		started := time.Now()
 		stdout, stderr, runErr := runner.Run(runCtx, commandmodel.Invocation{
 			Command: resolved,
-			Args:    planned.args,
+			Args:    args,
 			Dir:     root,
 			Env:     env,
 		})
@@ -122,14 +128,23 @@ func (r Runtime) Verify(ctx context.Context, workspace string) (verification.Rep
 			failures = parsed.Failures
 			parseConfidence = parsed.Confidence
 		case parserNodeJSON:
-			parsed := parseNodeTestJSON(stdout, stderr, runErr != nil, root, cacheRootFromEnv(env))
+			var parsed structuredParse
+			if reportPath != "" {
+				parsed = parseNodeTestJSONFile(reportPath, runErr != nil, root, cacheRoot)
+			} else {
+				parsed = parseNodeTestJSON(stdout, stderr, runErr != nil, root, cacheRoot)
+			}
+			failures = parsed.Failures
+			parseConfidence = parsed.Confidence
+		case parserPytestJUnit:
+			parsed := parsePytestJUnitFile(reportPath, runErr != nil, root, cacheRoot)
 			failures = parsed.Failures
 			parseConfidence = parsed.Confidence
 		}
 
 		check := verification.Check{
 			Name:     planned.name,
-			Command:  append([]string{planned.command}, planned.args...),
+			Command:  append([]string{planned.command}, args...),
 			Stdout:   truncate(stdout),
 			Stderr:   truncate(stderr),
 			Duration: duration,
@@ -184,17 +199,21 @@ func planChecks(root string) ([]plannedCheck, error) {
 		})
 	}
 
-	if fileExists(filepath.Join(root, "pyproject.toml")) {
+	if fileExists(filepath.Join(root, "pyproject.toml")) ||
+		fileExists(filepath.Join(root, "pytest.ini")) ||
+		fileExists(filepath.Join(root, "conftest.py")) {
 		checks = append(checks, plannedCheck{
-			name:    "pytest",
-			command: "python",
-			args:    []string{"-m", "pytest"},
+			name:       "pytest",
+			command:    "python",
+			args:       []string{"-m", "pytest", "-r", "fE", "--junitxml=" + verifyReportToken},
+			parser:     parserPytestJUnit,
+			reportFile: "pytest-junit.xml",
 		})
 	}
 
 	packagePath := filepath.Join(root, "package.json")
 	if fileExists(packagePath) {
-		nodeCheck, err := nodeTestCheck(packagePath)
+		nodeCheck, err := nodeTestCheck(root, packagePath)
 		if err != nil {
 			return nil, err
 		}
@@ -206,7 +225,7 @@ func planChecks(root string) ([]plannedCheck, error) {
 	return checks, nil
 }
 
-func nodeTestCheck(packagePath string) (*plannedCheck, error) {
+func nodeTestCheck(root, packagePath string) (*plannedCheck, error) {
 	data, err := os.ReadFile(packagePath)
 	if err != nil {
 		return nil, fmt.Errorf("read package.json: %w", err)
@@ -224,21 +243,79 @@ func nodeTestCheck(packagePath string) (*plannedCheck, error) {
 
 	args := []string{"test"}
 	parser := parserNone
+	reportFile := ""
 	lower := strings.ToLower(script)
 	switch {
 	case strings.Contains(lower, "vitest"):
-		args = append(args, "--", "--run", "--reporter=json")
+		args = append(args, "--", "--run", "--reporter=json", "--outputFile="+verifyReportToken)
 		parser = parserNodeJSON
+		reportFile = "node-test-report.json"
 	case strings.Contains(lower, "jest"):
-		args = append(args, "--", "--runInBand", "--json")
+		args = append(args, "--", "--runInBand", "--json", "--outputFile="+verifyReportToken)
 		parser = parserNodeJSON
+		reportFile = "node-test-report.json"
 	case strings.Contains(lower, "ng test"):
-		// Angular test runners vary by project generation (Karma/Vitest/etc.).
-		// Keep deterministic execution but do not claim structured completeness
-		// until the configured builder can be identified safely.
 		args = append(args, "--", "--watch=false")
+		unitTest, err := angularUsesUnitTestBuilder(root)
+		if err != nil {
+			return nil, err
+		}
+		if unitTest {
+			args = append(args, "--reporters=json", "--output-file="+verifyReportToken)
+			parser = parserNodeJSON
+			reportFile = "angular-test-report.json"
+		}
 	}
-	return &plannedCheck{name: "npm-test", command: "npm", args: args, parser: parser}, nil
+	return &plannedCheck{
+		name: "npm-test", command: "npm", args: args, parser: parser, reportFile: reportFile,
+	}, nil
+}
+
+func angularUsesUnitTestBuilder(root string) (bool, error) {
+	path := filepath.Join(root, "angular.json")
+	if !fileExists(path) {
+		return false, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false, fmt.Errorf("read angular.json: %w", err)
+	}
+	var workspace struct {
+		Projects map[string]struct {
+			Architect map[string]struct {
+				Builder string `json:"builder"`
+			} `json:"architect"`
+			Targets map[string]struct {
+				Builder string `json:"builder"`
+			} `json:"targets"`
+		} `json:"projects"`
+	}
+	if err := json.Unmarshal(data, &workspace); err != nil {
+		return false, fmt.Errorf("parse angular.json: %w", err)
+	}
+	for _, project := range workspace.Projects {
+		for _, targets := range []map[string]struct{ Builder string `json:"builder"` }{project.Architect, project.Targets} {
+			if test, ok := targets["test"]; ok &&
+				strings.EqualFold(strings.TrimSpace(test.Builder), "@angular/build:unit-test") {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func materializeCheckArgs(planned plannedCheck, cacheRoot string) ([]string, string) {
+	reportPath := ""
+	if strings.TrimSpace(planned.reportFile) != "" {
+		reportPath = filepath.Join(cacheRoot, planned.reportFile)
+	}
+	args := append([]string(nil), planned.args...)
+	for i := range args {
+		if strings.Contains(args[i], verifyReportToken) {
+			args[i] = strings.ReplaceAll(args[i], verifyReportToken, reportPath)
+		}
+	}
+	return args, reportPath
 }
 
 func safeVerificationEnvironment() []string {
