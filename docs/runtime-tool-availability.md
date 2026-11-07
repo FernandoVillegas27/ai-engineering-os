@@ -467,3 +467,28 @@ Evidence from another run or task cannot be reused. Approval for one operation c
 The legacy validator without an approval scope continues to reject approval-required operations. This prevents old call sites from accidentally gaining new authority merely because the evidence type exists.
 
 This foundation does not itself execute GitHub mutations or Playwright browser actions. Concrete mutation/browser adapters must separately prove their fixed request/command boundary and then supply matching durable approval evidence at the exact execution boundary.
+
+
+## Request-bound approval evidence
+
+Operation-scoped approval is necessary but not sufficient for concrete mutation adapters.
+
+A mutation request may additionally carry a lowercase SHA-256 `request_digest` derived from the canonical mutation payload. When present, the durable approval evidence preserves that digest.
+
+Request-bound validation uses `toolapproval.GrantsRequest` and requires an exact match across:
+
+~~~text
+run_id
+task_id
+tool_id
+operation
+request_digest
+~~~
+
+Changing any mutation input that contributes to the canonical payload produces a different digest and therefore requires a new human approval.
+
+Legacy operation-only approval evidence remains readable for compatibility, but it cannot authorize a request-bound mutation because it has no request digest.
+
+The CLI supports `--request-digest <sha256>` on tool-operation request/grant/reject flows. The Control Plane projects the digest as audit metadata without exposing the underlying mutation payload.
+
+Future GitHub write or browser side-effect adapters must use request-bound approval for concrete mutations/side effects rather than relying only on an operation-name grant.
