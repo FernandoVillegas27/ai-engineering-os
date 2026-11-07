@@ -97,3 +97,51 @@ func TestStoreIsAppendOnlyAndRejectsSymlinkRunDirectory(t *testing.T) {
 		t.Fatal("expected symlink run directory rejection")
 	}
 }
+
+
+func TestApprovalRequestDigestBindsExactMutationPayload(t *testing.T) {
+	now := time.Date(2026, 11, 7, 20, 0, 0, 0, time.UTC)
+	digest := DigestRequest([]byte(`{"base":"master","head":"feature-a","title":"Add feature"}`))
+	evidence, err := New(Request{
+		RunID: "run-1", TaskID: "task-1", ToolID: "github",
+		Operation: "create-pull-request", RequestDigest: digest,
+		Status: StatusGranted, Actor: "human",
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !GrantsRequest(evidence, "run-1", "task-1", "github", "create-pull-request", digest, now) {
+		t.Fatal("expected exact request digest grant")
+	}
+	changed := DigestRequest([]byte(`{"base":"master","head":"feature-b","title":"Add feature"}`))
+	if GrantsRequest(evidence, "run-1", "task-1", "github", "create-pull-request", changed, now) {
+		t.Fatal("approval must not authorize changed mutation payload")
+	}
+	if GrantsRequest(evidence, "run-1", "task-1", "github", "create-pull-request", "", now) {
+		t.Fatal("request-scoped grant must require a digest")
+	}
+}
+
+func TestApprovalRequestDigestValidationAndLegacyOperationGrant(t *testing.T) {
+	now := time.Now().UTC()
+	if _, err := New(Request{
+		RunID: "run-1", TaskID: "task-1", ToolID: "github",
+		Operation: "create-commit", RequestDigest: "not-a-digest",
+		Status: StatusGranted, Actor: "human",
+	}, now); err == nil {
+		t.Fatal("expected invalid digest rejection")
+	}
+	legacy, err := New(Request{
+		RunID: "run-1", TaskID: "task-1", ToolID: "github",
+		Operation: "create-commit", Status: StatusGranted, Actor: "human",
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !Grants(legacy, "run-1", "task-1", "github", "create-commit", now) {
+		t.Fatal("legacy operation-scoped grant should remain readable")
+	}
+	if GrantsRequest(legacy, "run-1", "task-1", "github", "create-commit", DigestRequest([]byte("payload")), now) {
+		t.Fatal("legacy grant must not authorize a concrete mutation request")
+	}
+}

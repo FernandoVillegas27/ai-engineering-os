@@ -86,6 +86,7 @@ type ToolApprovalState struct {
 	TaskID       string `json:"task_id"`
 	ToolID       string `json:"tool_id"`
 	Operation    string `json:"operation"`
+	RequestDigest string `json:"request_digest,omitempty"`
 	Status       string `json:"status"`
 	EvidenceID   string `json:"evidence_id,omitempty"`
 	ExpiresAt    string `json:"expires_at,omitempty"`
@@ -416,6 +417,7 @@ func applyToolApprovalProjection(state *State, event Event, status string) error
 		Kind       string `json:"kind"`
 		ToolID     string `json:"tool_id"`
 		Operation  string `json:"operation"`
+		RequestDigest string `json:"request_digest"`
 		EvidenceID string `json:"evidence_id"`
 		ExpiresAt  any    `json:"expires_at"`
 	}
@@ -440,6 +442,7 @@ func applyToolApprovalProjection(state *State, event Event, status string) error
 		TaskID:       event.TaskID,
 		ToolID:       metadata.ToolID,
 		Operation:    metadata.Operation,
+		RequestDigest: strings.TrimSpace(metadata.RequestDigest),
 		Status:       status,
 		EvidenceID:   strings.TrimSpace(metadata.EvidenceID),
 		ExpiresAt:    expiresAt,

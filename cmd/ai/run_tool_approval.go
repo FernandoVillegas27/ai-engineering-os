@@ -20,6 +20,7 @@ type runToolApprovalOptions struct {
 	taskID      string
 	toolID      string
 	operation   string
+	requestDigest string
 	stateDir    string
 	eventsDir   string
 	approvalDir string
@@ -32,6 +33,7 @@ type toolApprovalView struct {
 	TaskID     string     `json:"task_id"`
 	ToolID     string     `json:"tool_id"`
 	Operation  string     `json:"operation"`
+	RequestDigest string   `json:"request_digest,omitempty"`
 	Status     string     `json:"status"`
 	EvidenceID string     `json:"evidence_id,omitempty"`
 	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
@@ -69,7 +71,7 @@ func runRunToolApprovalRequest(args []string) error {
 	if err != nil {
 		return err
 	}
-	if toolApprovalPending(events, options.taskID, options.toolID, options.operation) {
+	if toolApprovalPending(events, options.taskID, options.toolID, options.operation, options.requestDigest) {
 		return fmt.Errorf("approval is already pending for %s/%s on task %s", options.toolID, options.operation, options.taskID)
 	}
 	event, err := controlplane.NewEvent(controlplane.NewEventRequest{
@@ -81,6 +83,7 @@ func runRunToolApprovalRequest(args []string) error {
 			"kind":      "tool-operation",
 			"tool_id":   options.toolID,
 			"operation": options.operation,
+			"request_digest": options.requestDigest,
 		},
 	}, time.Now().UTC())
 	if err != nil {
@@ -91,7 +94,7 @@ func runRunToolApprovalRequest(args []string) error {
 	}
 	return printToolApprovalView(toolApprovalView{
 		RunID: run.ID, TaskID: options.taskID, ToolID: options.toolID,
-		Operation: options.operation, Status: "pending",
+		Operation: options.operation, RequestDigest: options.requestDigest, Status: "pending",
 	}, options.json)
 }
 
@@ -111,7 +114,7 @@ func runRunToolApprovalResolve(args []string, granted bool) error {
 	if err != nil {
 		return err
 	}
-	if !toolApprovalPending(events, options.taskID, options.toolID, options.operation) {
+	if !toolApprovalPending(events, options.taskID, options.toolID, options.operation, options.requestDigest) {
 		return fmt.Errorf("no pending approval for %s/%s on task %s", options.toolID, options.operation, options.taskID)
 	}
 
@@ -132,7 +135,7 @@ func runRunToolApprovalResolve(args []string, granted bool) error {
 	}
 	evidence, err := toolapproval.New(toolapproval.Request{
 		RunID: run.ID, TaskID: options.taskID, ToolID: options.toolID,
-		Operation: options.operation, Status: status, Actor: "human", ExpiresAt: expiresAt,
+		Operation: options.operation, RequestDigest: options.requestDigest, Status: status, Actor: "human", ExpiresAt: expiresAt,
 	}, now)
 	if err != nil {
 		return err
@@ -146,6 +149,7 @@ func runRunToolApprovalResolve(args []string, granted bool) error {
 			"kind":        "tool-operation",
 			"tool_id":     options.toolID,
 			"operation":   options.operation,
+			"request_digest": options.requestDigest,
 			"evidence_id": evidence.ID,
 			"expires_at":  expiresAt,
 		},
@@ -165,7 +169,7 @@ func runRunToolApprovalResolve(args []string, granted bool) error {
 	}
 	return printToolApprovalView(toolApprovalView{
 		RunID: run.ID, TaskID: options.taskID, ToolID: options.toolID,
-		Operation: options.operation, Status: string(status),
+		Operation: options.operation, RequestDigest: options.requestDigest, Status: string(status),
 		EvidenceID: evidence.ID, ExpiresAt: expiresAt,
 	}, options.json)
 }
@@ -183,6 +187,18 @@ func parseRunToolApprovalArgs(args []string, resolving bool) (runToolApprovalOpt
 		case "--operation":
 			if i+1 >= len(args) { return options, fmt.Errorf("--operation requiere un valor") }
 			i++; options.operation = args[i]
+		case "--request-digest":
+			if i+1 >= len(args) { return options, fmt.Errorf("--request-digest requiere un sha256") }
+			i++
+			options.requestDigest = strings.ToLower(strings.TrimSpace(args[i]))
+			if len(options.requestDigest) != 64 {
+				return options, fmt.Errorf("--request-digest debe ser un sha256 hexadecimal de 64 caracteres")
+			}
+			for _, r := range options.requestDigest {
+				if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f') {
+					return options, fmt.Errorf("--request-digest debe ser un sha256 hexadecimal en minúsculas")
+				}
+			}
 		case "--state-dir":
 			if i+1 >= len(args) { return options, fmt.Errorf("--state-dir requiere una ruta") }
 			i++; options.stateDir = args[i]
@@ -275,7 +291,7 @@ func loadToolApprovalEvents(options runToolApprovalOptions) ([]controlplane.Even
 	return events, store, nil
 }
 
-func toolApprovalPending(events []controlplane.Event, taskID, toolID, operation string) bool {
+func toolApprovalPending(events []controlplane.Event, taskID, toolID, operation, requestDigest string) bool {
 	pending := false
 	for _, event := range events {
 		if event.TaskID != taskID { continue }
@@ -283,9 +299,10 @@ func toolApprovalPending(events []controlplane.Event, taskID, toolID, operation 
 			Kind string `json:"kind"`
 			ToolID string `json:"tool_id"`
 			Operation string `json:"operation"`
+			RequestDigest string `json:"request_digest"`
 		}
 		if err := jsonUnmarshalApprovalData(event, &data); err != nil { continue }
-		if data.Kind != "tool-operation" || data.ToolID != toolID || data.Operation != operation { continue }
+		if data.Kind != "tool-operation" || data.ToolID != toolID || data.Operation != operation || strings.TrimSpace(data.RequestDigest) != strings.TrimSpace(requestDigest) { continue }
 		switch event.Type {
 		case controlplane.EventApprovalRequested:
 			pending = true
@@ -339,6 +356,7 @@ func printToolApprovalView(view toolApprovalView, asJSON bool) error {
 	fmt.Printf("Run: %s\n", view.RunID)
 	fmt.Printf("Task: %s\n", view.TaskID)
 	fmt.Printf("Operation: %s/%s\n", view.ToolID, view.Operation)
+	if view.RequestDigest != "" { fmt.Printf("Request digest: %s\n", view.RequestDigest) }
 	fmt.Printf("Status: %s\n", view.Status)
 	if view.EvidenceID != "" { fmt.Printf("Evidence: %s\n", view.EvidenceID) }
 	if view.ExpiresAt != nil { fmt.Printf("Expires: %s\n", view.ExpiresAt.Format(time.RFC3339)) }
