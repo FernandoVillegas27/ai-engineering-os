@@ -221,19 +221,28 @@ func (c Coordinator) Run(ctx context.Context, graph *scheduler.Scheduler) (Resul
 			}
 			if completed.err != nil {
 				taskResult.Error = completed.err.Error()
-				if err := graph.Fail(completed.task.ID); err != nil {
-					return Result{}, err
-				}
-				if err := c.emit(ctx, Event{
-					Type:         EventTaskFailed,
-					TaskID:       completed.task.ID,
-					AgentID:      completed.task.AgentID,
-					Summary:      completed.err.Error(),
-					ArtifactRefs: completed.result.ArtifactRefs,
-					MessageRefs:  completed.result.MessageRefs,
-				}); err != nil {
-					graph.CancelAll()
-					return Result{}, err
+				cancelledByRun := ctx.Err() != nil &&
+					(errors.Is(completed.err, context.Canceled) ||
+						errors.Is(completed.err, context.DeadlineExceeded))
+				if cancelledByRun {
+					if err := graph.Cancel(completed.task.ID); err != nil {
+						return Result{}, err
+					}
+				} else {
+					if err := graph.Fail(completed.task.ID); err != nil {
+						return Result{}, err
+					}
+					if err := c.emit(ctx, Event{
+						Type:         EventTaskFailed,
+						TaskID:       completed.task.ID,
+						AgentID:      completed.task.AgentID,
+						Summary:      completed.err.Error(),
+						ArtifactRefs: completed.result.ArtifactRefs,
+						MessageRefs:  completed.result.MessageRefs,
+					}); err != nil {
+						graph.CancelAll()
+						return Result{}, err
+					}
 				}
 			} else {
 				taskResult.Completed = true
