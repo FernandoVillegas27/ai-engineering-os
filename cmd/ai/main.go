@@ -50,6 +50,11 @@ func main() {
 	}
 
 	switch os.Args[1] {
+	case "version":
+		if err := runVersion(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	case "inspect":
 		if err := runInspect(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -865,6 +870,7 @@ func printUsage() {
 	fmt.Println("AI Engineering OS")
 	fmt.Println()
 	fmt.Println("Uso:")
+	fmt.Println("  ai version [--json]")
 	fmt.Println("  ai inspect [ruta-del-proyecto] [--registry ruta] [--write]")
 	fmt.Println("  ai run init --task <tarea> --project <id> [--state-dir ruta]")
 	fmt.Println("  ai run status <run-id> [--state-dir ruta] [--json]")
@@ -884,6 +890,7 @@ func printUsage() {
 	fmt.Println("  ai gentle validate cursor")
 	fmt.Println()
 	fmt.Println("Comandos:")
+	fmt.Println("  version   Muestra versión, commit, Go y plataforma del binario")
 	fmt.Println("  inspect   Detecta el stack y resuelve skills para un proyecto")
 	fmt.Println("  run       Crea e inspecciona estado durable de ejecuciones")
 	fmt.Println("  memory    Verifica el proveedor de memoria persistente")
