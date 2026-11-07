@@ -163,7 +163,6 @@ func FormatToolBindings(unit WorkUnit) string {
 	for _, toolID := range uniqueSorted(unit.Tools) {
 		operations := uniqueSorted(unit.ToolOperations[toolID])
 		if len(operations) == 0 {
-			parts = append(parts, toolID+"[no-bound-operations]")
 			continue
 		}
 		parts = append(parts, toolID+"["+strings.Join(operations, ",")+"]")
