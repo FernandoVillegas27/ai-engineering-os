@@ -163,6 +163,10 @@ func (s *GovernanceStore) Append(ctx context.Context, entry GovernanceEntry) (Go
 	if err := validateGovernanceEntry(entry); err != nil {
 		return GovernanceEntry{}, err
 	}
+	proposed := append(append([]GovernanceEntry(nil), existing...), entry)
+	if _, err := projectRecords(proposed, entry.Project); err != nil {
+		return GovernanceEntry{}, fmt.Errorf("project memory governance lifecycle: %w", err)
+	}
 	data, err := json.MarshalIndent(entry, "", "  ")
 	if err != nil {
 		return GovernanceEntry{}, err
