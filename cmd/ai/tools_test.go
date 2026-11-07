@@ -72,9 +72,6 @@ func TestContextStyleHealthyLauncherCanRemainUnknown(t *testing.T) {
 }
 
 func TestPrintToolAvailabilityDoesNotExposeSecrets(t *testing.T) {
-	tools := registry.ToolRegistry{SchemaVersion: 1, Tools: map[string]registry.Tool{
-		"engram": testTool("engram", "mcp", "engram", "enabled"),
-	}}
 	snapshot := toolavailability.Snapshot{
 		"engram": {
 			ToolID: "engram", Provider: "engram",
