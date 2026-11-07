@@ -3,6 +3,7 @@
 
   const state = {
     runs: [],
+    observability: null,
     runId: "",
     runState: null,
     events: [],
@@ -18,7 +19,7 @@
 
   const $ = (id) => document.getElementById(id);
   const els = {
-    runList: $("run-list"), runCount: $("run-count"), refreshRuns: $("refresh-runs"),
+    runList: $("run-list"), runCount: $("run-count"), systemSummary: $("system-summary"), refreshRuns: $("refresh-runs"),
     connectionDot: $("connection-dot"), connectionLabel: $("connection-label"),
     empty: $("empty-state"), dashboard: $("dashboard"), title: $("run-title"),
     status: $("run-status"), copy: $("copy-run-id"),
@@ -82,10 +83,15 @@
 
   async function loadRuns(preserveSelection = true) {
     try {
-      const runs = await api("/runs");
+      const [runs, observability] = await Promise.all([
+        api("/runs"),
+        api("/observability").catch(() => null),
+      ]);
       state.runs = Array.isArray(runs) ? runs : [];
+      state.observability = observability;
       setConnection(true, "Control Plane online");
       renderRuns();
+      renderSystemSummary();
       if (!preserveSelection || !state.runId) {
         const query = new URLSearchParams(location.search).get("run");
         const preferred = query && state.runs.some((r) => r.run_id === query) ? query : state.runs[0]?.run_id;
@@ -97,6 +103,19 @@
       setConnection(false, "Backend unavailable");
       els.runCount.textContent = error.message;
     }
+  }
+
+  function renderSystemSummary() {
+    const value = state.observability;
+    if (!value) {
+      els.systemSummary.textContent = "Local metrics unavailable";
+      return;
+    }
+    const events = Number(value.event_count || 0);
+    const tasks = Number(value.task_count || 0);
+    const approvals = Number(value.pending_approvals || 0);
+    els.systemSummary.textContent = events + " events · " + tasks + " tasks" +
+      (approvals ? " · " + approvals + " approval(s)" : "");
   }
 
   function renderRuns() {
