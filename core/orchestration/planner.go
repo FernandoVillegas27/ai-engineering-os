@@ -39,6 +39,7 @@ type SkillPlan struct {
 type ToolPlan struct {
 	Required    []string
 	Recommended []string
+	Operations  map[string][]string
 }
 
 type Plan struct {
