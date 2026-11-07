@@ -22,6 +22,7 @@ const GovernanceSchemaVersion = 1
 type GovernanceAction string
 
 const (
+	GovernancePending    GovernanceAction = "pending"
 	GovernanceSaved      GovernanceAction = "saved"
 	GovernanceSuperseded GovernanceAction = "superseded"
 	GovernanceReviewed   GovernanceAction = "reviewed"
@@ -51,9 +52,10 @@ type GovernanceEntry struct {
 type GovernanceState string
 
 const (
-	GovernanceActive     GovernanceState = "active"
+	GovernancePendingState    GovernanceState = "pending"
+	GovernanceActive          GovernanceState = "active"
 	GovernanceSupersededState GovernanceState = "superseded"
-	GovernanceDeletedState GovernanceState = "deleted"
+	GovernanceDeletedState    GovernanceState = "deleted"
 )
 
 type GovernedRecord struct {
@@ -142,9 +144,9 @@ func (s *GovernanceStore) Append(ctx context.Context, entry GovernanceEntry) (Go
 	} else {
 		entry.CreatedAt = entry.CreatedAt.UTC()
 	}
-	if entry.Action == GovernanceSaved || entry.Action == GovernanceSuperseded {
+	if entry.Action == GovernancePending {
 		if strings.TrimSpace(entry.Title) == "" || strings.TrimSpace(entry.Content) == "" {
-			return GovernanceEntry{}, errors.New("governance save requires title and content")
+			return GovernanceEntry{}, errors.New("governance pending save requires title and content")
 		}
 		sum := sha256.Sum256([]byte(entry.Content))
 		entry.ContentSHA256 = hex.EncodeToString(sum[:])
@@ -152,7 +154,8 @@ func (s *GovernanceStore) Append(ctx context.Context, entry GovernanceEntry) (Go
 			entry.GovernanceID = governanceRecordID(entry.Project, entry.TopicKey, entry.Title, entry.Content, entry.Sequence)
 		}
 	}
-	if entry.Action == GovernanceReviewed || entry.Action == GovernanceDeleted {
+	if entry.Action == GovernanceSaved || entry.Action == GovernanceSuperseded ||
+		entry.Action == GovernanceReviewed || entry.Action == GovernanceDeleted {
 		if strings.TrimSpace(entry.ReferenceID) == "" {
 			return GovernanceEntry{}, errors.New("governance mutation requires reference id")
 		}
@@ -288,36 +291,55 @@ func projectRecords(entries []GovernanceEntry, project string) ([]GovernedRecord
 			return nil, errors.New("memory governance project boundary mismatch")
 		}
 		switch entry.Action {
-		case GovernanceSaved, GovernanceSuperseded:
+		case GovernancePending:
+			if _, exists := byID[entry.GovernanceID]; exists {
+				return nil, fmt.Errorf("duplicate pending governance record: %s", entry.GovernanceID)
+			}
 			record := &GovernedRecord{
 				GovernanceID: entry.GovernanceID,
 				Project: entry.Project,
-				Provider: entry.Provider,
-				MemoryID: entry.MemoryID,
 				TopicKey: entry.TopicKey,
 				Title: entry.Title,
 				Content: entry.Content,
 				ContentSHA256: entry.ContentSHA256,
 				Type: entry.Type,
 				Provenance: entry.Provenance,
-				State: GovernanceActive,
+				State: GovernancePendingState,
 				Supersedes: entry.Supersedes,
 				CreatedAt: entry.CreatedAt,
 			}
+			byID[entry.GovernanceID] = record
+			order = append(order, entry.GovernanceID)
+		case GovernanceSaved, GovernanceSuperseded:
+			record := byID[entry.ReferenceID]
+			if record == nil {
+				return nil, fmt.Errorf("memory governance commit references unknown pending record: %s", entry.ReferenceID)
+			}
+			if record.State != GovernancePendingState {
+				return nil, fmt.Errorf("memory governance commit requires pending record: %s", entry.ReferenceID)
+			}
+			record.Provider = entry.Provider
+			record.MemoryID = entry.MemoryID
+			record.State = GovernanceActive
+			record.Supersedes = entry.Supersedes
 			if entry.Supersedes != "" {
 				previous := byID[entry.Supersedes]
 				if previous == nil {
 					return nil, fmt.Errorf("memory governance supersedes unknown record: %s", entry.Supersedes)
 				}
+				if previous.State != GovernanceActive {
+					return nil, fmt.Errorf("memory governance supersedes non-active record: %s", entry.Supersedes)
+				}
 				previous.State = GovernanceSupersededState
-				previous.SupersededBy = entry.GovernanceID
+				previous.SupersededBy = record.GovernanceID
 			}
-			byID[entry.GovernanceID] = record
-			order = append(order, entry.GovernanceID)
 		case GovernanceReviewed:
 			record := byID[entry.ReferenceID]
 			if record == nil {
 				return nil, fmt.Errorf("memory governance review references unknown record: %s", entry.ReferenceID)
+			}
+			if record.State == GovernanceDeletedState || record.State == GovernancePendingState {
+				return nil, fmt.Errorf("memory governance review requires committed record: %s", entry.ReferenceID)
 			}
 			at := entry.CreatedAt
 			record.ReviewedAt = &at
@@ -325,6 +347,9 @@ func projectRecords(entries []GovernanceEntry, project string) ([]GovernedRecord
 			record := byID[entry.ReferenceID]
 			if record == nil {
 				return nil, fmt.Errorf("memory governance delete references unknown record: %s", entry.ReferenceID)
+			}
+			if record.State != GovernanceActive {
+				return nil, fmt.Errorf("memory governance delete requires active record: %s", entry.ReferenceID)
 			}
 			at := entry.CreatedAt
 			record.State = GovernanceDeletedState
@@ -364,10 +389,6 @@ func (p GovernedProvider) Save(ctx context.Context, request SaveRequest) (SaveRe
 	if err := ValidateSaveRequest(redacted); err != nil {
 		return SaveResult{}, err
 	}
-	result, err := p.Inner.Save(ctx, redacted)
-	if err != nil {
-		return SaveResult{}, err
-	}
 	records, err := p.Store.Records(redacted.Project)
 	if err != nil {
 		return SaveResult{}, err
@@ -382,16 +403,11 @@ func (p GovernedProvider) Save(ctx context.Context, request SaveRequest) (SaveRe
 			break
 		}
 	}
-	action := GovernanceSaved
-	if supersedes != "" {
-		action = GovernanceSuperseded
-	}
-	entry, err := p.Store.Append(ctx, GovernanceEntry{
-		Action: action,
+
+	pending, err := p.Store.Append(ctx, GovernanceEntry{
+		Action: GovernancePending,
 		Project: redacted.Project,
 		Supersedes: supersedes,
-		Provider: result.Provider,
-		MemoryID: result.MemoryID,
 		TopicKey: redacted.TopicKey,
 		Title: redacted.Title,
 		Content: redacted.Content,
@@ -399,9 +415,37 @@ func (p GovernedProvider) Save(ctx context.Context, request SaveRequest) (SaveRe
 		Provenance: redacted.Provenance,
 	})
 	if err != nil {
-		return SaveResult{}, fmt.Errorf("persist memory governance ledger: %w", err)
+		return SaveResult{}, fmt.Errorf("reserve memory governance record: %w", err)
 	}
-	result.GovernanceID = entry.GovernanceID
+
+	result, err := p.Inner.Save(ctx, redacted)
+	if err != nil {
+		return SaveResult{
+			Provider: p.Inner.ID(),
+			Project: redacted.Project,
+			Saved: false,
+			GovernanceID: pending.GovernanceID,
+			Summary: "provider delivery uncertain or failed; governance record remains pending",
+		}, err
+	}
+	action := GovernanceSaved
+	if supersedes != "" {
+		action = GovernanceSuperseded
+	}
+	_, err = p.Store.Append(ctx, GovernanceEntry{
+		Action: action,
+		Project: redacted.Project,
+		ReferenceID: pending.GovernanceID,
+		Supersedes: supersedes,
+		Provider: result.Provider,
+		MemoryID: result.MemoryID,
+	})
+	if err != nil {
+		result.GovernanceID = pending.GovernanceID
+		result.Saved = false
+		return result, fmt.Errorf("confirm memory governance record: %w", err)
+	}
+	result.GovernanceID = pending.GovernanceID
 	return result, nil
 }
 
@@ -512,7 +556,7 @@ func governanceRecordID(project, topic, title, content string, sequence uint64) 
 
 func validGovernanceAction(action GovernanceAction) bool {
 	switch action {
-	case GovernanceSaved, GovernanceSuperseded, GovernanceReviewed, GovernanceDeleted:
+	case GovernancePending, GovernanceSaved, GovernanceSuperseded, GovernanceReviewed, GovernanceDeleted:
 		return true
 	default:
 		return false
@@ -529,16 +573,27 @@ func validateGovernanceEntry(entry GovernanceEntry) error {
 	if entry.Sequence == 0 || entry.CreatedAt.IsZero() || !validGovernanceAction(entry.Action) {
 		return errors.New("invalid memory governance entry")
 	}
-	if entry.Action == GovernanceSaved || entry.Action == GovernanceSuperseded {
+	if entry.Action == GovernancePending {
 		if strings.TrimSpace(entry.GovernanceID) == "" ||
 			strings.TrimSpace(entry.Title) == "" ||
 			strings.TrimSpace(entry.Content) == "" ||
 			!validType(entry.Type) {
-			return errors.New("invalid governed memory save entry")
+			return errors.New("invalid governed memory pending entry")
 		}
 		sum := sha256.Sum256([]byte(entry.Content))
 		if entry.ContentSHA256 != hex.EncodeToString(sum[:]) {
 			return errors.New("memory governance content digest mismatch")
+		}
+	}
+	if entry.Action == GovernanceSaved || entry.Action == GovernanceSuperseded {
+		if strings.TrimSpace(entry.ReferenceID) == "" ||
+			strings.TrimSpace(entry.Provider) == "" {
+			return errors.New("invalid governed memory commit entry")
+		}
+	}
+	if entry.Action == GovernanceReviewed || entry.Action == GovernanceDeleted {
+		if strings.TrimSpace(entry.ReferenceID) == "" {
+			return errors.New("invalid governed memory mutation entry")
 		}
 	}
 	return nil
