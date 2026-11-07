@@ -244,3 +244,39 @@ func TestEffectiveOperationsExternalRequiresAvailableBoundEvidence(t *testing.T)
 		t.Fatalf("operations=%#v", got)
 	}
 }
+
+
+func TestValidateSnapshotAllowsReadOnlyGitHubOperationsButRejectsApprovalRequiredWrites(t *testing.T) {
+	provider := "github"
+	check := "github-connection-available"
+	github := registry.Tool{
+		ID: "github",
+		Description: "github",
+		Interface: registry.ToolInterface{Type: "connector", Provider: &provider},
+		Operations: []string{"read-repository", "read-issues", "create-commit", "create-pull-request"},
+		Access: []string{"read", "write", "network"},
+		Risk: "high",
+		RequiresApproval: true,
+		ApprovalRequiredOperations: []string{"create-commit", "create-pull-request"},
+		AvailabilityCheck: &check,
+		Status: "enabled",
+	}
+	tools := registry.ToolRegistry{SchemaVersion: 1, Tools: map[string]registry.Tool{"github": github}}
+
+	readOnly := BindOperations(Evidence{
+		ToolID: "github", Provider: "github",
+		State: StateAvailable, Healthy: true,
+	}, "read-repository", "read-issues")
+	if err := ValidateSnapshot(tools, Snapshot{"github": readOnly}); err != nil {
+		t.Fatalf("read-only binding rejected: %v", err)
+	}
+
+	write := BindOperations(Evidence{
+		ToolID: "github", Provider: "github",
+		State: StateAvailable, Healthy: true,
+	}, "create-commit")
+	err := ValidateSnapshot(tools, Snapshot{"github": write})
+	if err == nil || !strings.Contains(err.Error(), "requires explicit approval") {
+		t.Fatalf("err=%v", err)
+	}
+}

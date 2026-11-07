@@ -260,6 +260,13 @@ func ValidateSnapshot(tools registry.ToolRegistry, snapshot Snapshot) error {
 					operation,
 				)
 			}
+			if registry.OperationRequiresApproval(tool, operation) {
+				return fmt.Errorf(
+					"tool %q operation %q requires explicit approval and cannot be runtime-bound without approval evidence",
+					id,
+					operation,
+				)
+			}
 		}
 	}
 	return nil
