@@ -3,14 +3,17 @@ package main
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/FernandoVillegas27/ai-engineering-os/core/detector"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/registry"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/toolavailability"
 	"github.com/FernandoVillegas27/ai-engineering-os/core/toolhealth"
 	context7integration "github.com/FernandoVillegas27/ai-engineering-os/integrations/context7"
 	engramintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/engram"
+	githubintegration "github.com/FernandoVillegas27/ai-engineering-os/integrations/githubcli"
 )
 
 type toolProbe func(context.Context, registry.Tool) toolavailability.Evidence
@@ -29,15 +32,28 @@ func runTools(args []string) error {
 
 func runToolsStatus(args []string) error {
 	asJSON := false
-	for _, arg := range args {
-		switch arg {
+	projectRoot := ""
+	verifyBindings := false
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
 		case "--json":
 			asJSON = true
+		case "--project":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--project requiere una ruta")
+			}
+			i++
+			projectRoot = args[i]
+		case "--verify-bindings":
+			verifyBindings = true
 		case "-h", "--help":
-			return fmt.Errorf("uso: ai tools status [--json]")
+			return fmt.Errorf("uso: ai tools status [--json] [--project ruta --verify-bindings]")
 		default:
-			return fmt.Errorf("opción desconocida: %s", arg)
+			return fmt.Errorf("opción desconocida: %s", args[i])
 		}
+	}
+	if verifyBindings && strings.TrimSpace(projectRoot) == "" {
+		return fmt.Errorf("--verify-bindings requiere --project")
 	}
 
 	path, err := resolveRegistryFile("tools.yaml")
@@ -49,11 +65,27 @@ func runToolsStatus(args []string) error {
 		return err
 	}
 
-	snapshot := collectToolAvailability(
-		context.Background(),
-		tools,
-		defaultToolProbes(),
-	)
+	ctx := context.Background()
+	snapshot := collectToolAvailability(ctx, tools, defaultToolProbes())
+	if strings.TrimSpace(projectRoot) != "" && verifyBindings {
+		absoluteRoot, err := filepath.Abs(projectRoot)
+		if err != nil {
+			return fmt.Errorf("resolver ruta del proyecto: %w", err)
+		}
+		detection, err := detector.Inspect(absoluteRoot)
+		if err != nil {
+			return fmt.Errorf("inspeccionar proyecto para tool bindings: %w", err)
+		}
+		snapshot = verifyProjectToolBindings(
+			ctx,
+			tools,
+			snapshot,
+			absoluteRoot,
+			detection,
+			context7integration.New().Search,
+			githubintegration.New().Snapshot,
+		)
+	}
 	if err := toolavailability.ValidateSnapshot(tools, snapshot); err != nil {
 		return err
 	}
@@ -167,4 +199,116 @@ func printToolAvailability(tools registry.ToolRegistry, snapshot toolavailabilit
 	}
 	fmt.Println()
 	fmt.Println("Availability does not grant permissions. External unknown means not verified, not implicitly available.")
+}
+
+
+func verifyProjectToolBindings(
+	ctx context.Context,
+	tools registry.ToolRegistry,
+	base toolavailability.Snapshot,
+	root string,
+	detection detector.Detection,
+	context7Search context7SearchFunc,
+	githubSnapshot githubSnapshotFunc,
+) toolavailability.Snapshot {
+	snapshot := make(toolavailability.Snapshot, len(base))
+	for id, evidence := range base {
+		snapshot[id] = evidence
+	}
+
+	if tool, ok := tools.Tools["context7"]; ok && tool.Status == "enabled" {
+		libraries, language := context7LibraryHints(detection)
+		switch {
+		case len(libraries) == 0:
+			snapshot["context7"] = toolavailability.Unknown(
+				tool,
+				"project binding verification found no public library hints; no Context7 external query was sent",
+			)
+		case context7Search == nil:
+			snapshot["context7"] = toolavailability.Unknown(
+				tool,
+				"Context7 project binding verifier is not configured",
+			)
+		default:
+			result, err := context7Search(ctx, context7integration.SearchRequest{
+				Query: context7DocumentationQuery,
+				Libraries: libraries,
+				Language: language,
+			})
+			if err != nil {
+				failure := toolhealth.Classify(err, "")
+				snapshot["context7"] = toolavailability.FromHealth(
+					tool,
+					toolhealth.Status{
+						Provider: context7integration.ProviderID,
+						Available: failure.Kind != toolhealth.FailureUnavailable,
+						Healthy: false,
+						Details: err.Error(),
+						Failure: failure,
+					},
+					false,
+				)
+			} else {
+				evidence := toolavailability.FromHealth(
+					tool,
+					toolhealth.Status{
+						Provider: context7integration.ProviderID,
+						Available: true,
+						Healthy: true,
+						Details: fmt.Sprintf(
+							"project-scoped Context7 binding verified for %d public library hint(s)",
+							len(result.Libraries),
+						),
+					},
+					true,
+				)
+				snapshot["context7"] = toolavailability.BindOperations(evidence, "search-docs")
+			}
+		}
+	}
+
+	if tool, ok := tools.Tools["github"]; ok && tool.Status == "enabled" {
+		if githubSnapshot == nil {
+			snapshot["github"] = toolavailability.Unknown(
+				tool,
+				"GitHub project binding verifier is not configured",
+			)
+		} else {
+			result, err := githubSnapshot(ctx, root)
+			if err != nil {
+				failure := toolhealth.Classify(err, "")
+				snapshot["github"] = toolavailability.FromHealth(
+					tool,
+					toolhealth.Status{
+						Provider: githubintegration.ProviderID,
+						Available: failure.Kind != toolhealth.FailureUnavailable,
+						Healthy: false,
+						Details: err.Error(),
+						Failure: failure,
+					},
+					false,
+				)
+			} else {
+				evidence := toolavailability.FromHealth(
+					tool,
+					toolhealth.Status{
+						Provider: githubintegration.ProviderID,
+						Available: true,
+						Healthy: true,
+						Details: fmt.Sprintf(
+							"project-scoped GitHub read binding verified %d operation(s)",
+							len(result.BoundOperations),
+						),
+					},
+					true,
+				)
+				snapshot["github"] = toolavailability.BindOperations(
+					evidence,
+					result.BoundOperations...,
+				)
+			}
+		}
+	}
+
+	return snapshot
 }
