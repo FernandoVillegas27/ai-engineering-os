@@ -144,6 +144,10 @@ func runRunExecute(args []string) error {
 	if options.dryRun {
 		memoryProvider = nil
 	} else if memoryProvider != nil {
+		memoryProvider, err = governedRunMemoryProvider(memoryProvider)
+		if err != nil {
+			return err
+		}
 		memoryProvider = runbudget.ProjectMemory{Budget: budget, Inner: memoryProvider}
 	}
 	units, memoryRecall := injectRunMemory(
