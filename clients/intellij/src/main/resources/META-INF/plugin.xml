@@ -1,0 +1,35 @@
+<idea-plugin>
+  <id>com.fernandovillegas.ai-engineering-os</id>
+  <name>AI Engineering OS</name>
+  <vendor>FernandoVillegas27</vendor>
+  <description><![CDATA[
+    Read-only IntelliJ IDEA client for the local AI Engineering OS Control Plane.
+    Coordination, Quality, memory, recovery, and promotion remain owned by the AI Engineering OS backend.
+  ]]></description>
+
+  <depends>com.intellij.modules.platform</depends>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <applicationConfigurable
+        id="ai.engineering.os.settings"
+        displayName="AI Engineering OS"
+        instance="com.fernandovillegas.aiengineeringos.AiEngineeringOsConfigurable"/>
+  </extensions>
+
+  <actions>
+    <action
+        id="AiEngineeringOs.StartControlPlane"
+        class="com.fernandovillegas.aiengineeringos.StartControlPlaneAction"
+        text="AI Engineering OS: Start Control Plane"
+        description="Start the local AI Engineering OS Control Plane">
+      <add-to-group group-id="ToolsMenu" anchor="last"/>
+    </action>
+    <action
+        id="AiEngineeringOs.OpenControlPlane"
+        class="com.fernandovillegas.aiengineeringos.OpenControlPlaneAction"
+        text="AI Engineering OS: Open Control Plane"
+        description="Open the local AI Engineering OS dashboard">
+      <add-to-group group-id="ToolsMenu" anchor="last"/>
+    </action>
+  </actions>
+</idea-plugin>
