@@ -229,3 +229,65 @@ func TestVerifyOpenAPIRejectsOriginalSymlinkFile(t *testing.T) {
 		t.Fatalf("original OpenAPI symlink must block verification, got %v", err)
 	}
 }
+
+
+func TestArchitectureRejectsStagedPolicyFileSymlink(t *testing.T) {
+	original, staged, outside := t.TempDir(), t.TempDir(), t.TempDir()
+	policy := "version: 1\nrules:\n  - id: boundary\n    paths: [\"src/**\"]\n    forbidden_imports: [\"infra\"]\n"
+	writeFile(t, outside, "architecture.yaml", policy)
+	if err := os.MkdirAll(filepath.Join(staged, ".ai-engineering-os"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "architecture.yaml"), filepath.Join(staged, ".ai-engineering-os", "architecture.yaml")); err != nil {
+		if os.IsPermission(err) {
+			t.Skip("symlinks are not permitted")
+		}
+		t.Fatal(err)
+	}
+	if _, err := Verify(original, staged); err == nil || !strings.Contains(err.Error(), "symbolic link") {
+		t.Fatalf("policy symlink must be rejected, got %v", err)
+	}
+}
+
+func TestArchitectureRejectsStagedPolicyDirectorySymlink(t *testing.T) {
+	original, staged, outside := t.TempDir(), t.TempDir(), t.TempDir()
+	writeFile(t, outside, "architecture.yaml", "version: 1\nrules:\n  - id: boundary\n    paths: [\"src/**\"]\n    forbidden_imports: [\"infra\"]\n")
+	if err := os.Symlink(outside, filepath.Join(staged, ".ai-engineering-os")); err != nil {
+		if os.IsPermission(err) {
+			t.Skip("symlinks are not permitted")
+		}
+		t.Fatal(err)
+	}
+	if _, err := Verify(original, staged); err == nil || !strings.Contains(err.Error(), "symbolic link") {
+		t.Fatalf("policy parent symlink must be rejected, got %v", err)
+	}
+}
+
+func TestArchitectureRejectsSymlinkedSourceBeforeReading(t *testing.T) {
+	original, staged, outside := t.TempDir(), t.TempDir(), t.TempDir()
+	policy := "version: 1\nrules:\n  - id: boundary\n    paths: [\"src/**\"]\n    forbidden_imports: [\"infra\"]\n"
+	writeFile(t, staged, ".ai-engineering-os/architecture.yaml", policy)
+	writeFile(t, outside, "external.go", "package src\nimport \"example.com/infra\"\n")
+	if err := os.MkdirAll(filepath.Join(staged, "src"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "external.go"), filepath.Join(staged, "src", "external.go")); err != nil {
+		if os.IsPermission(err) {
+			t.Skip("symlinks are not permitted")
+		}
+		t.Fatal(err)
+	}
+	if _, err := Verify(original, staged); err == nil || !strings.Contains(err.Error(), "symbolic link") {
+		t.Fatalf("source symlink must be rejected, got %v", err)
+	}
+}
+
+func TestArchitecturePolicyYMLStillSupported(t *testing.T) {
+	original, staged := t.TempDir(), t.TempDir()
+	writeFile(t, staged, ".ai-engineering-os/architecture.yml", "version: 1\nrules:\n  - id: boundary\n    paths: [\"src/**\"]\n    forbidden_imports: [\"infra\"]\n")
+	writeFile(t, staged, "src/source.go", "package src\n")
+	result, err := Verify(original, staged)
+	if err != nil || !result.Passed {
+		t.Fatalf("valid .yml policy must still work: result=%#v err=%v", result, err)
+	}
+}
