@@ -267,6 +267,15 @@ It defines the order in which they evolve into the complete product.
 
 ---
 
+## Execution checkpoint — 2026-11-11 (OpenAPI read identity hardening)
+
+- Base master `5facecc413d539950836c63094c6ac2f556e3c44` after PR #197 merged; no open PRs at milestone selection.
+- Branch `fix/contractverify-openapi-replacement-detection` adds pre/open/post file-identity checks for OpenAPI document reads. It rejects symlinked/non-regular final files and ordinary replacement detected across the read, with focused regressions.
+- This is **not** atomic no-follow traversal and does not close all TOCTOU windows, especially parent directory replacement. A future cross-platform design must address those separately.
+- Merge only after exact-head Ubuntu/Windows/macOS Go CI, Ubuntu race, no conflicts. No releases/deploys.
+
+---
+
 ## 4. Current checkpoint
 
 ### Completed before this roadmap update
