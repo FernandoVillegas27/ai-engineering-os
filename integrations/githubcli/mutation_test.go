@@ -156,3 +156,61 @@ func TestPullRequestDigestChangesWithEveryMutationRelevantField(t *testing.T) {
 		}
 	}
 }
+
+
+func TestPullRequestResultURLMatchesExactApprovedGitHubRepository(t *testing.T) {
+	valid := []string{
+		"https://github.com/acme/project/pull/42",
+		"https://github.com/acme/project/pull/1",
+	}
+	for _, value := range valid {
+		if err := validatePullRequestResultURL(value, "acme/project"); err != nil {
+			t.Errorf("valid URL %q rejected: %v", value, err)
+		}
+	}
+	invalid := []string{
+		"https://evil.example/acme/project/pull/42",
+		"https://github.com.evil.example/acme/project/pull/42",
+		"https://attacker@github.com/acme/project/pull/42",
+		"http://github.com/acme/project/pull/42",
+		"https://github.com/acme/other/pull/42",
+		"https://github.com/other/project/pull/42",
+		"https://github.com/acme/project/pull/42/files",
+		"https://github.com/acme/project/pull/0",
+		"https://github.com/acme/project/pull/-1",
+		"https://github.com/acme/project/pull/01",
+		"https://github.com/acme/project/pull/not-a-number",
+		"https://github.com/acme/project/pull/42?next=evil",
+		"https://github.com/acme/project/pull/42#fragment",
+		"https://github.com/acme/project/pull/42/",
+		"https://github.com/acme/project/pull/42%2Ffiles",
+		"https://github.com/acme/project/pull/%34%32",
+		"https://github.com/acme/project/pull/42\\foo",
+		"https://github.com/acme/project/pull/18446744073709551616",
+		"https://github.com/acme/project/pull/42\nhttps://evil.example",
+		"",
+	}
+	for _, value := range invalid {
+		if err := validatePullRequestResultURL(value, "acme/project"); err == nil {
+			t.Errorf("unsafe or unrelated URL accepted: %q", value)
+		}
+	}
+}
+
+func TestCreatePullRequestRejectsUntrustedReturnedURL(t *testing.T) {
+	request := pullRequestFixture(t)
+	approval := approvedPullRequest(t, request)
+	runner := happyRunner()
+	runner.responses["repo view --json nameWithOwner"] = `{"nameWithOwner":"acme/project"}`
+	command := strings.Join([]string{
+		"pr", "create", "--repo", "acme/project", "--head", "feature/safe-pr",
+		"--base", "main", "--title", "Add safe feature", "--body", "Reviewed body",
+	}, " ")
+	runner.responses[command] = "https://github.com/attacker/repository/pull/7"
+	client := New()
+	client.Runner = runner
+	if _, err := client.CreatePullRequest(context.Background(), request, approval); err == nil ||
+		!strings.Contains(err.Error(), "invalid pull-request URL") {
+		t.Fatalf("expected a rejected untrusted CLI response, err=%v", err)
+	}
+}
