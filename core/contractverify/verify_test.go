@@ -291,3 +291,25 @@ func TestArchitecturePolicyYMLStillSupported(t *testing.T) {
 		t.Fatalf("valid .yml policy must still work: result=%#v err=%v", result, err)
 	}
 }
+
+func TestArchitectureRejectsAmbiguousPolicyFiles(t *testing.T) {
+	original, staged := t.TempDir(), t.TempDir()
+	policy := "version: 1\nrules:\n  - id: boundary\n    paths: [\"src/**\"]\n    forbidden_imports: [\"infra\"]\n"
+	writeFile(t, staged, ".ai-engineering-os/architecture.yaml", policy)
+	writeFile(t, staged, ".ai-engineering-os/architecture.yml", policy)
+	if _, err := Verify(original, staged); err == nil || !strings.Contains(err.Error(), "multiple architecture policy") {
+		t.Fatalf("ambiguous policies must fail closed, got %v", err)
+	}
+}
+
+func TestArchitectureRejectsAmbiguousOriginalPolicyFiles(t *testing.T) {
+	original, staged := t.TempDir(), t.TempDir()
+	policy := "version: 1\nrules:\n  - id: boundary\n    paths: [\"src/**\"]\n    forbidden_imports: [\"infra\"]\n"
+	for _, root := range []string{original, staged} {
+		writeFile(t, root, ".ai-engineering-os/architecture.yaml", policy)
+	}
+	writeFile(t, original, ".ai-engineering-os/architecture.yml", policy)
+	if _, err := Verify(original, staged); err == nil || !strings.Contains(err.Error(), "multiple architecture policy") {
+		t.Fatalf("ambiguous original policies must fail closed, got %v", err)
+	}
+}
