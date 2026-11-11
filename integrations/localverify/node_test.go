@@ -147,3 +147,42 @@ func TestParseNodeJSONValidPassingReportRemainsComplete(t *testing.T) {
 		t.Fatalf("valid passing report must remain complete, got=%#v", got)
 	}
 }
+
+
+func TestParseNodeJSONRejectsIncompleteReporterSchema(t *testing.T) {
+	cases := []string{
+		`{"testResults":[{"name":"test.js","assertionResults":[{"status":"passed"}]}]}`,
+		`{"numFailedTests":0}`,
+		`{"numFailedTests":0,"testResults":null}`,
+		`{"numFailedTests":-1,"testResults":[{"name":"test.js","assertionResults":[]}]}`,
+		`{"numFailedTests":0,"numFailedTestSuites":-1,"testResults":[{"name":"test.js","assertionResults":[]}]}`,
+		`{"numFailedTests":0,"testResults":[]}`,
+	}
+	for i, raw := range cases {
+		got := parseNodeTestJSON(raw, "", false)
+		if got.Confidence != verification.ParsePartial {
+			t.Fatalf("case %d accepted incomplete reporter: %#v", i, got)
+		}
+	}
+}
+
+func TestParseNodeJSONRejectsUnrecognizedAssertionStatus(t *testing.T) {
+	for _, status := range []string{"", "mystery", "FAILED-UNKNOWN"} {
+		changed := strings.Replace(nodeJSONFixture,
+			`"status": "failed"`, `"status": "`+status+`"`, 1)
+		changed = strings.Replace(changed, `"numFailedTests": 1`, `"numFailedTests": 0`, 1)
+		got := parseNodeTestJSON(changed, "", false, "C:/workspace")
+		if got.Confidence != verification.ParsePartial {
+			t.Fatalf("unknown status %q accepted: %#v", status, got)
+		}
+	}
+}
+
+func TestParseNodeJSONRecognizesValidSkippedAssertions(t *testing.T) {
+	passing := strings.Replace(nodeJSONFixture, `"numFailedTests": 1`, `"numFailedTests": 0`, 1)
+	passing = strings.Replace(passing, `"status": "failed"`, `"status": "skipped"`, 1)
+	got := parseNodeTestJSON(passing, "", false, "C:/workspace")
+	if got.Confidence != verification.ParseComplete || len(got.Failures) != 0 {
+		t.Fatalf("valid skipped assertion was rejected: %#v", got)
+	}
+}
