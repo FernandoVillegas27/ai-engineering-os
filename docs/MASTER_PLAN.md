@@ -251,8 +251,8 @@ It defines the order in which they evolve into the complete product.
 ## Execution checkpoint — 2026-11-11 (ancestor directory symlinks)
 
 - Baseline master `9f04053422075726208982959d14a0878794086a` (PR #195 merged).
-- Branch `fix/contractverify-ancestor-symlink-guard` extends root validation to all absolute-path ancestor components, not only the root's final component. Both original and staged roots are covered.
-- Regression tests cover symlinked ancestors on either root and normal nested directories.
+- Branch `fix/contractverify-ancestor-symlink-guard` extends root validation to the root's direct parent, in addition to the final component; deeper system ancestors are deliberately not gated because macOS uses legitimate /var symlinks. Both original and staged roots are covered.
+- Regression tests cover symlinked direct parents on either root and normal nested directories.
 - Scope remains pre-read only: concurrent replacement of filesystem components can still race. Platform-specific atomic no-follow traversal remains future work.
 - Merge gate: exact head SHA, no conflicts, Ubuntu/Windows/macOS Go checks and Ubuntu race. No releases/deploys.
 
