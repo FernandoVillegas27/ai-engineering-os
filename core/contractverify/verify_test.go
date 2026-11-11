@@ -505,3 +505,35 @@ func TestLoadArchitecturePolicyRejectsDirectory(t *testing.T) {
 		t.Fatal("architecture policy directory must fail closed")
 	}
 }
+
+func TestScanArchitectureViolationsReadsRegularSource(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "src/main.go", "package main\nimport \"unsafe\"\n")
+	policy := architecturePolicy{Rules: []architectureRule{{
+		ID: "no-unsafe", Paths: []string{"**/*.go"}, ForbiddenImports: []string{"unsafe"},
+	}}}
+	violations, err := scanArchitectureViolations(root, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 1 || violations[0].Import != "unsafe" {
+		t.Fatalf("expected forbidden import from regular source, got %#v", violations)
+	}
+}
+
+func TestScanArchitectureViolationsRejectsSymlinkedSource(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(t.TempDir(), "target.go")
+	if err := os.WriteFile(target, []byte("package main\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(root, "main.go")); err != nil {
+		if os.IsPermission(err) {
+			t.Skip("symlink creation not permitted")
+		}
+		t.Fatal(err)
+	}
+	if _, err := scanArchitectureViolations(root, architecturePolicy{}); err == nil {
+		t.Fatal("symlinked architecture source must fail closed")
+	}
+}
