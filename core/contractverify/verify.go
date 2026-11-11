@@ -518,7 +518,7 @@ func findArchitecturePolicy(root string) (string, bool, error) {
 }
 
 func loadArchitecturePolicy(path string) (architecturePolicy, error) {
-	data, err := os.ReadFile(path)
+	data, err := readStableContractFile(path)
 	if err != nil {
 		return architecturePolicy{}, err
 	}
