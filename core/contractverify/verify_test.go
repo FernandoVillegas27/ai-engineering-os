@@ -537,3 +537,31 @@ func TestScanArchitectureViolationsRejectsSymlinkedSource(t *testing.T) {
 		t.Fatal("symlinked architecture source must fail closed")
 	}
 }
+
+func TestArchitectureRejectsLiteralDynamicJavaScriptImports(t *testing.T) {
+	for _, ext := range []string{".js", ".jsx", ".ts", ".tsx"} {
+		t.Run(ext, func(t *testing.T) {
+			original, staged := t.TempDir(), t.TempDir()
+			policy := "version: 1\nrules:\n  - id: boundary\n    paths: [\"src/**\"]\n    forbidden_imports: [\"infra\"]\n"
+			writeFile(t, staged, ".ai-engineering-os/architecture.yaml", policy)
+			writeFile(t, staged, "src/module"+ext, "const module = import( \"example.com/infra\" );\n")
+			result, err := Verify(original, staged)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.Passed || len(result.Findings) != 1 || result.Findings[0].Kind != FindingArchitecture {
+				t.Fatalf("dynamic import must be gated: %#v", result)
+			}
+		})
+	}
+}
+
+func TestArchitectureAllowsNonForbiddenLiteralDynamicImport(t *testing.T) {
+	original, staged := t.TempDir(), t.TempDir()
+	writeFile(t, staged, ".ai-engineering-os/architecture.yaml", "version: 1\nrules:\n  - id: boundary\n    paths: [\"src/**\"]\n    forbidden_imports: [\"infra\"]\n")
+	writeFile(t, staged, "src/module.ts", "const module = import(\"example.com/allowed\");\n")
+	result, err := Verify(original, staged)
+	if err != nil || !result.Passed {
+		t.Fatalf("allowed dynamic import should pass: result=%#v err=%v", result, err)
+	}
+}
