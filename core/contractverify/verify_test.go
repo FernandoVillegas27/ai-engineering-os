@@ -313,3 +313,24 @@ func TestArchitectureRejectsAmbiguousOriginalPolicyFiles(t *testing.T) {
 		t.Fatalf("ambiguous original policies must fail closed, got %v", err)
 	}
 }
+
+func TestArchitectureMalformedGoImportsFailClosed(t *testing.T) {
+	original, staged := t.TempDir(), t.TempDir()
+	policy := "version: 1\nrules:\n  - id: boundary\n    paths: [\"src/**\"]\n    forbidden_imports: [\"infra\"]\n"
+	writeFile(t, staged, ".ai-engineering-os/architecture.yaml", policy)
+	writeFile(t, staged, "src/broken.go", "package src\nimport (\n")
+	if _, err := Verify(original, staged); err == nil || !strings.Contains(err.Error(), "parse architecture Go imports") {
+		t.Fatalf("malformed covered Go imports must fail closed, got %v", err)
+	}
+}
+
+func TestArchitectureMalformedUncoveredGoImportsAreNotGated(t *testing.T) {
+	original, staged := t.TempDir(), t.TempDir()
+	policy := "version: 1\nrules:\n  - id: boundary\n    paths: [\"src/**\"]\n    forbidden_imports: [\"infra\"]\n"
+	writeFile(t, staged, ".ai-engineering-os/architecture.yaml", policy)
+	writeFile(t, staged, "other/broken.go", "package other\nimport (\n")
+	result, err := Verify(original, staged)
+	if err != nil || !result.Passed {
+		t.Fatalf("uncovered files should not be subject to import syntax gate: result=%#v err=%v", result, err)
+	}
+}
