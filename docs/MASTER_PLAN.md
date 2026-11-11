@@ -285,6 +285,15 @@ It defines the order in which they evolve into the complete product.
 
 ---
 
+## Execution checkpoint — 2026-11-11 (architecture source read identity)
+
+- Baseline master `66f358776eb3c5a230f930c223bf61518a6abbb8`, PR #199 merged; no open PRs at milestone selection.
+- Branch `fix/contractverify-architecture-source-stable-read` reuses the pre/open/post file-identity guard for Go/Java/JS/TS architecture source reads, with regular-source and symlink regression coverage.
+- Remaining limitation: not an atomic no-follow traversal; parent-directory replacement and other concurrent mutation races remain. Avoid claiming complete TOCTOU protection.
+- Merge only after exact-head Ubuntu/Windows/macOS Go tests, Ubuntu race, no conflicts. No release/deploy.
+
+---
+
 ## 4. Current checkpoint
 
 ### Completed before this roadmap update
