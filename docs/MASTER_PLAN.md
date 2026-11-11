@@ -248,6 +248,16 @@ It defines the order in which they evolve into the complete product.
 
 ---
 
+## Execution checkpoint — 2026-11-11 (ancestor directory symlinks)
+
+- Baseline master `9f04053422075726208982959d14a0878794086a` (PR #195 merged).
+- Branch `fix/contractverify-ancestor-symlink-guard` extends root validation to all absolute-path ancestor components, not only the root's final component. Both original and staged roots are covered.
+- Regression tests cover symlinked ancestors on either root and normal nested directories.
+- Scope remains pre-read only: concurrent replacement of filesystem components can still race. Platform-specific atomic no-follow traversal remains future work.
+- Merge gate: exact head SHA, no conflicts, Ubuntu/Windows/macOS Go checks and Ubuntu race. No releases/deploys.
+
+---
+
 ## 4. Current checkpoint
 
 ### Completed before this roadmap update
