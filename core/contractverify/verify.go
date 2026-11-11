@@ -508,6 +508,22 @@ func scanArchitectureViolations(root string, policy architecturePolicy) ([]archi
 		if err != nil {
 			return err
 		}
+		// A malformed Go import declaration must not bypass forbidden-import
+		// checks. Only files covered by an architecture rule are gated.
+		if ext == ".go" {
+			covered := false
+			for _, rule := range policy.Rules {
+				if matchesAnyPath(relative, rule.Paths) {
+					covered = true
+					break
+				}
+			}
+			if covered {
+				if _, parseErr := parser.ParseFile(token.NewFileSet(), relative, data, parser.ImportsOnly); parseErr != nil {
+					return fmt.Errorf("parse architecture Go imports %s: %w", relative, parseErr)
+				}
+			}
+		}
 		imports := extractImports(string(data), ext)
 		for _, rule := range policy.Rules {
 			if !matchesAnyPath(relative, rule.Paths) {
