@@ -63,14 +63,29 @@ func parseNodeTestJSON(stdout, stderr string, exitFailed bool, roots ...string) 
 		}
 		return structuredParse{Confidence: verification.ParsePartial}
 	}
+	// Require actual reporter structure. Without these keys, Go's zero-value
+	// decoding can make an arbitrary JSON object look like a passing test run.
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &envelope); err != nil ||
+		!nodeRequiredJSONFields(envelope) || report.NumFailedTests < 0 ||
+		report.NumFailedTestSuites < 0 || len(report.TestResults) == 0 {
+		return structuredParse{Confidence: verification.ParsePartial}
+	}
 
 	var failures []verification.Failure
 	seen := map[string]bool{}
 	duplicateFailureIDs := false
+	invalidAssertionStatus := false
 	for _, suite := range report.TestResults {
 		suiteID := normalizedNodeSuite(suite.Name, roots...)
 		for _, assertion := range suite.AssertionResults {
-			if strings.ToLower(strings.TrimSpace(assertion.Status)) != "failed" {
+			switch strings.ToLower(strings.TrimSpace(assertion.Status)) {
+			case "passed", "pending", "skipped", "todo", "disabled":
+				continue
+			case "failed":
+				// Extract and retain the failure below.
+			default:
+				invalidAssertionStatus = true
 				continue
 			}
 			name := strings.TrimSpace(assertion.FullName)
@@ -107,7 +122,7 @@ func parseNodeTestJSON(stdout, stderr string, exitFailed bool, roots ...string) 
 	// incomplete even when an individual failure can be identified. In
 	// particular, do not treat a successful process exit with failures as
 	// complete evidence for baseline-aware Quality.
-	if duplicateFailureIDs || report.NumFailedTests != len(failures) ||
+	if duplicateFailureIDs || invalidAssertionStatus || report.NumFailedTests != len(failures) ||
 		(!exitFailed && len(failures) > 0) {
 		return structuredParse{Failures: failures, Confidence: verification.ParsePartial}
 	}
@@ -156,4 +171,20 @@ func normalizedNodeSuite(value string, roots ...string) string {
 		normalized = strings.TrimPrefix(normalized, "<workspace>/")
 	}
 	return filepath.ToSlash(normalized)
+}
+
+// nodeRequiredJSONFields keeps missing required fields distinct from valid
+// zero counts. The caller must never infer successful verification from a
+// JSON object that merely happens to contain a testResults property.
+func nodeRequiredJSONFields(envelope map[string]json.RawMessage) bool {
+	if envelope == nil {
+		return false
+	}
+	for _, name := range []string{"numFailedTests", "testResults"} {
+		value, ok := envelope[name]
+		if !ok || len(value) == 0 || string(value) == "null" {
+			return false
+		}
+	}
+	return true
 }
