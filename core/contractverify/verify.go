@@ -49,6 +49,15 @@ func Verify(originalRoot, stagedRoot string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	for _, root := range []string{originalAbs, stagedAbs} {
+		info, statErr := os.Lstat(root)
+		if statErr != nil {
+			return Result{}, fmt.Errorf("inspect contract verification root: %w", statErr)
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return Result{}, errors.New("contract verification root must be a real directory, not a symbolic link")
+		}
+	}
 
 	var findings []Finding
 	openAPI, err := verifyOpenAPIContracts(originalAbs, stagedAbs)
