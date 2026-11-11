@@ -228,6 +228,17 @@ It defines the order in which they evolve into the complete product.
 
 ---
 
+## Execution checkpoint — 2026-11-11 (Go import parsing)
+
+- Baseline master: `39bbccdc60a458328c0d528c3dc018f57f4c7b2e` (PR #193 merged); no PRs open at selection.
+- Branch: `fix/architecture-go-import-parse-failclosed`.
+- Security milestone: architecture checks must fail closed when a covered Go file has malformed import declarations. Previously `extractImports` ignored parser errors and returned no imports, allowing a malformed declaration to bypass the rule. Uncovered files retain existing behavior.
+- Regression tests cover malformed covered and uncovered Go files.
+- Merge gate: exact SHA, conflict-free, required Go tests Ubuntu/Windows/macOS, Ubuntu race, applicable packaging; no releases/deploys.
+- Follow-up: evaluate platform-specific atomic no-follow reads for actively mutating workspaces; pre-read guards remain vulnerable to TOCTOU.
+
+---
+
 ## 4. Current checkpoint
 
 ### Completed before this roadmap update
