@@ -334,3 +334,43 @@ func TestArchitectureMalformedUncoveredGoImportsAreNotGated(t *testing.T) {
 		t.Fatalf("uncovered files should not be subject to import syntax gate: result=%#v err=%v", result, err)
 	}
 }
+
+func TestVerifyRejectsSymlinkedProjectRoots(t *testing.T) {
+	original, staged := t.TempDir(), t.TempDir()
+	linkParent := t.TempDir()
+	for _, tc := range []struct {
+		name string
+		target string
+		originalLink bool
+	}{
+		{name: "original", target: original, originalLink: true},
+		{name: "staged", target: staged},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			link := filepath.Join(linkParent, tc.name)
+			if err := os.Symlink(tc.target, link); err != nil {
+				if os.IsPermission(err) {
+					t.Skip("symlink creation not permitted")
+				}
+				t.Fatal(err)
+			}
+			left, right := original, staged
+			if tc.originalLink {
+				left = link
+			} else {
+				right = link
+			}
+			if _, err := Verify(left, right); err == nil || !strings.Contains(err.Error(), "symbolic link") {
+				t.Fatalf("symlinked %s root must fail closed, got %v", tc.name, err)
+			}
+		})
+	}
+}
+
+func TestVerifyRejectsNonDirectoryRoot(t *testing.T) {
+	original, staged := t.TempDir(), t.TempDir()
+	writeFile(t, original, "not-a-directory", "content")
+	if _, err := Verify(filepath.Join(original, "not-a-directory"), staged); err == nil || !strings.Contains(err.Error(), "real directory") {
+		t.Fatalf("non-directory root must fail closed, got %v", err)
+	}
+}
