@@ -2394,3 +2394,58 @@ After every meaningful milestone:
 7. preserve the long-term vision unless an explicit architecture decision changes it.
 
 The repository, not a chat transcript, is the durable source of truth for the project plan.
+
+
+## Verified engineering checkpoint — 2026-11-11 (PRs #183–#187)
+
+This supersedes older "resume here" implementation pointers for the current
+post-RC development sequence. Historical milestone descriptions remain in this
+document for continuity.
+
+### Merged milestone evidence
+
+| PR | Scope | Verified merge SHA |
+| --- | --- | --- |
+| #183 | Prevent sequential replay of approved GitHub PR creation using a durable pre-mutation event | `68578b2ad31b8665e1d40c39fab5a1a2e0a0611e` |
+| #184 | Atomic, immutable mutation claim prevents concurrent duplicate creation across processes sharing an approval store | `f3454bededa35ff1d2deae1a7dccd93a3d5b08c9` |
+| #185 | Validate external GitHub PR result URLs against the exact approved repository and GitHub origin | `620066c613f628c86048d5ab6a1200c466df7118` |
+| #186 | Python pytest/JUnit evidence fails closed on invalid roots, duplicate failure identities, inconsistent counts and contradictory exit status | `cb5ae99dedf2a7725d5a8abbfacaa3aa41c0ccab` |
+| #187 | Reject symlinked original/staged OpenAPI paths before contract verification reads | `f6459b4860351bd9e0778d19e832f445ffd063db` |
+
+All five PRs passed the applicable GitHub Actions Go matrix on Ubuntu,
+Windows and macOS before merge. #183 and #184 additionally passed their
+applicable release artifact workflows. A skipped tag-only release publishing
+job on a PR is intentional; it is not a public release.
+
+### Current boundaries and limitations
+
+- Creating a GitHub PR requires a matching human grant, durable audit evidence
+  and a one-time atomic mutation claim. Ambiguous outcomes are *not*
+  automatically retried. Concurrent claims require all processes to use the
+  same storage location and a filesystem supporting exclusive creation.
+- Only the approved GitHub.com repository may be accepted as the result of a
+  GitHub PR creation operation. Enterprise hosts require explicit contracts.
+- Pytest JUnit evidence with contradictory or ambiguous structure/counts
+  cannot authorize a baseline-aware success classification.
+- OpenAPI contract file and parent-directory symlinks fail closed. The
+  pre-read check is **not** a race-free descriptor-based no-follow read if an
+  untrusted process can mutate the workspace concurrently.
+- Green CI proves only the tested behavior and environments. It does not
+  imply that the entire long-term product vision is complete.
+
+### Next prioritized engineering milestones
+
+1. Extend cross-language structured Quality evidence integrity and
+   deterministic failure comparison, including more adversarial fixtures.
+2. Harden contract/architecture input reads against concurrent path swapping
+   where the supported operating systems permit atomic no-follow access.
+3. Complete external-tool/MCP runtime bindings with provider-verified
+   operations; never equate a registry declaration with authorization.
+4. Expand safe interactive browser/Playwright integration only after a real
+   transport/operation contract and explicit human approval are verifiable.
+5. Improve Control Plane and IDE usability, end-to-end product scenarios and
+   release/readiness evidence before declaring a stable production version.
+
+**Resume rule:** Inspect live `master`, open PRs and CI first. Continue from
+the earliest incomplete milestone above; do not assume a historical checkpoint
+is still current. Always preserve human approval and green CI before merge.
