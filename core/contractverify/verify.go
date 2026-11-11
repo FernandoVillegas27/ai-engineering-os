@@ -357,16 +357,13 @@ type architectureViolation struct {
 }
 
 func verifyArchitecture(originalRoot, stagedRoot string) ([]Finding, error) {
-	policyPath := filepath.Join(stagedRoot, ".ai-engineering-os", "architecture.yaml")
-	if _, err := os.Stat(policyPath); os.IsNotExist(err) {
-		policyPath = filepath.Join(stagedRoot, ".ai-engineering-os", "architecture.yml")
-	}
-	if _, err := os.Stat(policyPath); os.IsNotExist(err) {
-		return nil, nil
-	} else if err != nil {
+	policyPath, found, err := findArchitecturePolicy(stagedRoot)
+	if err != nil {
 		return nil, err
 	}
-
+	if !found {
+		return nil, nil
+	}
 	policy, err := loadArchitecturePolicy(policyPath)
 	if err != nil {
 		return nil, err
@@ -376,12 +373,12 @@ func verifyArchitecture(originalRoot, stagedRoot string) ([]Finding, error) {
 		return nil, err
 	}
 
-	originalPolicyPath := filepath.Join(originalRoot, ".ai-engineering-os", "architecture.yaml")
-	if _, err := os.Stat(originalPolicyPath); os.IsNotExist(err) {
-		originalPolicyPath = filepath.Join(originalRoot, ".ai-engineering-os", "architecture.yml")
+	originalPolicyPath, hasOriginalPolicy, err := findArchitecturePolicy(originalRoot)
+	if err != nil {
+		return nil, err
 	}
 	originalViolations := map[string]bool{}
-	if _, err := os.Stat(originalPolicyPath); err == nil {
+	if hasOriginalPolicy {
 		originalPolicy, loadErr := loadArchitecturePolicy(originalPolicyPath)
 		if loadErr != nil {
 			return nil, loadErr
@@ -408,6 +405,39 @@ func verifyArchitecture(originalRoot, stagedRoot string) ([]Finding, error) {
 		})
 	}
 	return findings, nil
+}
+
+// findArchitecturePolicy detects policy files without following file or
+// parent-directory symlinks. A symlink may not turn a policy into an
+// apparently missing file or redirect the read outside the project.
+func findArchitecturePolicy(root string) (string, bool, error) {
+	policyDir := filepath.Join(root, ".ai-engineering-os")
+	info, err := os.Lstat(policyDir)
+	if os.IsNotExist(err) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return "", false, errors.New("architecture policy directory must not be a symbolic link or special file")
+	}
+	for _, name := range []string{"architecture.yaml", "architecture.yml"} {
+		relative := filepath.Join(".ai-engineering-os", name)
+		path := filepath.Join(root, relative)
+		info, err := os.Lstat(path)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return "", false, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return "", false, errors.New("architecture policy must be a regular file, not a symbolic link")
+		}
+		return path, true, nil
+	}
+	return "", false, nil
 }
 
 func loadArchitecturePolicy(path string) (architecturePolicy, error) {
@@ -464,6 +494,9 @@ func scanArchitectureViolations(root string, policy architecturePolicy) ([]archi
 			return err
 		}
 		relative = filepath.ToSlash(relative)
+		if err := verifyContractFilePath(root, relative); err != nil {
+			return fmt.Errorf("inspect architecture source %s: %w", relative, err)
+		}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return err
