@@ -422,3 +422,26 @@ func TestVerifyAllowsOrdinaryNestedRootDirectories(t *testing.T) {
 		t.Fatalf("ordinary nested roots must remain valid: result=%#v err=%v", result, err)
 	}
 }
+
+func TestVerifyAllowsSymlinkedSystemStyleGrandparent(t *testing.T) {
+	// macOS commonly exposes /var through a system symlink. Only the
+	// workspace root and its direct parent are under this guard.
+	realParent := t.TempDir()
+	nested := filepath.Join(realParent, "workspace")
+	for _, name := range []string{"original", "staged"} {
+		if err := os.MkdirAll(filepath.Join(nested, name), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	link := filepath.Join(t.TempDir(), "system-style-link")
+	if err := os.Symlink(realParent, link); err != nil {
+		if os.IsPermission(err) {
+			t.Skip("symlink creation not permitted")
+		}
+		t.Fatal(err)
+	}
+	result, err := Verify(filepath.Join(link, "workspace", "original"), filepath.Join(link, "workspace", "staged"))
+	if err != nil || !result.Passed {
+		t.Fatalf("system-style grandparent symlink must not block ordinary workspaces: result=%#v err=%v", result, err)
+	}
+}
