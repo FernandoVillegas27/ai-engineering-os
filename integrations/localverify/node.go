@@ -66,6 +66,7 @@ func parseNodeTestJSON(stdout, stderr string, exitFailed bool, roots ...string) 
 
 	var failures []verification.Failure
 	seen := map[string]bool{}
+	duplicateFailureIDs := false
 	for _, suite := range report.TestResults {
 		suiteID := normalizedNodeSuite(suite.Name, roots...)
 		for _, assertion := range suite.AssertionResults {
@@ -83,6 +84,9 @@ func parseNodeTestJSON(stdout, stderr string, exitFailed bool, roots ...string) 
 			}
 			id := suiteID + "#" + name
 			if seen[id] {
+				// Baseline comparison indexes by failure ID. Discarding a
+				// duplicate here would conceal conflicting test evidence.
+				duplicateFailureIDs = true
 				continue
 			}
 			seen[id] = true
@@ -99,14 +103,19 @@ func parseNodeTestJSON(stdout, stderr string, exitFailed bool, roots ...string) 
 	}
 	sortFailures(failures)
 
+	// A report with duplicate failure identities or conflicting totals is
+	// incomplete even when an individual failure can be identified. In
+	// particular, do not treat a successful process exit with failures as
+	// complete evidence for baseline-aware Quality.
+	if duplicateFailureIDs || report.NumFailedTests != len(failures) ||
+		(!exitFailed && len(failures) > 0) {
+		return structuredParse{Failures: failures, Confidence: verification.ParsePartial}
+	}
 	if !exitFailed {
 		return structuredParse{Failures: failures, Confidence: verification.ParseComplete}
 	}
 	if len(failures) == 0 {
 		return structuredParse{Confidence: verification.ParseFailed}
-	}
-	if report.NumFailedTests > len(failures) {
-		return structuredParse{Failures: failures, Confidence: verification.ParsePartial}
 	}
 	return structuredParse{Failures: failures, Confidence: verification.ParseComplete}
 }
