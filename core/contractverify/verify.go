@@ -422,6 +422,7 @@ func findArchitecturePolicy(root string) (string, bool, error) {
 	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 		return "", false, errors.New("architecture policy directory must not be a symbolic link or special file")
 	}
+	var selected string
 	for _, name := range []string{"architecture.yaml", "architecture.yml"} {
 		relative := filepath.Join(".ai-engineering-os", name)
 		path := filepath.Join(root, relative)
@@ -435,7 +436,13 @@ func findArchitecturePolicy(root string) (string, bool, error) {
 		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 			return "", false, errors.New("architecture policy must be a regular file, not a symbolic link")
 		}
-		return path, true, nil
+		if selected != "" {
+			return "", false, errors.New("multiple architecture policy files are ambiguous")
+		}
+		selected = path
+	}
+	if selected != "" {
+		return selected, true, nil
 	}
 	return "", false, nil
 }
