@@ -175,3 +175,57 @@ rules:
 		t.Fatalf("result=%#v", result)
 	}
 }
+
+
+func TestVerifyOpenAPIRejectsStagedSymlinkFile(t *testing.T) {
+	original := t.TempDir()
+	staged := t.TempDir()
+	outside := t.TempDir()
+	writeFile(t, original, "contracts/openapi.yaml", openAPIBase)
+	writeFile(t, outside, "external.yaml", openAPIBase)
+	if err := os.MkdirAll(filepath.Join(staged, "contracts"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "external.yaml"), filepath.Join(staged, "contracts", "openapi.yaml")); err != nil {
+		if os.IsPermission(err) {
+			t.Skip("symlink creation not permitted")
+		}
+		t.Fatal(err)
+	}
+	if _, err := Verify(original, staged); err == nil || !strings.Contains(err.Error(), "symbolic link") {
+		t.Fatalf("staged OpenAPI symlink must block verification, got %v", err)
+	}
+}
+
+func TestVerifyOpenAPIRejectsStagedSymlinkDirectory(t *testing.T) {
+	original := t.TempDir()
+	staged := t.TempDir()
+	outside := t.TempDir()
+	writeFile(t, original, "contracts/openapi.yaml", openAPIBase)
+	writeFile(t, outside, "openapi.yaml", openAPIBase)
+	if err := os.Symlink(outside, filepath.Join(staged, "contracts")); err != nil {
+		if os.IsPermission(err) {
+			t.Skip("symlink creation not permitted")
+		}
+		t.Fatal(err)
+	}
+	if _, err := Verify(original, staged); err == nil || !strings.Contains(err.Error(), "symbolic link") {
+		t.Fatalf("staged OpenAPI parent symlink must block verification, got %v", err)
+	}
+}
+
+func TestVerifyOpenAPIRejectsOriginalSymlinkFile(t *testing.T) {
+	original := t.TempDir()
+	staged := t.TempDir()
+	outside := t.TempDir()
+	writeFile(t, outside, "openapi.yaml", openAPIBase)
+	if err := os.Symlink(filepath.Join(outside, "openapi.yaml"), filepath.Join(original, "openapi.yaml")); err != nil {
+		if os.IsPermission(err) {
+			t.Skip("symlink creation not permitted")
+		}
+		t.Fatal(err)
+	}
+	if _, err := Verify(original, staged); err == nil || !strings.Contains(err.Error(), "symbolic link") {
+		t.Fatalf("original OpenAPI symlink must block verification, got %v", err)
+	}
+}
