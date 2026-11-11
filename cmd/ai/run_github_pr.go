@@ -170,6 +170,16 @@ func runRunGitHubPRCreate(args []string) error {
 	if githubPRMutationStarted(events, options.taskID, digest) {
 		return errors.New("this pull-request mutation has already started; inspect GitHub and the audit trail before any new approval")
 	}
+	// Claim the exact side effect before writing the pre-mutation event. The
+	// append-only audit check above prevents sequential replay, while this
+	// O_EXCL claim prevents concurrent processes from both passing that check.
+	// A failed audit append leaves the claim intact to fail closed.
+	if err := approvalStore.ClaimMutation(
+		options.runID, options.taskID, "github", "create-pull-request", digest,
+	); err != nil {
+		return fmt.Errorf("reserve github/create-pull-request mutation: %w", err)
+	}
+
 	started, err := controlplane.NewEvent(controlplane.NewEventRequest{
 		RunID: options.runID,
 		TaskID: options.taskID,
