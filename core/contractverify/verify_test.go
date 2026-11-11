@@ -374,3 +374,51 @@ func TestVerifyRejectsNonDirectoryRoot(t *testing.T) {
 		t.Fatalf("non-directory root must fail closed, got %v", err)
 	}
 }
+
+func TestVerifyRejectsSymlinkedAncestorDirectory(t *testing.T) {
+	realParent := t.TempDir()
+	original := filepath.Join(realParent, "original")
+	staged := filepath.Join(realParent, "staged")
+	if err := os.Mkdir(original, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(staged, 0700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "parent-link")
+	if err := os.Symlink(realParent, link); err != nil {
+		if os.IsPermission(err) {
+			t.Skip("symlink creation not permitted")
+		}
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		left string
+		right string
+	}{
+		{name: "original ancestor", left: filepath.Join(link, "original"), right: staged},
+		{name: "staged ancestor", left: original, right: filepath.Join(link, "staged")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := Verify(tc.left, tc.right); err == nil || !strings.Contains(err.Error(), "symbolic links") {
+				t.Fatalf("symlinked ancestor must fail closed: %v", err)
+			}
+		})
+	}
+}
+
+func TestVerifyAllowsOrdinaryNestedRootDirectories(t *testing.T) {
+	parent := t.TempDir()
+	original := filepath.Join(parent, "nested", "original")
+	staged := filepath.Join(parent, "nested", "staged")
+	for _, root := range []string{original, staged} {
+		if err := os.MkdirAll(root, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	result, err := Verify(original, staged)
+	if err != nil || !result.Passed {
+		t.Fatalf("ordinary nested roots must remain valid: result=%#v err=%v", result, err)
+	}
+}

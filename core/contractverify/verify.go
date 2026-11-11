@@ -50,12 +50,8 @@ func Verify(originalRoot, stagedRoot string) (Result, error) {
 		return Result{}, err
 	}
 	for _, root := range []string{originalAbs, stagedAbs} {
-		info, statErr := os.Lstat(root)
-		if statErr != nil {
-			return Result{}, fmt.Errorf("inspect contract verification root: %w", statErr)
-		}
-		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-			return Result{}, errors.New("contract verification root must be a real directory, not a symbolic link")
+		if err := verifyRealDirectoryChain(root); err != nil {
+			return Result{}, fmt.Errorf("inspect contract verification root: %w", err)
 		}
 	}
 
@@ -82,6 +78,33 @@ func Verify(originalRoot, stagedRoot string) (Result, error) {
 		return findings[i].ID < findings[j].ID
 	})
 	return Result{Passed: len(findings) == 0, Findings: findings}, nil
+}
+
+// verifyRealDirectoryChain rejects symlinks in any component of an absolute
+// project root. This prevents an ancestor link from redirecting a workspace
+// outside the intended tree. It is a pre-read guard, not an atomic open.
+func verifyRealDirectoryChain(root string) error {
+	current := filepath.Clean(root)
+	// Check the root and its direct parent. macOS has legitimate system
+	// ancestor symlinks (for example /var -> /private/var).
+	for depth := 0; depth < 2; depth++ {
+		info, err := os.Lstat(current)
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("contract verification root path must not contain symbolic links: %s", current)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("contract verification root path must contain a real directory at each component: %s", current)
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		current = parent
+	}
+	return nil
 }
 
 func verifyOpenAPIContracts(originalRoot, stagedRoot string) ([]Finding, error) {
