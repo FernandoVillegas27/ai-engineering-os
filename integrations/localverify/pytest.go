@@ -47,7 +47,8 @@ func parsePytestJUnitFile(path string, exitFailed bool, roots ...string) structu
 		return structuredParse{Confidence: verification.ParsePartial}
 	}
 	var report junitReport
-	if err := xml.Unmarshal(data, &report); err != nil {
+	if err := xml.Unmarshal(data, &report); err != nil ||
+		(report.XMLName.Local != "testsuite" && report.XMLName.Local != "testsuites") {
 		if exitFailed {
 			return structuredParse{Confidence: verification.ParseFailed}
 		}
@@ -58,16 +59,19 @@ func parsePytestJUnitFile(path string, exitFailed bool, roots ...string) structu
 	collectJUnitFailures(report, &failures, roots...)
 	sortFailures(failures)
 
+	// A successful exit with reported failures or an inconsistent count is not
+	// trustworthy evidence. Duplicate IDs are similarly ambiguous: the
+	// baseline comparison indexes by ID and must never silently drop entries.
+	expected, known := junitExpectedFailures(report)
+	if junitDuplicateFailureIDs(failures) || (known && expected != len(failures)) ||
+		(!exitFailed && len(failures) > 0) {
+		return structuredParse{Failures: failures, Confidence: verification.ParsePartial}
+	}
 	if !exitFailed {
 		return structuredParse{Failures: failures, Confidence: verification.ParseComplete}
 	}
 	if len(failures) == 0 {
 		return structuredParse{Confidence: verification.ParseFailed}
-	}
-
-	expected, known := junitExpectedFailures(report)
-	if known && expected > len(failures) {
-		return structuredParse{Failures: failures, Confidence: verification.ParsePartial}
 	}
 	return structuredParse{Failures: failures, Confidence: verification.ParseComplete}
 }
@@ -143,3 +147,14 @@ func junitExpectedFailures(report junitReport) (int, bool) {
 	return total, known
 }
 
+
+func junitDuplicateFailureIDs(failures []verification.Failure) bool {
+	seen := make(map[string]bool, len(failures))
+	for _, failure := range failures {
+		if failure.ID == "" || seen[failure.ID] {
+			return true
+		}
+		seen[failure.ID] = true
+	}
+	return false
+}
