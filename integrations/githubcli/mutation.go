@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -160,9 +161,8 @@ func (c Client) CreatePullRequest(
 		)
 	}
 	prURL := strings.TrimSpace(output)
-	parsed, err := url.Parse(prURL)
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || !strings.Contains(parsed.Path, "/pull/") {
-		return CreatePullRequestResult{}, errors.New("GitHub create-pull-request returned an invalid pull-request URL")
+	if err := validatePullRequestResultURL(prURL, request.Repository); err != nil {
+		return CreatePullRequestResult{}, fmt.Errorf("GitHub create-pull-request returned invalid pull-request URL: %w", err)
 	}
 	return CreatePullRequestResult{
 		URL: prURL,
@@ -242,6 +242,37 @@ func validateRef(label, value string) error {
 		strings.Contains(value, "@{") || strings.ContainsAny(value, " ~^:?*[\\") ||
 		strings.HasSuffix(value, "/") || strings.HasSuffix(value, ".") {
 		return fmt.Errorf("pull-request %s ref is invalid", label)
+	}
+	return nil
+}
+
+// validatePullRequestResultURL treats the CLI response as untrusted evidence.
+// A successful command is insufficient: the resulting URL must identify the
+// exact GitHub repository approved by the human operator.
+func validatePullRequestResultURL(value, repository string) error {
+	parsed, err := url.Parse(value)
+	if err != nil || parsed == nil {
+		return errors.New("malformed URL")
+	}
+	if parsed.Scheme != "https" || parsed.Host != "github.com" ||
+		parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
+		parsed.RawFragment != "" || parsed.RawPath != "" || parsed.Opaque != "" {
+		return errors.New("unsupported GitHub URL origin or URL components")
+	}
+	// URL.Path has already been decoded; reject encoded path tricks and
+	// additional segments rather than attempting to sanitize them.
+	parts := strings.Split(parsed.Path, "/")
+	if len(parts) != 5 || parts[0] != "" || parts[3] != "pull" ||
+		parts[1]+"/"+parts[2] != repository {
+		return errors.New("pull request URL does not match approved repository")
+	}
+	if parts[1] == "" || parts[2] == "" || parts[4] == "" ||
+		strings.ContainsAny(parsed.Path, "\\%") {
+		return errors.New("pull request URL has unsafe path")
+	}
+	number, err := strconv.ParseUint(parts[4], 10, 64)
+	if err != nil || number == 0 || strconv.FormatUint(number, 10) != parts[4] {
+		return errors.New("pull request URL has invalid number")
 	}
 	return nil
 }
