@@ -85,7 +85,9 @@ func Verify(originalRoot, stagedRoot string) (Result, error) {
 // outside the intended tree. It is a pre-read guard, not an atomic open.
 func verifyRealDirectoryChain(root string) error {
 	current := filepath.Clean(root)
-	for {
+	// Check the root and its direct parent. macOS has legitimate system
+	// ancestor symlinks (for example /var -> /private/var).
+	for depth := 0; depth < 2; depth++ {
 		info, err := os.Lstat(current)
 		if err != nil {
 			return err
@@ -98,10 +100,11 @@ func verifyRealDirectoryChain(root string) error {
 		}
 		parent := filepath.Dir(current)
 		if parent == current {
-			return nil
+			break
 		}
 		current = parent
 	}
+	return nil
 }
 
 func verifyOpenAPIContracts(originalRoot, stagedRoot string) ([]Finding, error) {
