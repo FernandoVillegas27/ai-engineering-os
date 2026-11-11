@@ -2449,3 +2449,11 @@ job on a PR is intentional; it is not a public release.
 **Resume rule:** Inspect live `master`, open PRs and CI first. Continue from
 the earliest incomplete milestone above; do not assume a historical checkpoint
 is still current. Always preserve human approval and green CI before merge.
+
+
+### In-progress Quality evidence milestone — nested JUnit counts
+
+- Proposed change: reject negative/impossible JUnit counts and contradictions between aggregate suite totals and fully declared child-suite totals.
+- Regression fixtures cover nested failure/test count mismatches and invalid totals.
+- This milestone is **not complete** until the corresponding PR has passed required Ubuntu, Windows, macOS and applicable race/package checks and has been merged from its verified head SHA.
+- After merge, continue cross-language Quality hardening and then no-follow contract reads, external tool runtime contracts and product UX per the prioritized checkpoint above.
