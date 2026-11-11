@@ -76,3 +76,51 @@ func TestParsePytestJUnitPassingReportIsComplete(t *testing.T) {
 		t.Fatalf("got=%#v", got)
 	}
 }
+
+
+func TestParsePytestJUnitRejectsUnknownRoot(t *testing.T) {
+	fixture := `<result tests="1" failures="1"><testcase name="test_bad"><failure message="boom"/></testcase></result>`
+	for _, exitFailed := range []bool{false, true} {
+		got := parseJUnitFixture(t, fixture, exitFailed)
+		want := verification.ParsePartial
+		if exitFailed {
+			want = verification.ParseFailed
+		}
+		if got.Confidence != want {
+			t.Fatalf("exitFailed=%v, got=%#v", exitFailed, got)
+		}
+	}
+}
+
+func TestParsePytestJUnitRejectsDuplicateFailureIdentity(t *testing.T) {
+	fixture := `<testsuite tests="2" failures="2" errors="0">
+  <testcase classname="tests.test_example" name="test_same" file="tests/test_example.py"><failure message="first"/></testcase>
+  <testcase classname="tests.test_example" name="test_same" file="tests/test_example.py"><failure message="second"/></testcase>
+</testsuite>`
+	got := parseJUnitFixture(t, fixture, true)
+	if got.Confidence != verification.ParsePartial || len(got.Failures) != 2 {
+		t.Fatalf("duplicate failed cases cannot be treated as complete: %#v", got)
+	}
+}
+
+func TestParsePytestJUnitRejectsInconsistentFailureCount(t *testing.T) {
+	for _, expected := range []string{"0", "3"} {
+		fixture := `<testsuite tests="3" failures="` + expected + `" errors="0">
+  <testcase classname="test_example" name="test_one"><failure message="boom"/></testcase>
+</testsuite>`
+		got := parseJUnitFixture(t, fixture, true)
+		if got.Confidence != verification.ParsePartial {
+			t.Fatalf("declared failures=%s, got=%#v", expected, got)
+		}
+	}
+}
+
+func TestParsePytestJUnitRejectsFailureEvidenceWithSuccessfulExit(t *testing.T) {
+	fixture := `<testsuite tests="1" failures="1" errors="0">
+  <testcase classname="test_example" name="test_one"><failure message="boom"/></testcase>
+</testsuite>`
+	got := parseJUnitFixture(t, fixture, false)
+	if got.Confidence != verification.ParsePartial || len(got.Failures) != 1 {
+		t.Fatalf("passed process cannot have complete failing evidence: %#v", got)
+	}
+}
