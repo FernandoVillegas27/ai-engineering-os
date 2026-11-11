@@ -239,6 +239,15 @@ It defines the order in which they evolve into the complete product.
 
 ---
 
+## Execution checkpoint — 2026-11-11 (root symlink guard)
+
+- Base master `7f01c3e0288b62ad638380a795f31f6eb506f907`; no open PRs when selecting this milestone.
+- Branch `fix/contractverify-reject-symlink-roots`: reject original or staged verification roots when their final component is a symlink or not a directory, before any recursive scan or contract read. Regression coverage for both roots and non-directory input.
+- This guard does **not** solve symlinked ancestors or concurrent path replacement (TOCTOU). Follow-up must evaluate platform-specific atomic no-follow reads with clear portability and approval boundaries.
+- Merge only on verified head SHA, conflict-free required Ubuntu/Windows/macOS CI and Ubuntu race. Do not publish releases/deploy.
+
+---
+
 ## 4. Current checkpoint
 
 ### Completed before this roadmap update
