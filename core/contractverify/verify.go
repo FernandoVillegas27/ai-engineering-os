@@ -82,19 +82,22 @@ func verifyOpenAPIContracts(originalRoot, stagedRoot string) ([]Finding, error) 
 	}
 	var findings []Finding
 	for _, relative := range originalFiles {
+		if err := verifyContractFilePath(originalRoot, relative); err != nil {
+			return nil, fmt.Errorf("inspect original OpenAPI %s: %w", relative, err)
+		}
 		before, err := loadOpenAPIDocument(filepath.Join(originalRoot, relative))
 		if err != nil {
 			return nil, fmt.Errorf("load original OpenAPI %s: %w", relative, err)
 		}
 		stagedPath := filepath.Join(stagedRoot, relative)
-		if _, err := os.Stat(stagedPath); os.IsNotExist(err) {
+		if err := verifyContractFilePath(stagedRoot, relative); os.IsNotExist(err) {
 			findings = append(findings, Finding{
 				Kind: FindingOpenAPI, ID: "contract-removed", Path: relative,
 				Summary: "existing OpenAPI contract file was removed",
 			})
 			continue
 		} else if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("inspect staged OpenAPI %s: %w", relative, err)
 		}
 		after, err := loadOpenAPIDocument(stagedPath)
 		if err != nil {
@@ -135,6 +138,40 @@ func discoverOpenAPIFiles(root string) ([]string, error) {
 	})
 	sort.Strings(values)
 	return values, err
+}
+
+
+// verifyContractFilePath refuses symlinked intermediate directories and
+// final files. Contract verification must never follow links outside the
+// original or staged project. The final component must be a regular file.
+//
+// This is a pre-read guard, not a substitute for platform-specific atomic
+// no-follow file opening when defending against an actively mutating workspace.
+func verifyContractFilePath(root, relative string) error {
+	clean := filepath.Clean(filepath.FromSlash(relative))
+	if filepath.IsAbs(clean) || clean == "." || clean == ".." ||
+		strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return errors.New("contract path must remain repository-relative")
+	}
+	parts := strings.Split(clean, string(filepath.Separator))
+	current := root
+	for i, part := range parts {
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("contract path contains symbolic link: %s", relative)
+		}
+		if i < len(parts)-1 && !info.IsDir() {
+			return fmt.Errorf("contract parent must be a directory: %s", relative)
+		}
+		if i == len(parts)-1 && !info.Mode().IsRegular() {
+			return fmt.Errorf("contract must be a regular file: %s", relative)
+		}
+	}
+	return nil
 }
 
 func loadOpenAPIDocument(path string) (map[string]any, error) {
