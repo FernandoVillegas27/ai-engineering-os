@@ -124,3 +124,21 @@ func TestParsePytestJUnitRejectsFailureEvidenceWithSuccessfulExit(t *testing.T) 
 		t.Fatalf("passed process cannot have complete failing evidence: %#v", got)
 	}
 }
+
+func TestParsePytestJUnitRejectsContradictoryNestedCounts(t *testing.T) {
+	fixtures := []string{
+		// The root count matches observed failures, but the child claims two.
+		`<testsuites tests="2" failures="1" errors="0"><testsuite tests="2" failures="2" errors="0"><testcase name="one"><failure message="boom"/></testcase></testsuite></testsuites>`,
+		// Two children disagree with the otherwise plausible parent count.
+		`<testsuites tests="2" failures="1" errors="0"><testsuite tests="1" failures="1" errors="0"><testcase name="one"><failure message="boom"/></testcase></testsuite><testsuite tests="2" failures="0" errors="0"><testcase name="two"/></testsuite></testsuites>`,
+		// Negative and impossible counts must not authorize complete evidence.
+		`<testsuite tests="-1" failures="1" errors="0"><testcase name="one"><failure message="boom"/></testcase></testsuite>`,
+		`<testsuite tests="0" failures="1" errors="0"><testcase name="one"><failure message="boom"/></testcase></testsuite>`,
+	}
+	for i, fixture := range fixtures {
+		got := parseJUnitFixture(t, fixture, true)
+		if got.Confidence != verification.ParsePartial {
+			t.Fatalf("fixture %d accepted contradictory counts: %#v", i, got)
+		}
+	}
+}
