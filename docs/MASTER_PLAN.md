@@ -276,6 +276,15 @@ It defines the order in which they evolve into the complete product.
 
 ---
 
+## Execution checkpoint — 2026-11-11 (architecture policy read identity)
+
+- Baseline master `c213a15ed7a4c50f4d2442400273a83876d0b9b2` after PR #198 merged with required Go CI green.
+- Branch `fix/contractverify-architecture-policy-stable-read` reuses the existing pre/open/post file identity guard for architecture policy YAML reads; regressions reject symlink and directory paths at the read boundary.
+- Still not atomic no-follow traversal; directory replacement TOCTOU remains open for future cross-platform design.
+- Merge only after exact-head Ubuntu/Windows/macOS CI and Ubuntu race, no conflicts. No release/deploy.
+
+---
+
 ## 4. Current checkpoint
 
 ### Completed before this roadmap update
