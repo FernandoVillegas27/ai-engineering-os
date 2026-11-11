@@ -94,7 +94,7 @@ func verifyRealDirectoryChain(root string) error {
 			return fmt.Errorf("contract verification root path must not contain symbolic links: %s", current)
 		}
 		if !info.IsDir() {
-			return fmt.Errorf("contract verification root path must contain real directories: %s", current)
+			return fmt.Errorf("contract verification root path must contain a real directory at each component: %s", current)
 		}
 		parent := filepath.Dir(current)
 		if parent == current {
