@@ -445,3 +445,39 @@ func TestVerifyAllowsSymlinkedSystemStyleGrandparent(t *testing.T) {
 		t.Fatalf("system-style grandparent symlink must not block ordinary workspaces: result=%#v err=%v", result, err)
 	}
 }
+
+func TestReadStableContractFileAcceptsRegularFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "openapi.yaml")
+	want := []byte("openapi: 3.0.0\npaths: {}\n")
+	if err := os.WriteFile(path, want, 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readStableContractFile(path)
+	if err != nil || string(got) != string(want) {
+		t.Fatalf("regular contract read: got=%q err=%v", got, err)
+	}
+}
+
+func TestReadStableContractFileRejectsSymlink(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "target.yaml")
+	if err := os.WriteFile(target, []byte("openapi: 3.0.0"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "openapi.yaml")
+	if err := os.Symlink(target, link); err != nil {
+		if os.IsPermission(err) {
+			t.Skip("symlink creation not permitted")
+		}
+		t.Fatal(err)
+	}
+	if _, err := readStableContractFile(link); err == nil {
+		t.Fatal("symlinked contract must fail closed")
+	}
+}
+
+func TestReadStableContractFileRejectsDirectory(t *testing.T) {
+	if _, err := readStableContractFile(t.TempDir()); err == nil {
+		t.Fatal("directory cannot be read as a contract")
+	}
+}
