@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go/parser"
 	"go/token"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -206,8 +207,45 @@ func verifyContractFilePath(root, relative string) error {
 	return nil
 }
 
+// readStableContractFile checks the opened file identity against the validated
+// path before and after reading. This detects ordinary path replacement during
+// verification, but is not an atomic no-follow open and cannot defeat all races.
+func readStableContractFile(path string) ([]byte, error) {
+	before, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !before.Mode().IsRegular() {
+		return nil, fmt.Errorf("contract file must be regular before read: %s", path)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	opened, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !opened.Mode().IsRegular() || !os.SameFile(before, opened) {
+		return nil, fmt.Errorf("contract file changed before read: %s", path)
+	}
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+	after, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !after.Mode().IsRegular() || !os.SameFile(opened, after) || opened.Size() != int64(len(data)) {
+		return nil, fmt.Errorf("contract file changed during read: %s", path)
+	}
+	return data, nil
+}
+
 func loadOpenAPIDocument(path string) (map[string]any, error) {
-	data, err := os.ReadFile(path)
+	data, err := readStableContractFile(path)
 	if err != nil {
 		return nil, err
 	}
