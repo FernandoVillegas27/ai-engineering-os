@@ -140,7 +140,10 @@ func extractNodeJSON(value string) ([]byte, bool) {
 	if value == "" {
 		return nil, false
 	}
-	if json.Valid([]byte(value)) && strings.Contains(value, `"testResults"`) {
+	// A complete JSON object is a reporter candidate even if mandatory
+	// fields are absent. Let schema validation classify it as partial rather
+	// than reporting parsing as "not attempted".
+	if strings.HasPrefix(value, "{") && json.Valid([]byte(value)) {
 		return []byte(value), true
 	}
 	start := strings.Index(value, "{")
