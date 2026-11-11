@@ -574,9 +574,9 @@ func scanArchitectureViolations(root string, policy architecturePolicy) ([]archi
 		if err := verifyContractFilePath(root, relative); err != nil {
 			return fmt.Errorf("inspect architecture source %s: %w", relative, err)
 		}
-		data, err := os.ReadFile(path)
+		data, err := readStableContractFile(path)
 		if err != nil {
-			return err
+			return fmt.Errorf("read architecture source %s: %w", relative, err)
 		}
 		// A malformed Go import declaration must not bypass forbidden-import
 		// checks. Only files covered by an architecture rule are gated.
