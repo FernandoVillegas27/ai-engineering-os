@@ -94,3 +94,56 @@ func TestParseNodeJSONFileMissingFailsClosed(t *testing.T) {
 		t.Fatalf("got=%#v", got)
 	}
 }
+
+
+func TestParseNodeJSONRejectsDuplicateFailureIdentity(t *testing.T) {
+	// Two failed assertions with the same stable ID cannot be silently
+	// deduplicated into complete evidence.
+	duplicate := strings.Replace(nodeJSONFixture,
+		`"numFailedTests": 1`, `"numFailedTests": 2`, 1)
+	needle := `{
+          "ancestorTitles": ["calc"],
+          "title": "subtracts",
+          "fullName": "calc subtracts",
+          "status": "passed",
+          "failureMessages": []
+        }`
+	replacement := `{
+          "ancestorTitles": ["calc"],
+          "title": "adds",
+          "fullName": "calc adds",
+          "status": "failed",
+          "failureMessages": ["different assertion"]
+        }`
+	duplicate = strings.Replace(duplicate, needle, replacement, 1)
+	got := parseNodeTestJSON(duplicate, "", true, "C:/workspace")
+	if got.Confidence != verification.ParsePartial || len(got.Failures) != 1 {
+		t.Fatalf("duplicate failure ID must be partial, got=%#v", got)
+	}
+}
+
+func TestParseNodeJSONRejectsConflictingCounts(t *testing.T) {
+	for _, count := range []string{"0", "2"} {
+		report := strings.Replace(nodeJSONFixture, `"numFailedTests": 1`, `"numFailedTests": `+count, 1)
+		got := parseNodeTestJSON(report, "", true, "C:/workspace")
+		if got.Confidence != verification.ParsePartial || len(got.Failures) != 1 {
+			t.Fatalf("count=%s must be partial, got=%#v", count, got)
+		}
+	}
+}
+
+func TestParseNodeJSONRejectsFailedAssertionsOnSuccessExit(t *testing.T) {
+	got := parseNodeTestJSON(nodeJSONFixture, "", false, "C:/workspace")
+	if got.Confidence != verification.ParsePartial || len(got.Failures) != 1 {
+		t.Fatalf("successful exit with reported failures must be partial, got=%#v", got)
+	}
+}
+
+func TestParseNodeJSONValidPassingReportRemainsComplete(t *testing.T) {
+	passing := strings.Replace(nodeJSONFixture, `"numFailedTests": 1`, `"numFailedTests": 0`, 1)
+	passing = strings.Replace(passing, `"status": "failed"`, `"status": "passed"`, 1)
+	got := parseNodeTestJSON(passing, "", false, "C:/workspace")
+	if got.Confidence != verification.ParseComplete || len(got.Failures) != 0 {
+		t.Fatalf("valid passing report must remain complete, got=%#v", got)
+	}
+}
