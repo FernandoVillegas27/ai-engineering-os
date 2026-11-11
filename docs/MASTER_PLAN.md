@@ -218,6 +218,16 @@ It defines the order in which they evolve into the complete product.
 
 ---
 
+## Execution checkpoint — 2026-11-11 (pending CI)
+
+- Baseline: master `04fd24c618fc8e1573e193f40ef0c2aa95807fec` after PR #192.
+- No open PRs at milestone selection.
+- Current milestone: reject ambiguous simultaneous `.ai-engineering-os/architecture.yaml` and `.yml` policies in either original or staged project. Existing behavior silently preferred YAML; the change fails closed and adds regression tests.
+- Branch: `fix/architecture-ambiguous-policy-files`. Merge only after the exact head SHA passes required Ubuntu (including race), Windows, macOS and applicable packaging checks with no conflicts. Do not release or deploy.
+- Next: assess atomic no-follow reads for actively mutating workspaces; existing pre-read symlink checks do not eliminate TOCTOU races.
+
+---
+
 ## 4. Current checkpoint
 
 ### Completed before this roadmap update
