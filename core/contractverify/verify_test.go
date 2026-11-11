@@ -481,3 +481,27 @@ func TestReadStableContractFileRejectsDirectory(t *testing.T) {
 		t.Fatal("directory cannot be read as a contract")
 	}
 }
+
+func TestLoadArchitecturePolicyRejectsSymlinkedPolicy(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "target.yaml")
+	if err := os.WriteFile(target, []byte("rules: []\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "architecture.yaml")
+	if err := os.Symlink(target, link); err != nil {
+		if os.IsPermission(err) {
+			t.Skip("symlink creation not permitted")
+		}
+		t.Fatal(err)
+	}
+	if _, err := loadArchitecturePolicy(link); err == nil {
+		t.Fatal("architecture policy symlink must fail closed at read boundary")
+	}
+}
+
+func TestLoadArchitecturePolicyRejectsDirectory(t *testing.T) {
+	if _, err := loadArchitecturePolicy(t.TempDir()); err == nil {
+		t.Fatal("architecture policy directory must fail closed")
+	}
+}
