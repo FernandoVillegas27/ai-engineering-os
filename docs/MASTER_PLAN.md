@@ -258,6 +258,15 @@ It defines the order in which they evolve into the complete product.
 
 ---
 
+## Execution checkpoint — 2026-11-11 (portable ancestor-link regression)
+
+- Baseline master `6cc1e35e75abe2cf6761d17ef831a121cc644a69` after PR #196 merged with green Ubuntu (including race), Windows, and macOS.
+- Branch `test/contractverify-grandparent-symlink-portability` adds a regression ensuring legitimate macOS-style grandparent symlinks do not invalidate workspaces with real root and direct-parent directories.
+- This deliberately does not broaden no-follow protections or claim TOCTOU resistance. Future atomic traversal requires platform-specific design.
+- Merge gate: exact SHA, conflict-free, Ubuntu race and Ubuntu/Windows/macOS Go checks. No release/deploy.
+
+---
+
 ## 4. Current checkpoint
 
 ### Completed before this roadmap update
