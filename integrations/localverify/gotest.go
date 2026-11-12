@@ -62,11 +62,17 @@ func parseGoTestJSONWithStderr(raw, stderr string, exitFailed bool, roots ...str
 			rendered.WriteString(line + "\n")
 			continue
 		}
-		// Lifecycle events without a package cannot be attributed to a test
-		// unit and must not authorize complete quality evidence.
+		// Lifecycle events require a package, while build events require an
+		// import path. Otherwise their failures can collapse into an empty
+		// identity and must not authorize complete quality evidence.
 		switch event.Action {
 		case "start", "run", "pass", "fail", "skip":
 			if strings.TrimSpace(event.Package) == "" {
+				invalid++
+				continue
+			}
+		case "build-output", "build-fail":
+			if strings.TrimSpace(event.ImportPath) == "" || strings.TrimSpace(baseImportPath(event.ImportPath)) == "" {
 				invalid++
 				continue
 			}

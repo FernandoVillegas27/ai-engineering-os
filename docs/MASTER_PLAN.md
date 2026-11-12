@@ -2622,3 +2622,10 @@ is still current. Always preserve human approval and green CI before merge.
 - Regression fixtures cover all five unscoped lifecycle actions and a valid scoped run/pass sequence.
 - Build events remain separately scoped by ImportPath; this slice does not validate all JSON event fields or event ordering.
 - Merge only after exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build, vet, and conflict-free PR. No release or deployment.
+
+### 2026-11-12 — Go test JSON build identity integrity (pending CI)
+
+- Baseline master `d3f9d7b6a6a1f72dc28e08a7f666ef55f4b1d572` after verified PR #212 merge; no open PRs at selection.
+- Reject `build-output` and `build-fail` JSON events with missing/blank ImportPath or an empty base path, marking otherwise-valid streams partial instead of creating unattributable build identities.
+- Regression tests cover missing, whitespace and empty base paths for both actions, plus a correctly scoped build failure.
+- This does not prove complete Go event schema or event ordering. Merge only after exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build, vet, and no conflicts. No release or deployment.

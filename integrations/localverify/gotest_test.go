@@ -474,3 +474,31 @@ func TestParseGoTestJSONScopedLifecycleEventsRemainComplete(t *testing.T) {
 		t.Fatalf("scoped lifecycle events should remain complete, got %q", got.Confidence)
 	}
 }
+
+func TestParseGoTestJSONRejectsBuildEventsWithoutImportPath(t *testing.T) {
+	for _, action := range []string{"build-output", "build-fail"} {
+		for _, importPath := range []string{"", "   ", " [probe.test]"} {
+			t.Run(action+"/"+strings.ReplaceAll(importPath, " ", "_"), func(t *testing.T) {
+				stream := "{\"Action\":\"start\",\"Package\":\"probe/ok\"}\n" +
+					"{\"Action\":\"pass\",\"Package\":\"probe/ok\"}\n" +
+					"{\"Action\":\"" + action + "\",\"ImportPath\":\"" + importPath + "\",\"Output\":\"compiler error\\n\"}\n"
+				got := parseGoTestJSON(stream, false)
+				if got.Confidence != verification.ParsePartial {
+					t.Fatalf("unattributable %s must be partial, got %#v", action, got)
+				}
+				if len(got.Failures) != 0 {
+					t.Fatalf("unattributable build event must not create empty failure identity: %#v", got.Failures)
+				}
+			})
+		}
+	}
+}
+
+func TestParseGoTestJSONAcceptsScopedBuildEvents(t *testing.T) {
+	stream := "{\"Action\":\"build-output\",\"ImportPath\":\"probe/lib [probe/lib.test]\",\"Output\":\"compiler error\\n\"}\n" +
+		"{\"Action\":\"build-fail\",\"ImportPath\":\"probe/lib [probe/lib.test]\"}\n"
+	got := parseGoTestJSON(stream, true)
+	if got.Confidence != verification.ParseComplete || len(got.Failures) != 1 || got.Failures[0].ID != "probe/lib" {
+		t.Fatalf("scoped build failure must remain complete: %#v", got)
+	}
+}
