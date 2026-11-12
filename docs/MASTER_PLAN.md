@@ -2597,3 +2597,10 @@ is still current. Always preserve human approval and green CI before merge.
 - Add JS/JSX/TS/TSX negative regressions and an allowed-import positive fixture.
 - Lexical check only: not a complete JS/TS parser; do not claim computed imports are covered.
 - Merge only after exact-head green Ubuntu/Windows/macOS tests, Ubuntu race, build and vet.
+
+
+### Go test JSON evidence — unknown actions (pending CI)
+
+- Treat unrecognized Go `test -json` event actions as partial parse evidence rather than complete; retain known-event parsing and failure classification.
+- Add positive and negative parser regressions. This does not imply exhaustive future Go event schema validation.
+- Merge only with exact-head green Ubuntu/Windows/macOS tests, Ubuntu race, build and vet.
