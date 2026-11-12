@@ -2656,3 +2656,10 @@ is still current. Always preserve human approval and green CI before merge.
 - Reject run events lacking a nonblank Test identity; a Go run event must refer to a test or subtest, not a package-level run.
 - Add regressions for missing/whitespace Test and a valid test-scoped run/pass lifecycle.
 - This milestone is pending CI, exact-head mergeability and any required human approval. No release, deploy, visibility changes or bypasses.
+
+### 2026-11-12 — Go JSON terminal test identity (pending CI)
+
+- After PR #216 merged to master (`9e33eb972b6eb42d03b6f1a4710bd559c5549257`), no PRs were open at selection.
+- Reject whitespace-only `Test` identities on test-scoped `pass`, `fail`, and `skip` events. Such events must not generate bogus failure identities or count as complete evidence.
+- Regression coverage includes malformed whitespace identities and valid test-scoped terminal actions.
+- This is a narrow schema-integrity check, not full lifecycle/order verification. Require exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build, vet, applicable release checks, no conflicts and human approvals before merge. No release, deployment or visibility change.
