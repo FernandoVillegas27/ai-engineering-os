@@ -604,9 +604,9 @@ func TestParseGoTestJSONValidTerminalEventsRemainComplete(t *testing.T) {
 
 
 func TestParseGoTestJSONRejectsWhitespaceOnlyOutputTestIdentity(t *testing.T) {
-	stream := "{\"Action\":\"start\",\"Package\":\"probe/ok\"}\\n" +
-		"{\"Action\":\"output\",\"Package\":\"probe/ok\",\"Test\":\"   \",\"Output\":\"unattributed test output\\n\"}\\n" +
-		"{\"Action\":\"pass\",\"Package\":\"probe/ok\"}\\n"
+	stream := "{\"Action\":\"start\",\"Package\":\"probe/ok\"}\n" +
+		"{\"Action\":\"output\",\"Package\":\"probe/ok\",\"Test\":\"   \",\"Output\":\"unattributed test output\n\"}\n" +
+		"{\"Action\":\"pass\",\"Package\":\"probe/ok\"}\n"
 	got := parseGoTestJSON(stream, false)
 	if got.Confidence != verification.ParsePartial || strings.Contains(got.Rendered, "unattributed test output") {
 		t.Fatalf("whitespace-only output test identity must be partial and not rendered: %#v", got)
@@ -614,11 +614,11 @@ func TestParseGoTestJSONRejectsWhitespaceOnlyOutputTestIdentity(t *testing.T) {
 }
 
 func TestParseGoTestJSONValidTestOutputIdentityRemainsComplete(t *testing.T) {
-	stream := "{\"Action\":\"start\",\"Package\":\"probe/ok\"}\\n" +
-		"{\"Action\":\"run\",\"Package\":\"probe/ok\",\"Test\":\"TestOK\"}\\n" +
-		"{\"Action\":\"output\",\"Package\":\"probe/ok\",\"Test\":\"TestOK\",\"Output\":\"test output\\n\"}\\n" +
-		"{\"Action\":\"pass\",\"Package\":\"probe/ok\",\"Test\":\"TestOK\"}\\n" +
-		"{\"Action\":\"pass\",\"Package\":\"probe/ok\"}\\n"
+	stream := "{\"Action\":\"start\",\"Package\":\"probe/ok\"}\n" +
+		"{\"Action\":\"run\",\"Package\":\"probe/ok\",\"Test\":\"TestOK\"}\n" +
+		"{\"Action\":\"output\",\"Package\":\"probe/ok\",\"Test\":\"TestOK\",\"Output\":\"test output\n\"}\n" +
+		"{\"Action\":\"pass\",\"Package\":\"probe/ok\",\"Test\":\"TestOK\"}\n" +
+		"{\"Action\":\"pass\",\"Package\":\"probe/ok\"}\n"
 	got := parseGoTestJSON(stream, false)
 	if got.Confidence != verification.ParseComplete || !strings.Contains(got.Rendered, "test output") {
 		t.Fatalf("valid test output must remain complete: %#v", got)
