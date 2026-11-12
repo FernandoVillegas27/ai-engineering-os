@@ -2698,3 +2698,11 @@ is still current. Always preserve human approval and green CI before merge.
 - Regressions cover whitespace-only and empty-base `FailedBuild`, plus valid build attribution.
 - This is a narrow cross-language Quality evidence integrity improvement, not completion of nested JUnit evidence or the broader product milestones.
 - Require exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build, vet, applicable release checks, conflict-free merge and human approvals before integration. No release, deployment or visibility changes.
+
+
+### Multi-agent module block 1 — coordination contracts (in progress)
+
+- Baseline `master` `9cb0ea581e4fe1136c233fc621c42b39a0d19265`; PR #222 CI still pending macOS at branch creation.
+- Introduced provider-independent `core/coordination` task graph and typed inter-agent message contracts, with deterministic cycle/missing dependency checks, dependency-ready selection, and scoped sender/recipient/artifact validation.
+- This is the first **module slice**, not a completed durable message bus or runtime scheduler. Next slices: append-only message persistence with run scoping and replay; task state transitions and ownership; orchestrator integration; Control Plane projections and end-to-end scenarios.
+- CI, review, and exact-head merge checks remain mandatory; do not infer runtime authority from these contracts.
