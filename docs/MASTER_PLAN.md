@@ -2722,3 +2722,10 @@ is still current. Always preserve human approval and green CI before merge.
 - PR #223 now also includes `DurableScheduler` with append-only, run-scoped task transition events, strict replay validation, dependency-gated transitions and regression coverage for restart, foreign-run and corruption cases.
 - **Acceptance limits:** journals require single-process writer ownership; cross-process locking, atomic combined handoff/task transition, orchestration adapter, recovery from partially written records, and true multiagent runtime E2E remain incomplete. No claim that Block 1 is finished.
 - Continue within PR #223, not a new small PR. Preserve CI and human approvals before merge.
+
+
+### 2026-11-12 — PR #223 integration follow-up (journal path safety)
+
+- Master baseline confirmed at `37e25dd1fc1c1cefff49a8258cb757228da163e9` after PR #222 merged. Only open PR is #223; its prior exact-head workflow `43300007285` succeeded on Ubuntu, Windows, and macOS, including Ubuntu race. A new head requires a fresh green matrix.
+- Strengthened `DurableSession` to reject identical task/message journals through lexical path aliases, symlinked parent directories and existing hard links, with portable regressions. Prevents two incompatible event schemas sharing the same file.
+- **Still not complete:** exclusive cross-process writer lease, crash-safe coordinated handoff/task-state recovery, runtime orchestrator adapter and real multi-agent E2E. Do not merge PR #223 as a completed module merely because CI passes. Do not bypass reviews or publish releases.
