@@ -2751,3 +2751,10 @@ is still current. Always preserve human approval and green CI before merge.
 - Added a five-role execution regression with parallel-independent Backend/Frontend branches followed by QA and Reviewer; reopening the journal must not execute completed tasks again. Added a failure/stall regression to prevent implicit retry.
 - The test executor is a deterministic double; **no live AI runtime is wired yet**. No claims of production-ready agent execution, cross-process exclusive ownership or atomic handoff.
 - PR #223 remains open, behind master, with exact-head CI not confirmed. Reconcile and run full matrix before any merge; retain approvals and tool security gates.
+
+### 2026-11-12 — Cancellation semantics fail-closed (PR #223)
+
+- Verified live master `37e25dd1fc1c1cefff49a8258cb757228da163e9`, one open PR (#223), branch still four commits behind master, and no pull-request Actions runs or combined statuses returned for inspected head `1e60284a`.
+- Corrected `RunUntilIdle` so cancelled work is **not** treated as successful completion. A fully or partially cancelled graph now returns an error without running dependent work; added two regressions.
+- Commits: `3eecce2` and `4d4297d`. These are committed tests, **not executed tests**. No CI-green claim, approval bypass or merge.
+- Next: reconcile branch, confirm actual CI workflow triggers/runners and exact-head matrix; integrate live agent adapters, exclusive journal ownership, and crash-consistent handoff before declaring Module 1 complete.
