@@ -2549,3 +2549,12 @@ is still current. Always preserve human approval and green CI before merge.
 - Add positive and negative regression tests across JS/JSX/TS/TSX.
 - This remains a lexical heuristic, not complete JS/TS parsing or computed-import enforcement. No race-free filesystem guarantees are implied.
 - Merge only after exact-head green CI on Ubuntu, Windows and macOS, including Ubuntu race, build and vet.
+
+
+### Verified continuation — PRs #201–#202
+
+- PR #201 merged at `0567ebc0487053e362c5eb57ae23aca7b8926e1e`: literal JS/TS dynamic import architecture checks.
+- PR #202 merged at `462e14391883093c931965ed83ef60bc817ad60b`: single bundler block comment before a literal dynamic import.
+- Both passed exact-head Ubuntu/Windows/macOS tests and Ubuntu race before merge. The earlier "proposed" entries above are historical, not outstanding PRs.
+- Current proposed follow-up: reject consecutive block-comment evasion of literal dynamic import rules, with cross-extension regressions. This is still lexical scanning, not a JS/TS parser or a complete no-follow filesystem guarantee.
+- After green CI and merge, prioritize stronger parser-backed architecture verification, atomic contract reads, and external-tool runtime authorization as described above.
