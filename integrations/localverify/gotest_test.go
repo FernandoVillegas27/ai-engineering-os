@@ -624,3 +624,24 @@ func TestParseGoTestJSONValidTestOutputIdentityRemainsComplete(t *testing.T) {
 		t.Fatalf("valid test output must remain complete: %#v", got)
 	}
 }
+
+
+func TestParseGoTestJSONInvalidOnlySuccessfulExitIsPartial(t *testing.T) {
+	for _, raw := range []string{
+		"not-json\\n",
+		"{\\"Action\\":\\"future-action\\",\\"Package\\":\\"probe/ok\\"}\\n",
+		"{\\"Action\\":\\"output\\",\\"Package\\":\\"   \\",\\"Output\\":\\"unscoped\\"}\\n",
+	} {
+		got := parseGoTestJSON(raw, false)
+		if got.Confidence != verification.ParsePartial {
+			t.Fatalf("invalid-only successful stream must be partial: %#v", got)
+		}
+	}
+}
+
+func TestParseGoTestJSONInvalidOnlyFailedExitRemainsFailed(t *testing.T) {
+	got := parseGoTestJSON("not-json\\n", true)
+	if got.Confidence != verification.ParseFailed {
+		t.Fatalf("failed command with no valid events must remain failed: %#v", got)
+	}
+}
