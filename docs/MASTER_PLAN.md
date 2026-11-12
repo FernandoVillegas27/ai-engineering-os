@@ -2613,3 +2613,12 @@ is still current. Always preserve human approval and green CI before merge.
 - Unrecognized Go test JSON actions now make evidence partial rather than complete; known actions retain complete classification.
 - CI gate: exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build and vet; no merge until verified green and conflict-free.
 - This does not validate all future Go JSON event schema changes.
+
+
+### 2026-11-12 — Go test JSON lifecycle package integrity (pending CI)
+
+- Baseline master `4342afc04333e80b50a63e3267fa87304e9d93fd` after verified PR #211 merge.
+- Require nonempty Package for Go test JSON start/run/pass/fail/skip lifecycle events. Unscoped lifecycle events now make mixed streams partial, preventing attribution to an empty package.
+- Regression fixtures cover all five unscoped lifecycle actions and a valid scoped run/pass sequence.
+- Build events remain separately scoped by ImportPath; this slice does not validate all JSON event fields or event ordering.
+- Merge only after exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build, vet, and conflict-free PR. No release or deployment.
