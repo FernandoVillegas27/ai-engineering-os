@@ -2689,3 +2689,12 @@ is still current. Always preserve human approval and green CI before merge.
 - Regression coverage checks both malformed actions, absence of fabricated failures and suppression of invalid build output.
 - Prior checkpoint for PR #219 is historical: its exact-head CI passed and PR was merged as `55ff78a7`.
 - This change remains pending exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build, vet, mergeability and applicable approvals. No release, deployment or visibility changes.
+
+
+### 2026-11-12 — FailedBuild identity integrity (pending CI)
+
+- Baseline master `8e707585e5a4504384d88c1673a18841ed6807f9`; PR #220 merged with exact-head Ubuntu/Windows/macOS checks and Ubuntu race green, no open PRs at selection.
+- For Go package `fail` events with nonempty `FailedBuild`, reject blank or empty-base import paths. Malformed failed-build attribution must yield partial confidence, not a fabricated build identity.
+- Regressions cover whitespace-only and empty-base `FailedBuild`, plus valid build attribution.
+- This is a narrow cross-language Quality evidence integrity improvement, not completion of nested JUnit evidence or the broader product milestones.
+- Require exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build, vet, applicable release checks, conflict-free merge and human approvals before integration. No release, deployment or visibility changes.
