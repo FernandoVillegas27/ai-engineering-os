@@ -2589,3 +2589,11 @@ is still current. Always preserve human approval and green CI before merge.
 - PR #207: literal dynamic imports with line comments; merged as `301086c3c71ce1aec296838bf7ae7a44338bc8d7` after exact-head `6cc7a67db36da6ab4218e277bb9c861584d978dc` passed Ubuntu/Windows/macOS tests, Ubuntu race, build and vet (run 43137857412).
 - Prior section headings saying "pending CI" describe historical implementation checkpoints, not open PRs.
 - Next engineering priority: parser-backed JavaScript/TypeScript import analysis and/or atomic no-follow file reads. Avoid claiming the existing regex scanner or pre-read filesystem checks are race-free. Scope and test one small cross-platform slice before merging.
+
+
+### Architecture dynamic imports — trailing comments (pending CI)
+
+- Detect forbidden literal dynamic import specifiers when JavaScript block or line comments occur between the quoted module and the closing `) ` token.
+- Add JS/JSX/TS/TSX negative regressions and an allowed-import positive fixture.
+- Lexical check only: not a complete JS/TS parser; do not claim computed imports are covered.
+- Merge only after exact-head green Ubuntu/Windows/macOS tests, Ubuntu race, build and vet.
