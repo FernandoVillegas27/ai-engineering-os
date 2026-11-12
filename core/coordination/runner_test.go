@@ -67,3 +67,28 @@ func TestRunReadyHonorsCancellation(t *testing.T) {
  if err:=RunReady(ctx,scheduler,exec);!errors.Is(err,context.Canceled) {t.Fatalf("expected cancellation, got %v",err)}
  if len(exec.called)!=0 || scheduler.Snapshot()[0].State!=Queued {t.Fatal("cancelled run mutated state")}
 }
+
+type cancelExecutor struct { cancel context.CancelFunc; called int }
+func (e *cancelExecutor) Execute(_ context.Context, _ Task) error {
+ e.called++
+ e.cancel()
+ return nil
+}
+
+func TestRunReadyCancellationDuringExecutionRequiresExplicitRecovery(t *testing.T) {
+ tasks:=[]Task{{ID:"architect",Role:Architect,State:Queued},{ID:"backend",Role:Backend,State:Queued,DependsOn:[]string{"architect"}}}
+ path:=filepath.Join(t.TempDir(),"tasks.jsonl")
+ scheduler,err:=NewDurableScheduler("run",path,tasks)
+ if err!=nil {t.Fatal(err)}
+ ctx,cancel:=context.WithCancel(context.Background())
+ exec:=&cancelExecutor{cancel:cancel}
+ if err:=RunReady(ctx,scheduler,exec);!errors.Is(err,context.Canceled) {t.Fatalf("expected cancellation, got %v",err)}
+ reopened,err:=NewDurableScheduler("run",path,tasks)
+ if err!=nil {t.Fatal(err)}
+ state:=reopened.Snapshot()
+ if state[0].State!=Running || state[1].State!=Queued {
+  t.Fatalf("interrupted task must not be falsely completed: %#v",state)
+ }
+ if err:=RunReady(context.Background(),reopened,exec);err!=nil {t.Fatal(err)}
+ if exec.called!=1 {t.Fatalf("interrupted task was automatically rerun %d times",exec.called)}
+}
