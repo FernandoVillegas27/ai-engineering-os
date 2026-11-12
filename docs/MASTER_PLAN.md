@@ -2599,6 +2599,14 @@ is still current. Always preserve human approval and green CI before merge.
 - Merge only after exact-head green Ubuntu/Windows/macOS tests, Ubuntu race, build and vet.
 
 
+### 2026-11-12 — dynamic import call-boundary comment guard (pending CI)
+
+- Baseline master `57c77c85bf60f3344c47cdfbd4f0a20d1c7e0890` after verified PR #209 merge. No open PRs at selection.
+- Detect literal JS/JSX/TS/TSX dynamic imports with mixed block and line comments between `import` and `(`; add forbidden and allowed regressions.
+- This remains a lexical guard, not parser-backed JS/TS analysis; computed imports and concurrent filesystem swaps remain outside this milestone.
+- Require exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build and vet; do not merge before green CI or override human approvals.
+
+
 ### Go test JSON evidence — unknown actions (pending CI)
 
 - Treat unrecognized Go `test -json` event actions as partial parse evidence rather than complete; retain known-event parsing and failure classification.
