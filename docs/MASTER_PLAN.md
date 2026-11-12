@@ -2566,3 +2566,11 @@ is still current. Always preserve human approval and green CI before merge.
 - A regression test creates a linked source directory with a forbidden import and requires fail-closed behavior.
 - This is a pre-scan guard only. It is not race-free descriptor-relative traversal and does not solve concurrent workspace mutations.
 - Do not merge until exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build and vet are green and the PR is conflict-free.
+
+
+### OpenAPI discovery — linked directory fail-closed guard (pending CI)
+
+- Reject symlinked directories during original OpenAPI/Swagger contract discovery; `filepath.WalkDir` otherwise skips linked contract trees silently.
+- Add cross-platform regression that places `openapi.yaml` inside a symlinked contract directory, with permission-based skip on restricted Windows environments.
+- This is not atomic descriptor-relative no-follow traversal and does not protect against concurrent filesystem swaps.
+- Merge only after exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build and vet pass.
