@@ -572,3 +572,32 @@ func TestParseGoTestJSONScopedRunRemainsComplete(t *testing.T) {
 		t.Fatalf("test-scoped run must remain complete: %#v", got)
 	}
 }
+
+func TestParseGoTestJSONRejectsWhitespaceOnlyTerminalTestIdentity(t *testing.T) {
+	for _, action := range []string{"pass", "fail", "skip"} {
+		t.Run(action, func(t *testing.T) {
+			stream := "{\"Action\":\"start\",\"Package\":\"probe/ok\"}\n" +
+				"{\"Action\":\"" + action + "\",\"Package\":\"probe/ok\",\"Test\":\"   \"}\n" +
+				"{\"Action\":\"pass\",\"Package\":\"probe/ok\"}\n"
+			got := parseGoTestJSON(stream, false)
+			if got.Confidence != verification.ParsePartial || len(got.Failures) != 0 {
+				t.Fatalf("invalid terminal event must be partial without failures: %#v", got)
+			}
+		})
+	}
+}
+
+func TestParseGoTestJSONValidTerminalEventsRemainComplete(t *testing.T) {
+	for _, action := range []string{"pass", "fail", "skip"} {
+		t.Run(action, func(t *testing.T) {
+			stream := "{\"Action\":\"start\",\"Package\":\"probe/ok\"}\n" +
+				"{\"Action\":\"run\",\"Package\":\"probe/ok\",\"Test\":\"TestOK\"}\n" +
+				"{\"Action\":\"" + action + "\",\"Package\":\"probe/ok\",\"Test\":\"TestOK\"}\n" +
+				"{\"Action\":\"pass\",\"Package\":\"probe/ok\"}\n"
+			got := parseGoTestJSON(stream, action == "fail")
+			if got.Confidence != verification.ParseComplete {
+				t.Fatalf("valid terminal event must remain complete: %#v", got)
+			}
+		})
+	}
+}
