@@ -2,6 +2,7 @@ package coordination
 
 import (
  "path/filepath"
+ "os"
  "testing"
 )
 
@@ -32,4 +33,27 @@ func TestDurableSessionRejectsJournalPathCollision(t *testing.T) {
  tasks:=[]Task{{ID:"a",Role:Architect,State:Queued}}
  path:=filepath.Join(t.TempDir(),"same.jsonl")
  if _,err:=OpenDurableSession("run",path,path,tasks);err==nil {t.Fatal("shared journal path accepted")}
+}
+
+func TestDurableSessionRejectsAliasedJournalPaths(t *testing.T) {
+ dir:=t.TempDir()
+ path:=filepath.Join(dir,"events.jsonl")
+ alias:=filepath.Join(dir,"sub","..","events.jsonl")
+ if err:=distinctJournalPaths(path,alias);err==nil {
+  t.Fatal("lexically aliased journals accepted")
+ }
+ if err:=os.WriteFile(path,[]byte{},0600);err!=nil {t.Fatal(err)}
+ hardlink:=filepath.Join(dir,"hardlink.jsonl")
+ if err:=os.Link(path,hardlink);err==nil {
+  if err:=distinctJournalPaths(path,hardlink);err==nil {
+   t.Fatal("hard-linked journals accepted")
+  }
+ }
+ // Symlink creation can be restricted on Windows; only assert when supported.
+ linkedDir:=filepath.Join(dir,"linked")
+ if err:=os.Symlink(dir,linkedDir);err==nil {
+  if err:=distinctJournalPaths(path,filepath.Join(linkedDir,"events.jsonl"));err==nil {
+   t.Fatal("symlinked parent alias accepted")
+  }
+ }
 }
