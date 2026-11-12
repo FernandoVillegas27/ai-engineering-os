@@ -2605,3 +2605,11 @@ is still current. Always preserve human approval and green CI before merge.
 - Detect literal JS/JSX/TS/TSX dynamic imports with mixed block and line comments between `import` and `(`; add forbidden and allowed regressions.
 - This remains a lexical guard, not parser-backed JS/TS analysis; computed imports and concurrent filesystem swaps remain outside this milestone.
 - Require exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build and vet; do not merge before green CI or override human approvals.
+
+
+### 2026-11-12 — Go test JSON unknown actions (PR #211)
+
+- Reconciled PR #211 with master `d7b53ede872a5d2303ab5f2ff117dcd1e91adc3b` using an explicit two-parent merge commit and master-based tree. Diff against master contains only `integrations/localverify/gotest.go` and its regression tests before this checkpoint.
+- Unrecognized Go test JSON actions now make evidence partial rather than complete; known actions retain complete classification.
+- CI gate: exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build and vet; no merge until verified green and conflict-free.
+- This does not validate all future Go JSON event schema changes.
