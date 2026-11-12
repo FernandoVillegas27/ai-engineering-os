@@ -645,3 +645,21 @@ func TestParseGoTestJSONInvalidOnlyFailedExitRemainsFailed(t *testing.T) {
 		t.Fatalf("failed command with no valid events must remain failed: %#v", got)
 	}
 }
+
+
+func TestParseGoTestJSONRejectsTestScopedBuildEvents(t *testing.T) {
+	for _, action := range []string{"build-output", "build-fail"} {
+		t.Run(action, func(t *testing.T) {
+			stream := "{\"Action\":\"start\",\"Package\":\"probe/ok\"}\n" +
+				"{\"Action\":\"" + action + "\",\"ImportPath\":\"probe/lib\",\"Test\":\"TestUnexpected\",\"Output\":\"bad build output\\n\"}\n" +
+				"{\"Action\":\"pass\",\"Package\":\"probe/ok\"}\n"
+			got := parseGoTestJSON(stream, false)
+			if got.Confidence != verification.ParsePartial || len(got.Failures) != 0 {
+				t.Fatalf("test-scoped build event must be partial without failures: %#v", got)
+			}
+			if strings.Contains(got.Rendered, "bad build output") {
+				t.Fatalf("invalid build output must not be attributed: %#v", got)
+			}
+		})
+	}
+}
