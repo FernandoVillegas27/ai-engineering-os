@@ -142,8 +142,13 @@ func parseGoTestJSONWithStderr(raw, stderr string, exitFailed bool, roots ...str
 
 	if valid == 0 {
 		confidence := verification.ParseNotAttempted
-		if exitFailed {
+		switch {
+		case exitFailed:
 			confidence = verification.ParseFailed
+		case invalid > 0:
+			// A malformed stream with a successful exit cannot establish
+			// complete evidence or be mistaken for no attempted parse.
+			confidence = verification.ParsePartial
 		}
 		return goTestParse{Rendered: raw, Confidence: confidence}
 	}
