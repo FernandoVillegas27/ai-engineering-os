@@ -2581,3 +2581,11 @@ is still current. Always preserve human approval and green CI before merge.
 - Recognize JS/JSX/TS/TSX literal `import(` calls with JavaScript `//` line comments and mixed block comments before the quoted module specifier.
 - Add forbidden/allowed regression fixtures. This remains lexical detection, not full parser-backed JavaScript/TypeScript import analysis.
 - Merge only with exact-head green Ubuntu, Windows, macOS, Ubuntu race, build and vet.
+
+### Verified integration checkpoint — 2026-11-11
+
+- PR #205: architecture directory-symlink fail-closed guard; merged to master after green cross-platform CI.
+- PR #206: OpenAPI discovery directory-symlink fail-closed guard; merged as `b6e854c928daaf9fb68bf94f53679712bb9aa0f4` after green Ubuntu/Windows/macOS, Ubuntu race, build and vet.
+- PR #207: literal dynamic imports with line comments; merged as `301086c3c71ce1aec296838bf7ae7a44338bc8d7` after exact-head `6cc7a67db36da6ab4218e277bb9c861584d978dc` passed Ubuntu/Windows/macOS tests, Ubuntu race, build and vet (run 43137857412).
+- Prior section headings saying "pending CI" describe historical implementation checkpoints, not open PRs.
+- Next engineering priority: parser-backed JavaScript/TypeScript import analysis and/or atomic no-follow file reads. Avoid claiming the existing regex scanner or pre-read filesystem checks are race-free. Scope and test one small cross-platform slice before merging.
