@@ -91,8 +91,8 @@ func parseGoTestJSONWithStderr(raw, stderr string, exitFailed bool, roots ...str
 				continue
 			}
 			// FailedBuild names a build import path when present. A blank
-			// base cannot identify the failed build reliably.
-			if event.Action == "fail" && event.FailedBuild != "" && strings.TrimSpace(baseImportPath(event.FailedBuild)) == "" {
+			// base cannot identify the failed build reliably. FailedBuild is\n\t\t\t// package-scoped and must not be attached to a test failure.
+			if event.Action == "fail" && event.FailedBuild != "" && (event.Test != "" || strings.TrimSpace(baseImportPath(event.FailedBuild)) == "") {
 				invalid++
 				continue
 			}

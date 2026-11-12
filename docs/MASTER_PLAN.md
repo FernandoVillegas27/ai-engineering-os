@@ -2698,3 +2698,11 @@ is still current. Always preserve human approval and green CI before merge.
 - Regressions cover whitespace-only and empty-base `FailedBuild`, plus valid build attribution.
 - This is a narrow cross-language Quality evidence integrity improvement, not completion of nested JUnit evidence or the broader product milestones.
 - Require exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build, vet, applicable release checks, conflict-free merge and human approvals before integration. No release, deployment or visibility changes.
+
+
+### 2026-11-12 — Go FailedBuild test-scope integrity (pending CI)
+
+- Baseline master `9cb0ea581e4fe1136c233fc621c42b39a0d19265` after PR #221 merge; no open PRs at selection.
+- Reject `FailedBuild` metadata on test-scoped `fail` events: compiler build attribution is package-scoped, and test-scoped metadata must not establish complete Quality evidence.
+- Regressions cover malformed test-scoped metadata and valid package-scoped build failure.
+- Exact-head Ubuntu/Windows/macOS tests/build/vet, Ubuntu race, conflict checks and applicable human approvals are required before merge. No deployment, release or visibility changes.

@@ -688,3 +688,25 @@ func TestParseGoTestJSONValidFailedBuildIdentityRemainsComplete(t *testing.T) {
 		t.Fatalf("valid FailedBuild identity must remain complete: %#v", got)
 	}
 }
+
+
+func TestParseGoTestJSONRejectsTestScopedFailedBuild(t *testing.T) {
+	stream := "{\"Action\":\"start\",\"Package\":\"probe/pkg\"}\n" +
+		"{\"Action\":\"run\",\"Package\":\"probe/pkg\",\"Test\":\"TestBroken\"}\n" +
+		"{\"Action\":\"fail\",\"Package\":\"probe/pkg\",\"Test\":\"TestBroken\",\"FailedBuild\":\"probe/lib\"}\n" +
+		"{\"Action\":\"pass\",\"Package\":\"probe/pkg\"}\n"
+	got := parseGoTestJSON(stream, true)
+	if got.Confidence != verification.ParsePartial || len(got.Failures) != 0 {
+		t.Fatalf("test-scoped FailedBuild must be partial without fabricated failures: %#v", got)
+	}
+}
+
+func TestParseGoTestJSONAllowsPackageScopedFailedBuild(t *testing.T) {
+	stream := "{\"Action\":\"build-output\",\"ImportPath\":\"probe/lib\",\"Output\":\"compiler error\\n\"}\n" +
+		"{\"Action\":\"fail\",\"Package\":\"probe/pkg\",\"FailedBuild\":\"probe/lib\"}\n"
+	got := parseGoTestJSON(stream, true)
+	if got.Confidence != verification.ParseComplete || len(got.Failures) != 1 ||
+		got.Failures[0].ID != "probe/pkg" || got.Failures[0].Class != verification.FailureClassBuild {
+		t.Fatalf("package-scoped FailedBuild must remain valid: %#v", got)
+	}
+}
