@@ -2639,3 +2639,12 @@ is still current. Always preserve human approval and green CI before merge.
 - Regression tests cover missing/blank Package and valid scoped output. Build output remains scoped by ImportPath.
 - This does not prove the entire Go JSON event schema, ordering, or complete quality-evidence integrity.
 - Merge only after exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build and vet pass, no conflicts and all required approvals. No release or deployment.
+
+
+### 2026-11-12 — Go test JSON package-start scope integrity (pending CI)
+
+- Baseline master `b9196c6c23139e358e909e516b748ba2263c85c9` after PR #214 merged; no open PRs when selected.
+- Reject `start` actions containing a nonempty Test: Go package-start events are package-scoped, and malformed test-scoped starts must not authorize complete evidence.
+- Add regression coverage for malformed test-scoped starts and legitimate package-scoped starts.
+- PR #214 is merged (its earlier checkpoint says pending CI historically); the current milestone remains pending exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build, vet, conflict and approval checks.
+- This is a narrow Go JSON lifecycle validation improvement, not proof of complete schema or ordering integrity. No release or deployment.

@@ -529,3 +529,22 @@ func TestParseGoTestJSONScopedOutputRemainsComplete(t *testing.T) {
 		t.Fatalf("scoped output must remain complete, got %#v", got)
 	}
 }
+
+func TestParseGoTestJSONRejectsTestScopedStart(t *testing.T) {
+	stream := "{\"Action\":\"start\",\"Package\":\"probe/ok\",\"Test\":\"TestUnexpected\"}\n" +
+		"{\"Action\":\"start\",\"Package\":\"probe/ok\"}\n" +
+		"{\"Action\":\"pass\",\"Package\":\"probe/ok\"}\n"
+	got := parseGoTestJSON(stream, false)
+	if got.Confidence != verification.ParsePartial {
+		t.Fatalf("test-scoped start must not be complete evidence: %#v", got)
+	}
+}
+
+func TestParseGoTestJSONPackageStartRemainsComplete(t *testing.T) {
+	stream := "{\"Action\":\"start\",\"Package\":\"probe/ok\"}\n" +
+		"{\"Action\":\"pass\",\"Package\":\"probe/ok\"}\n"
+	got := parseGoTestJSON(stream, false)
+	if got.Confidence != verification.ParseComplete {
+		t.Fatalf("package-scoped start must remain complete: %#v", got)
+	}
+}
