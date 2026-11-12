@@ -2744,3 +2744,10 @@ is still current. Always preserve human approval and green CI before merge.
 - Added `core/coordination/runner.go` with an injected provider-neutral `Executor` interface and deterministic `RunReady` driver. It persists Ready/Running/Completed/Failed transitions, respects dependencies and context cancellation, and never auto-retries failed work.
 - Added tests for ordered execution across restarts, provider failures, cancellation before work, and interruption during execution. An interrupted Running task stays Running after replay, requiring explicit recovery policy rather than accidental re-execution.
 - **Scope:** this is an adapter contract and test double, not a live Cursor/Codex agent integration. Cross-process writer exclusivity, crash-safe handoff and real runtime E2E remain blockers for Module 1 completion. Verify exact-head CI matrix, race, build/vet, conflicts and approvals before merging.
+
+### 2026-11-12 — Module 1 deterministic orchestrator loop (PR #223)
+
+- Added `RunUntilIdle` to advance all currently eligible dependency layers using an injected `Executor`, stopping on executor errors or stalled runs instead of silently treating blocked work as success.
+- Added a five-role execution regression with parallel-independent Backend/Frontend branches followed by QA and Reviewer; reopening the journal must not execute completed tasks again. Added a failure/stall regression to prevent implicit retry.
+- The test executor is a deterministic double; **no live AI runtime is wired yet**. No claims of production-ready agent execution, cross-process exclusive ownership or atomic handoff.
+- PR #223 remains open, behind master, with exact-head CI not confirmed. Reconcile and run full matrix before any merge; retain approvals and tool security gates.
