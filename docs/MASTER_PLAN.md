@@ -2549,3 +2549,10 @@ is still current. Always preserve human approval and green CI before merge.
 - Add positive and negative regression tests across JS/JSX/TS/TSX.
 - This remains a lexical heuristic, not complete JS/TS parsing or computed-import enforcement. No race-free filesystem guarantees are implied.
 - Merge only after exact-head green CI on Ubuntu, Windows and macOS, including Ubuntu race, build and vet.
+
+
+### Architecture import guard — consecutive bundler comments (pending CI)
+
+- Extend literal JS/TS dynamic import detection to support consecutive block comments before a module string, for example `import(/* chunk */ /* mode */ "module")`.
+- Regression tests cover JS/JSX/TS/TSX. This is deliberately lexical and does not parse arbitrary JavaScript or computed specifiers.
+- This milestone is pending until the exact PR head passes Ubuntu/Windows/macOS Go tests, Ubuntu race, build and vet and merges without conflicts. Prior proposed checkpoints remain historical; verify live PRs and CI before considering them complete.
