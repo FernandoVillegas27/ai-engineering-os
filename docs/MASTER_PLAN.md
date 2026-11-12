@@ -2714,3 +2714,11 @@ is still current. Always preserve human approval and green CI before merge.
 - Added unit and integration scenarios for graph cycles, dependency bypass, invalid transitions, duplicate messages, foreign runs, corrupt journals, and handoff replay.
 - **Not yet production-complete:** scheduler transitions are in memory, replay restores messages but not task state; journal locking is per instance, not cross-process; session handoff journal append and state transition are not a single durable transaction; no runtime orchestrator/Control Plane adapter or tool authority integration exists yet. Do not claim end-to-end multi-agent execution.
 - Complete the remaining durable task event model and orchestrator integration before treating Block 1 as finished. Keep PR #223 open until exact-head CI and the block acceptance criteria pass.
+
+
+### Automation checkpoint — 2026-11-12 coordination durability increment
+
+- Oldest open PR #222 still awaits macOS GitHub-hosted runner; exact-head Ubuntu and Windows jobs passed. Do not merge until macOS and all applicable gates pass.
+- PR #223 now also includes `DurableScheduler` with append-only, run-scoped task transition events, strict replay validation, dependency-gated transitions and regression coverage for restart, foreign-run and corruption cases.
+- **Acceptance limits:** journals require single-process writer ownership; cross-process locking, atomic combined handoff/task transition, orchestration adapter, recovery from partially written records, and true multiagent runtime E2E remain incomplete. No claim that Block 1 is finished.
+- Continue within PR #223, not a new small PR. Preserve CI and human approvals before merge.
