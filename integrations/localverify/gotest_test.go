@@ -502,3 +502,30 @@ func TestParseGoTestJSONAcceptsScopedBuildEvents(t *testing.T) {
 		t.Fatalf("scoped build failure must remain complete: %#v", got)
 	}
 }
+
+func TestParseGoTestJSONRejectsUnscopedOutput(t *testing.T) {
+	for _, pkg := range []string{"", "   "} {
+		t.Run("package_"+strings.ReplaceAll(pkg, " ", "_"), func(t *testing.T) {
+			stream := "{\"Action\":\"start\",\"Package\":\"probe/ok\"}\n" +
+				"{\"Action\":\"output\",\"Package\":\"" + pkg + "\",\"Output\":\"unattributed text\\n\"}\n" +
+				"{\"Action\":\"pass\",\"Package\":\"probe/ok\"}\n"
+			got := parseGoTestJSON(stream, false)
+			if got.Confidence != verification.ParsePartial {
+				t.Fatalf("unscoped output must be partial, got %#v", got)
+			}
+			if strings.Contains(got.Rendered, "unattributed text") {
+				t.Fatalf("unscoped output must not be rendered as attributed output: %q", got.Rendered)
+			}
+		})
+	}
+}
+
+func TestParseGoTestJSONScopedOutputRemainsComplete(t *testing.T) {
+	stream := "{\"Action\":\"start\",\"Package\":\"probe/ok\"}\n" +
+		"{\"Action\":\"output\",\"Package\":\"probe/ok\",\"Output\":\"ok\\n\"}\n" +
+		"{\"Action\":\"pass\",\"Package\":\"probe/ok\"}\n"
+	got := parseGoTestJSON(stream, false)
+	if got.Confidence != verification.ParseComplete || !strings.Contains(got.Rendered, "ok") {
+		t.Fatalf("scoped output must remain complete, got %#v", got)
+	}
+}
