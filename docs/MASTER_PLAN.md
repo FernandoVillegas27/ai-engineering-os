@@ -2729,3 +2729,11 @@ is still current. Always preserve human approval and green CI before merge.
 - Master baseline confirmed at `37e25dd1fc1c1cefff49a8258cb757228da163e9` after PR #222 merged. Only open PR is #223; its prior exact-head workflow `43300007285` succeeded on Ubuntu, Windows, and macOS, including Ubuntu race. A new head requires a fresh green matrix.
 - Strengthened `DurableSession` to reject identical task/message journals through lexical path aliases, symlinked parent directories and existing hard links, with portable regressions. Prevents two incompatible event schemas sharing the same file.
 - **Still not complete:** exclusive cross-process writer lease, crash-safe coordinated handoff/task-state recovery, runtime orchestrator adapter and real multi-agent E2E. Do not merge PR #223 as a completed module merely because CI passes. Do not bypass reviews or publish releases.
+
+### 2026-11-12 — Module 1 integration acceptance and role validation (PR #223)
+
+- Current master confirmed at `37e25dd1fc1c1cefff49a8258cb757228da163e9`; PR #223 is the sole open PR and remains behind master. Do not merge without reconciling.
+- Added deterministic five-role restart/handoff integration test for Architect → Backend → Frontend → QA → Reviewer. It verifies state/message replay, **not** execution of external agent runtimes.
+- Hardened graph validation to reject unsupported role strings; added positive and negative role-registry tests.
+- The latest head must receive full Ubuntu/Windows/macOS CI, Ubuntu race, build/vet and required approvals. No workflow run was returned at the time of this checkpoint.
+- **Still blocking 100% acceptance:** runtime orchestration integration, cross-process exclusive writer coordination, atomic/crash-safe handoff state recovery, and real agent-runtime end-to-end proof. Do not claim Module 1 complete or bypass safety gates.
