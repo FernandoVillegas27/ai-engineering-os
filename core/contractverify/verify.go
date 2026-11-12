@@ -147,6 +147,17 @@ func discoverOpenAPIFiles(root string) ([]string, error) {
 		if err != nil {
 			return err
 		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			// WalkDir skips linked directories; fail closed instead of silently
+			// omitting a tree of contracts from compatibility verification.
+			info, statErr := os.Stat(path)
+			if statErr != nil {
+				return fmt.Errorf("inspect OpenAPI symlink %s: %w", path, statErr)
+			}
+			if info.IsDir() {
+				return fmt.Errorf("OpenAPI directory must not be a symbolic link: %s", path)
+			}
+		}
 		if entry.IsDir() {
 			name := entry.Name()
 			if name == ".git" || name == "node_modules" || name == "vendor" || name == "build" || name == "dist" {
