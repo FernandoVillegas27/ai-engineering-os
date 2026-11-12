@@ -2629,3 +2629,13 @@ is still current. Always preserve human approval and green CI before merge.
 - Reject `build-output` and `build-fail` JSON events with missing/blank ImportPath or an empty base path, marking otherwise-valid streams partial instead of creating unattributable build identities.
 - Regression tests cover missing, whitespace and empty base paths for both actions, plus a correctly scoped build failure.
 - This does not prove complete Go event schema or event ordering. Merge only after exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build, vet, and no conflicts. No release or deployment.
+
+
+### 2026-11-12 — Go test JSON output identity integrity (pending CI)
+
+- PR #213 merged to master as `f2b7ba6be56243d52a4b615532792cf5b8b2e444` after exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build and vet passed (run 43176299686).
+- Baseline master `f2b7ba6be56243d52a4b615532792cf5b8b2e444`, with no open PRs at selection.
+- Require a nonempty Package for ordinary `output` events, preventing unattributed output from entering test/package signatures while marking mixed streams partial.
+- Regression tests cover missing/blank Package and valid scoped output. Build output remains scoped by ImportPath.
+- This does not prove the entire Go JSON event schema, ordering, or complete quality-evidence integrity.
+- Merge only after exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build and vet pass, no conflicts and all required approvals. No release or deployment.
