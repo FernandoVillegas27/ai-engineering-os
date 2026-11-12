@@ -2671,3 +2671,12 @@ is still current. Always preserve human approval and green CI before merge.
 - Guard: reject `go test -json` output events whose nonempty `Test` is whitespace-only; mark evidence partial rather than attributing output to a malformed test identity.
 - Regression coverage: malformed whitespace-only identity and valid test-scoped output.
 - Integration: pending GitHub Actions on Ubuntu (including race), Windows and macOS; no merge before checks, approvals and SHA verification.
+
+
+### 2026-11-12 — Invalid-only Go JSON parse confidence (pending CI)
+
+- Baseline `master` `e3e445ee6f9ba1cb8d25bd6c6805deea50baf404` after PR #218 merge; no open PRs at selection.
+- A nonempty `go test -json` stream containing only invalid events must yield partial parse confidence on a successful command exit, rather than being mistaken for no attempted parse.
+- Preserve failed confidence for nonzero exit without valid events and not-attempted confidence for genuinely empty successful output.
+- Regression tests cover invalid JSON, unknown action, unscoped output, and failed exit.
+- Integration pending exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build, vet, applicable release workflows, conflict checks and required human approvals. No release, deployment, visibility changes or bypasses.
