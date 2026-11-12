@@ -67,6 +67,11 @@ func parseGoTestJSONWithStderr(raw, stderr string, exitFailed bool, roots ...str
 		// identity and must not authorize complete quality evidence.
 		switch event.Action {
 		case "output":
+			// A nonempty but whitespace-only test name cannot identify a test.
+			if event.Test != "" && strings.TrimSpace(event.Test) == "" {
+				invalid++
+				continue
+			}
 			if strings.TrimSpace(event.Package) == "" {
 				invalid++
 				continue

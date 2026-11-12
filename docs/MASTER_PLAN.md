@@ -2663,3 +2663,11 @@ is still current. Always preserve human approval and green CI before merge.
 - Reject whitespace-only `Test` identities on test-scoped `pass`, `fail`, and `skip` events. Such events must not generate bogus failure identities or count as complete evidence.
 - Regression coverage includes malformed whitespace identities and valid test-scoped terminal actions.
 - This is a narrow schema-integrity check, not full lifecycle/order verification. Require exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build, vet, applicable release checks, no conflicts and human approvals before merge. No release, deployment or visibility change.
+
+
+### 2026-11-12 — Output test identity integrity (PR pending)
+
+- Baseline: `master` at `2b851809e6f7edc11adc457195eb4d02ae6b5644`, PR #217 merged, no open PRs at start.
+- Guard: reject `go test -json` output events whose nonempty `Test` is whitespace-only; mark evidence partial rather than attributing output to a malformed test identity.
+- Regression coverage: malformed whitespace-only identity and valid test-scoped output.
+- Integration: pending GitHub Actions on Ubuntu (including race), Windows and macOS; no merge before checks, approvals and SHA verification.
