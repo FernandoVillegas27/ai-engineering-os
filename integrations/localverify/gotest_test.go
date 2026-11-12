@@ -430,3 +430,22 @@ func TestVerifyParsesRealGoTestJSONOutput(t *testing.T) {
 		}
 	}
 }
+
+func TestParseGoTestJSONUnknownActionIsPartial(t *testing.T) {
+	raw := "{\"Action\":\"start\",\"Package\":\"example/pkg\"}\n" +
+		"{\"Action\":\"future-action\",\"Package\":\"example/pkg\"}\n" +
+		"{\"Action\":\"pass\",\"Package\":\"example/pkg\"}\n"
+	got := parseGoTestJSON(raw, false)
+	if got.Confidence != verification.ParsePartial {
+		t.Fatalf("unknown action must not produce complete evidence: %q", got.Confidence)
+	}
+}
+
+func TestParseGoTestJSONKnownActionsRemainComplete(t *testing.T) {
+	raw := "{\"Action\":\"start\",\"Package\":\"example/pkg\"}\n" +
+		"{\"Action\":\"pass\",\"Package\":\"example/pkg\"}\n"
+	got := parseGoTestJSON(raw, false)
+	if got.Confidence != verification.ParseComplete {
+		t.Fatalf("known successful events should be complete: %q", got.Confidence)
+	}
+}
