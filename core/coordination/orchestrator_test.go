@@ -39,3 +39,26 @@ func TestRunUntilIdleStopsAtFailedDependency(t *testing.T) {
  if err:=RunUntilIdle(context.Background(),scheduler,exec);err==nil {t.Fatal("stalled run reported success")}
  if len(exec.called)!=1 {t.Fatal("failed work retried automatically")}
 }
+
+func TestRunUntilIdleDoesNotReportCancelledWorkAsSuccess(t *testing.T) {
+ tasks:=[]Task{{ID:"plan",Role:Architect,State:Queued},{ID:"qa",Role:QA,State:Queued,DependsOn:[]string{"plan"}}}
+ scheduler,err:=NewDurableScheduler("run",filepath.Join(t.TempDir(),"tasks.jsonl"),tasks)
+ if err!=nil {t.Fatal(err)}
+ if err:=scheduler.Transition("plan",Cancelled);err!=nil {t.Fatal(err)}
+ if err:=scheduler.Transition("qa",Cancelled);err!=nil {t.Fatal(err)}
+ exec:=&recordingExecutor{}
+ if err:=RunUntilIdle(context.Background(),scheduler,exec);err==nil {
+  t.Fatal("cancelled tasks must not produce successful run")
+ }
+ if len(exec.called)!=0 {t.Fatalf("cancelled work executed: %v",exec.called)}
+}
+
+func TestRunUntilIdleRejectsPartialCancellation(t *testing.T) {
+ tasks:=[]Task{{ID:"plan",Role:Architect,State:Queued},{ID:"qa",Role:QA,State:Queued,DependsOn:[]string{"plan"}}}
+ scheduler,err:=NewDurableScheduler("run",filepath.Join(t.TempDir(),"tasks.jsonl"),tasks)
+ if err!=nil {t.Fatal(err)}
+ if err:=scheduler.Transition("plan",Cancelled);err!=nil {t.Fatal(err)}
+ exec:=&recordingExecutor{}
+ if err:=RunUntilIdle(context.Background(),scheduler,exec);err==nil {t.Fatal("partial cancellation reported success")}
+ if len(exec.called)!=0 {t.Fatal("cancelled dependency bypassed")}
+}
