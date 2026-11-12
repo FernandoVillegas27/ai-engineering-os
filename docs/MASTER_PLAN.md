@@ -2737,3 +2737,10 @@ is still current. Always preserve human approval and green CI before merge.
 - Hardened graph validation to reject unsupported role strings; added positive and negative role-registry tests.
 - The latest head must receive full Ubuntu/Windows/macOS CI, Ubuntu race, build/vet and required approvals. No workflow run was returned at the time of this checkpoint.
 - **Still blocking 100% acceptance:** runtime orchestration integration, cross-process exclusive writer coordination, atomic/crash-safe handoff state recovery, and real agent-runtime end-to-end proof. Do not claim Module 1 complete or bypass safety gates.
+
+### 2026-11-12 — Runtime-neutral executor and interruption regression (PR #223)
+
+- Master remains `37e25dd1`; PR #223 is the only open PR, behind master by four commits. No Actions workflow runs were returned for the previous head `38843fbf`.
+- Added `core/coordination/runner.go` with an injected provider-neutral `Executor` interface and deterministic `RunReady` driver. It persists Ready/Running/Completed/Failed transitions, respects dependencies and context cancellation, and never auto-retries failed work.
+- Added tests for ordered execution across restarts, provider failures, cancellation before work, and interruption during execution. An interrupted Running task stays Running after replay, requiring explicit recovery policy rather than accidental re-execution.
+- **Scope:** this is an adapter contract and test double, not a live Cursor/Codex agent integration. Cross-process writer exclusivity, crash-safe handoff and real runtime E2E remain blockers for Module 1 completion. Verify exact-head CI matrix, race, build/vet, conflicts and approvals before merging.
