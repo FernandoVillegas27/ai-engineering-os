@@ -605,7 +605,7 @@ func TestParseGoTestJSONValidTerminalEventsRemainComplete(t *testing.T) {
 
 func TestParseGoTestJSONRejectsWhitespaceOnlyOutputTestIdentity(t *testing.T) {
 	stream := "{\"Action\":\"start\",\"Package\":\"probe/ok\"}\n" +
-		"{\"Action\":\"output\",\"Package\":\"probe/ok\",\"Test\":\"   \",\"Output\":\"unattributed test output\n\"}\n" +
+		"{\"Action\":\"output\",\"Package\":\"probe/ok\",\"Test\":\"   \",\"Output\":\"unattributed test output\\n\"}\n" +
 		"{\"Action\":\"pass\",\"Package\":\"probe/ok\"}\n"
 	got := parseGoTestJSON(stream, false)
 	if got.Confidence != verification.ParsePartial || strings.Contains(got.Rendered, "unattributed test output") {
@@ -616,7 +616,7 @@ func TestParseGoTestJSONRejectsWhitespaceOnlyOutputTestIdentity(t *testing.T) {
 func TestParseGoTestJSONValidTestOutputIdentityRemainsComplete(t *testing.T) {
 	stream := "{\"Action\":\"start\",\"Package\":\"probe/ok\"}\n" +
 		"{\"Action\":\"run\",\"Package\":\"probe/ok\",\"Test\":\"TestOK\"}\n" +
-		"{\"Action\":\"output\",\"Package\":\"probe/ok\",\"Test\":\"TestOK\",\"Output\":\"test output\n\"}\n" +
+		"{\"Action\":\"output\",\"Package\":\"probe/ok\",\"Test\":\"TestOK\",\"Output\":\"test output\\n\"}\n" +
 		"{\"Action\":\"pass\",\"Package\":\"probe/ok\",\"Test\":\"TestOK\"}\n" +
 		"{\"Action\":\"pass\",\"Package\":\"probe/ok\"}\n"
 	got := parseGoTestJSON(stream, false)
