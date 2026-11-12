@@ -74,7 +74,9 @@ func parseGoTestJSONWithStderr(raw, stderr string, exitFailed bool, roots ...str
 		case "start", "run", "pass", "fail", "skip":
 			// Go emits start only for packages. A test-scoped start is
 			// malformed evidence and must not establish package lifecycle.
-			if event.Action == "start" && event.Test != "" {
+			// Likewise, run must identify a test or subtest.
+			if (event.Action == "start" && event.Test != "") ||
+				(event.Action == "run" && strings.TrimSpace(event.Test) == "") {
 				invalid++
 				continue
 			}
