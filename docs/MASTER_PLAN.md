@@ -2648,3 +2648,11 @@ is still current. Always preserve human approval and green CI before merge.
 - Add regression coverage for malformed test-scoped starts and legitimate package-scoped starts.
 - PR #214 is merged (its earlier checkpoint says pending CI historically); the current milestone remains pending exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build, vet, conflict and approval checks.
 - This is a narrow Go JSON lifecycle validation improvement, not proof of complete schema or ordering integrity. No release or deployment.
+
+
+### 2026-11-12 — Go JSON test-run identity integrity (pending CI)
+
+- PR #215 merged to master at 9019549c056ee884ac3c3556250d0c1ed0281ee5 after exact-head Ubuntu/Windows/macOS tests/build/vet and Ubuntu race passed.
+- Reject run events lacking a nonblank Test identity; a Go run event must refer to a test or subtest, not a package-level run.
+- Add regressions for missing/whitespace Test and a valid test-scoped run/pass lifecycle.
+- This milestone is pending CI, exact-head mergeability and any required human approval. No release, deploy, visibility changes or bypasses.
