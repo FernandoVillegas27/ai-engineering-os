@@ -3,6 +3,8 @@ package coordination
 import (
  "errors"
  "fmt"
+ "os"
+ "path/filepath"
  "sync"
 )
 
@@ -17,7 +19,7 @@ type DurableSession struct {
 }
 
 func OpenDurableSession(runID, taskJournalPath, messageJournalPath string, tasks []Task) (*DurableSession,error) {
- if taskJournalPath==messageJournalPath {return nil,errors.New("task and message journals must be separate")}
+ if err:=distinctJournalPaths(taskJournalPath,messageJournalPath);err!=nil {return nil,err}
  scheduler,err:=NewDurableScheduler(runID,taskJournalPath,tasks)
  if err!=nil {return nil,err}
  messages,err:=NewJournal(messageJournalPath,runID,tasks)
@@ -46,4 +48,29 @@ func (s *DurableSession) Send(msg Message) error {
   }
  }
  return s.Messages.Append(msg)
+}
+
+ 
+// distinctJournalPaths rejects identical paths, including aliases through
+// symlinked parent directories and existing hard links. This prevents the two
+// independent JSONL schemas from corrupting one another.
+func distinctJournalPaths(taskPath,messagePath string) error {
+ if taskPath=="" || messagePath=="" {return errors.New("journal paths are required")}
+ a,err:=filepath.Abs(taskPath)
+ if err!=nil {return err}
+ b,err:=filepath.Abs(messagePath)
+ if err!=nil {return err}
+ resolve:=func(path string) string {
+  parent,err:=filepath.EvalSymlinks(filepath.Dir(path))
+  if err==nil {return filepath.Join(parent,filepath.Base(path))}
+  return path
+ }
+ a,b=resolve(a),resolve(b)
+ if a==b {return errors.New("task and message journals must be separate")}
+ ai,ae:=os.Stat(a)
+ bi,be:=os.Stat(b)
+ if ae==nil && be==nil && os.SameFile(ai,bi) {
+  return errors.New("task and message journals must be separate")
+ }
+ return nil
 }
