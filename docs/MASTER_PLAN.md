@@ -2558,3 +2558,11 @@ is still current. Always preserve human approval and green CI before merge.
 - Both passed exact-head Ubuntu/Windows/macOS tests and Ubuntu race before merge. The earlier "proposed" entries above are historical, not outstanding PRs.
 - Current proposed follow-up: reject consecutive block-comment evasion of literal dynamic import rules, with cross-extension regressions. This is still lexical scanning, not a JS/TS parser or a complete no-follow filesystem guarantee.
 - After green CI and merge, prioritize stronger parser-backed architecture verification, atomic contract reads, and external-tool runtime authorization as described above.
+
+
+### Architecture source-tree symlink guard (pending CI)
+
+- The architecture scanner must reject symlinked directories instead of silently skipping their contents during `filepath.WalkDir`; a linked `src/` tree could otherwise hide forbidden imports.
+- A regression test creates a linked source directory with a forbidden import and requires fail-closed behavior.
+- This is a pre-scan guard only. It is not race-free descriptor-relative traversal and does not solve concurrent workspace mutations.
+- Do not merge until exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build and vet are green and the PR is conflict-free.
