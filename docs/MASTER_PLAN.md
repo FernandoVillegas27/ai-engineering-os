@@ -2541,3 +2541,11 @@ is still current. Always preserve human approval and green CI before merge.
 - Regression tests verify forbidden literal dynamic imports are reported and allowed imports remain accepted.
 - This is lexical detection for literal module specifiers, **not** a full JS/TS parser. Computed dynamic imports and aliases are outside this milestone; no claim of complete enforcement.
 - Treat this checkpoint as pending until exact-head Ubuntu, Windows, macOS and Ubuntu race checks pass and the PR is merged.
+
+
+### Dynamic import coverage follow-up — bundler comments (proposed)
+
+- Extend the lexical JS/TS architecture check to recognize a literal dynamic import preceded by an optional block comment inside `import(/* chunk */ "module")`, including multiline comments.
+- Add positive and negative regression tests across JS/JSX/TS/TSX.
+- This remains a lexical heuristic, not complete JS/TS parsing or computed-import enforcement. No race-free filesystem guarantees are implied.
+- Merge only after exact-head green CI on Ubuntu, Windows and macOS, including Ubuntu race, build and vet.

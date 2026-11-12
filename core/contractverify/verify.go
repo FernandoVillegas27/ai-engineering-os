@@ -623,7 +623,7 @@ var (
 	javaImportPattern   = regexp.MustCompile(`(?m)^\s*import\s+(?:static\s+)?([^;]+);`)
 	jsImportPattern     = regexp.MustCompile(`(?m)(?:from\s+|require\s*\(\s*)["']([^"']+)["']`)
 	sideEffectJSPattern = regexp.MustCompile(`(?m)^\s*import\s+["']([^"']+)["']`)
-	dynamicJSPattern    = regexp.MustCompile(`\bimport\s*\(\s*["']([^"']+)["']\s*\)`)
+	dynamicJSPattern    = regexp.MustCompile(`\bimport\s*\(\s*(?:/\*[\s\S]*?\*/\s*)?["']([^"']+)["']\s*\)`)
 )
 
 func extractImports(source, ext string) []string {
