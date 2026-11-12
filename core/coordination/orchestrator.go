@@ -16,12 +16,15 @@ func RunUntilIdle(ctx context.Context, scheduler *DurableScheduler, executor Exe
   if err:=ctx.Err();err!=nil {return err}
   before:=scheduler.Snapshot()
   completed:=true
+  cancelled:=false
   runnable:=false
   for _,task:=range before {
-   if task.State!=Completed && task.State!=Cancelled {completed=false}
+   if task.State!=Completed {completed=false}
+   if task.State==Cancelled {cancelled=true}
    if task.State==Ready {runnable=true}
   }
   if completed {return nil}
+  if cancelled {return errors.New("run contains cancelled tasks; completion cannot be reported")}
   eligible,err:=ReadyTasks(before)
   if err!=nil {return err}
   if len(eligible)==0 && !runnable {
