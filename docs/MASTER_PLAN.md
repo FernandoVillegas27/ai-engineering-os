@@ -2680,3 +2680,12 @@ is still current. Always preserve human approval and green CI before merge.
 - Preserve failed confidence for nonzero exit without valid events and not-attempted confidence for genuinely empty successful output.
 - Regression tests cover invalid JSON, unknown action, unscoped output, and failed exit.
 - Integration pending exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build, vet, applicable release workflows, conflict checks and required human approvals. No release, deployment, visibility changes or bypasses.
+
+
+### 2026-11-12 — Build JSON event test-scope integrity (PR pending)
+
+- Baseline master `55ff78a758ff2036440b71ed8b4981cb5d556b8a` after PR #219 merged; no open PRs at selection.
+- Reject `build-output` and `build-fail` events with a nonempty `Test` field: build events are scoped to `ImportPath`, not an individual test.
+- Regression coverage checks both malformed actions, absence of fabricated failures and suppression of invalid build output.
+- Prior checkpoint for PR #219 is historical: its exact-head CI passed and PR was merged as `55ff78a7`.
+- This change remains pending exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build, vet, mergeability and applicable approvals. No release, deployment or visibility changes.
