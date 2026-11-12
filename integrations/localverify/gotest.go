@@ -100,6 +100,9 @@ func parseGoTestJSONWithStderr(raw, stderr string, exitFailed bool, roots ...str
 					failedTests = append(failedTests, key)
 				}
 			}
+		default:
+			// Unknown event actions cannot be treated as fully parsed evidence.
+			invalid++
 		}
 	}
 
