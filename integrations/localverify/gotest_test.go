@@ -663,3 +663,28 @@ func TestParseGoTestJSONRejectsTestScopedBuildEvents(t *testing.T) {
 		})
 	}
 }
+
+
+func TestParseGoTestJSONRejectsMalformedFailedBuildIdentity(t *testing.T) {
+	for _, failedBuild := range []string{"   ", " [probe.test]"} {
+		t.Run(strings.ReplaceAll(failedBuild, " ", "_"), func(t *testing.T) {
+			stream := "{\"Action\":\"start\",\"Package\":\"probe/ok\"}\n" +
+				"{\"Action\":\"fail\",\"Package\":\"probe/bad\",\"FailedBuild\":\"" + failedBuild + "\"}\n" +
+				"{\"Action\":\"pass\",\"Package\":\"probe/ok\"}\n"
+			got := parseGoTestJSON(stream, true)
+			if got.Confidence != verification.ParsePartial || len(got.Failures) != 0 {
+				t.Fatalf("invalid FailedBuild must not authorize complete evidence: %#v", got)
+			}
+		})
+	}
+}
+
+func TestParseGoTestJSONValidFailedBuildIdentityRemainsComplete(t *testing.T) {
+	stream := "{\"Action\":\"build-output\",\"ImportPath\":\"probe/lib\",\"Output\":\"compiler error\\n\"}\n" +
+		"{\"Action\":\"fail\",\"Package\":\"probe/bad\",\"FailedBuild\":\"probe/lib [probe/lib.test]\"}\n"
+	got := parseGoTestJSON(stream, true)
+	if got.Confidence != verification.ParseComplete || len(got.Failures) != 1 ||
+		got.Failures[0].ID != "probe/bad" || got.Failures[0].Class != verification.FailureClassBuild {
+		t.Fatalf("valid FailedBuild identity must remain complete: %#v", got)
+	}
+}
