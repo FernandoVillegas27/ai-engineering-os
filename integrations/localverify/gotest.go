@@ -76,7 +76,8 @@ func parseGoTestJSONWithStderr(raw, stderr string, exitFailed bool, roots ...str
 			// malformed evidence and must not establish package lifecycle.
 			// Likewise, run must identify a test or subtest.
 			if (event.Action == "start" && event.Test != "") ||
-				(event.Action == "run" && strings.TrimSpace(event.Test) == "") {
+				(event.Action == "run" && strings.TrimSpace(event.Test) == "") ||
+				((event.Action == "pass" || event.Action == "fail" || event.Action == "skip") && event.Test != "" && strings.TrimSpace(event.Test) == "") {
 				invalid++
 				continue
 			}
