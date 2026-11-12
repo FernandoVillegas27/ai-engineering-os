@@ -2574,3 +2574,10 @@ is still current. Always preserve human approval and green CI before merge.
 - Add cross-platform regression that places `openapi.yaml` inside a symlinked contract directory, with permission-based skip on restricted Windows environments.
 - This is not atomic descriptor-relative no-follow traversal and does not protect against concurrent filesystem swaps.
 - Merge only after exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build and vet pass.
+
+
+### Architecture literal dynamic imports — line-comment gaps (pending CI)
+
+- Recognize JS/JSX/TS/TSX literal `import(` calls with JavaScript `//` line comments and mixed block comments before the quoted module specifier.
+- Add forbidden/allowed regression fixtures. This remains lexical detection, not full parser-backed JavaScript/TypeScript import analysis.
+- Merge only with exact-head green Ubuntu, Windows, macOS, Ubuntu race, build and vet.
