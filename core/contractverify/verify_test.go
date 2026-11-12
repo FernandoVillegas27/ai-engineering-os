@@ -593,3 +593,30 @@ func TestArchitectureAllowsCommentedNonForbiddenDynamicImport(t *testing.T) {
 		t.Fatalf("allowed commented dynamic import should pass: result=%#v err=%v", result, err)
 	}
 }
+
+func TestArchitectureRejectsConsecutiveCommentedDynamicImports(t *testing.T) {
+	for _, ext := range []string{".js", ".jsx", ".ts", ".tsx"} {
+		t.Run(ext, func(t *testing.T) {
+			original, staged := t.TempDir(), t.TempDir()
+			writeFile(t, staged, ".ai-engineering-os/architecture.yaml", "version: 1\nrules:\n  - id: boundary\n    paths: [\"src/**\"]\n    forbidden_imports: [\"infra\"]\n")
+			writeFile(t, staged, "src/module"+ext, "const module = import(/* bundler */ /* chunk\n name */ \"example.com/infra\");\n")
+			result, err := Verify(original, staged)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.Passed || len(result.Findings) != 1 || result.Findings[0].Kind != FindingArchitecture {
+				t.Fatalf("consecutive comments must not bypass architecture rules: %#v", result)
+			}
+		})
+	}
+}
+
+func TestArchitectureAllowsConsecutiveCommentedDynamicImport(t *testing.T) {
+	original, staged := t.TempDir(), t.TempDir()
+	writeFile(t, staged, ".ai-engineering-os/architecture.yaml", "version: 1\nrules:\n  - id: boundary\n    paths: [\"src/**\"]\n    forbidden_imports: [\"infra\"]\n")
+	writeFile(t, staged, "src/module.ts", "const module = import(/* a */ /* b */ \"example.com/allowed\");\n")
+	result, err := Verify(original, staged)
+	if err != nil || !result.Passed {
+		t.Fatalf("allowed import should pass: result=%#v err=%v", result, err)
+	}
+}
