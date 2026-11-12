@@ -2698,3 +2698,27 @@ is still current. Always preserve human approval and green CI before merge.
 - Regressions cover whitespace-only and empty-base `FailedBuild`, plus valid build attribution.
 - This is a narrow cross-language Quality evidence integrity improvement, not completion of nested JUnit evidence or the broader product milestones.
 - Require exact-head Ubuntu/Windows/macOS tests, Ubuntu race, build, vet, applicable release checks, conflict-free merge and human approvals before integration. No release, deployment or visibility changes.
+
+
+### Multi-agent module block 1 — coordination contracts (in progress)
+
+- Baseline `master` `9cb0ea581e4fe1136c233fc621c42b39a0d19265`; PR #222 CI still pending macOS at branch creation.
+- Introduced provider-independent `core/coordination` task graph and typed inter-agent message contracts, with deterministic cycle/missing dependency checks, dependency-ready selection, and scoped sender/recipient/artifact validation.
+- This is the first **module slice**, not a completed durable message bus or runtime scheduler. Next slices: append-only message persistence with run scoping and replay; task state transitions and ownership; orchestrator integration; Control Plane projections and end-to-end scenarios.
+- CI, review, and exact-head merge checks remain mandatory; do not infer runtime authority from these contracts.
+
+
+### Module 1 integration checkpoint — scheduler, journal, handoff
+
+- Added `core/coordination` deterministic scheduler, dependency-gated transitions, task snapshots, append-only run-scoped JSONL message journal, replay validation, and session-level architect-to-backend handoff.
+- Added unit and integration scenarios for graph cycles, dependency bypass, invalid transitions, duplicate messages, foreign runs, corrupt journals, and handoff replay.
+- **Not yet production-complete:** scheduler transitions are in memory, replay restores messages but not task state; journal locking is per instance, not cross-process; session handoff journal append and state transition are not a single durable transaction; no runtime orchestrator/Control Plane adapter or tool authority integration exists yet. Do not claim end-to-end multi-agent execution.
+- Complete the remaining durable task event model and orchestrator integration before treating Block 1 as finished. Keep PR #223 open until exact-head CI and the block acceptance criteria pass.
+
+
+### Automation checkpoint — 2026-11-12 coordination durability increment
+
+- Oldest open PR #222 still awaits macOS GitHub-hosted runner; exact-head Ubuntu and Windows jobs passed. Do not merge until macOS and all applicable gates pass.
+- PR #223 now also includes `DurableScheduler` with append-only, run-scoped task transition events, strict replay validation, dependency-gated transitions and regression coverage for restart, foreign-run and corruption cases.
+- **Acceptance limits:** journals require single-process writer ownership; cross-process locking, atomic combined handoff/task transition, orchestration adapter, recovery from partially written records, and true multiagent runtime E2E remain incomplete. No claim that Block 1 is finished.
+- Continue within PR #223, not a new small PR. Preserve CI and human approvals before merge.
