@@ -66,6 +66,11 @@ func parseGoTestJSONWithStderr(raw, stderr string, exitFailed bool, roots ...str
 		// import path. Otherwise their failures can collapse into an empty
 		// identity and must not authorize complete quality evidence.
 		switch event.Action {
+		case "output":
+			if strings.TrimSpace(event.Package) == "" {
+				invalid++
+				continue
+			}
 		case "start", "run", "pass", "fail", "skip":
 			if strings.TrimSpace(event.Package) == "" {
 				invalid++
