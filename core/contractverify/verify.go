@@ -623,6 +623,7 @@ var (
 	javaImportPattern   = regexp.MustCompile(`(?m)^\s*import\s+(?:static\s+)?([^;]+);`)
 	jsImportPattern     = regexp.MustCompile(`(?m)(?:from\s+|require\s*\(\s*)["']([^"']+)["']`)
 	sideEffectJSPattern = regexp.MustCompile(`(?m)^\s*import\s+["']([^"']+)["']`)
+	dynamicJSPattern    = regexp.MustCompile(`\bimport\s*\(\s*["']([^"']+)["']\s*\)`)
 )
 
 func extractImports(source, ext string) []string {
@@ -654,6 +655,7 @@ func extractImports(source, ext string) []string {
 	default:
 		addMatches(jsImportPattern)
 		addMatches(sideEffectJSPattern)
+		addMatches(dynamicJSPattern)
 	}
 	out := make([]string, 0, len(seen))
 	for value := range seen {

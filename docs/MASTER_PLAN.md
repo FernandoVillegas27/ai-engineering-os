@@ -2533,3 +2533,11 @@ is still current. Always preserve human approval and green CI before merge.
 - Regression fixtures cover nested failure/test count mismatches and invalid totals.
 - This milestone is **not complete** until the corresponding PR has passed required Ubuntu, Windows, macOS and applicable race/package checks and has been merged from its verified head SHA.
 - After merge, continue cross-language Quality hardening and then no-follow contract reads, external tool runtime contracts and product UX per the prioritized checkpoint above.
+
+
+### Architecture import coverage — dynamic module loading (proposed)
+
+- The architecture import scanner now recognizes literal JavaScript/TypeScript `import("module")` expressions, including JS/JSX/TS/TSX files, alongside static imports and CommonJS `require`.
+- Regression tests verify forbidden literal dynamic imports are reported and allowed imports remain accepted.
+- This is lexical detection for literal module specifiers, **not** a full JS/TS parser. Computed dynamic imports and aliases are outside this milestone; no claim of complete enforcement.
+- Treat this checkpoint as pending until exact-head Ubuntu, Windows, macOS and Ubuntu race checks pass and the PR is merged.
