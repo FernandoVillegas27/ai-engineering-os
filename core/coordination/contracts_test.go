@@ -40,3 +40,16 @@ func TestMessageValidation(t *testing.T) {
  }
  for i,bad:=range cases { if err:=ValidateMessage(bad,tasks);err==nil { t.Fatalf("case %d: expected rejection",i) } }
 }
+
+func TestGraphRejectsUnknownAndWhitespaceRoles(t *testing.T) {
+ for _,role:=range []Role{"arbitrary-provider"," ","backend"} {
+  tasks:=[]Task{{ID:"agent",Role:role,State:Queued}}
+  if err:=ValidateGraph(tasks);err==nil {t.Fatalf("accepted unsupported role %q",role)}
+  if _,err:=NewScheduler(tasks);err==nil {t.Fatalf("scheduler accepted unsupported role %q",role)}
+ }
+ for _,role:=range []Role{Architect,Backend,Frontend,QA,Reviewer} {
+  if err:=ValidateGraph([]Task{{ID:"agent",Role:role,State:Queued}});err!=nil {
+   t.Fatalf("rejected supported role %q: %v",role,err)
+  }
+ }
+}
