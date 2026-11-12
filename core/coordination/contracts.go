@@ -60,6 +60,10 @@ func ValidateGraph(tasks []Task) error {
   if strings.TrimSpace(task.ID) == "" || strings.TrimSpace(string(task.Role)) == "" {
    return errors.New("task ID and role are required")
   }
+  switch task.Role {
+  case Architect, Backend, Frontend, QA, Reviewer:
+  default: return fmt.Errorf("task %q: invalid role %q", task.ID, task.Role)
+  }
   switch task.State {
   case Queued, Ready, Running, Waiting, Blocked, Completed, Failed, Cancelled:
   default: return fmt.Errorf("task %q: invalid state %q", task.ID, task.State)
