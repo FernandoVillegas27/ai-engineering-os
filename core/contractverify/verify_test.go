@@ -640,3 +640,19 @@ func TestScanArchitectureViolationsRejectsSymlinkedDirectory(t *testing.T) {
 		t.Fatal("symlinked architecture directory must fail closed instead of skipping source files")
 	}
 }
+
+func TestDiscoverOpenAPIFilesRejectsSymlinkedContractDirectory(t *testing.T) {
+	root, target := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(target, "openapi.yaml"), []byte("openapi: 3.0.0\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(root, "contracts")); err != nil {
+		if os.IsPermission(err) {
+			t.Skip("symlink creation not permitted")
+		}
+		t.Fatal(err)
+	}
+	if _, err := discoverOpenAPIFiles(root); err == nil {
+		t.Fatal("linked contract directory must fail closed rather than hiding OpenAPI files")
+	}
+}
