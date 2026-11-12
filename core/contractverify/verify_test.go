@@ -710,3 +710,30 @@ func TestArchitectureAllowsDynamicImportWithTrailingComments(t *testing.T) {
 		t.Fatalf("allowed import should pass: result=%#v err=%v", result, err)
 	}
 }
+
+func TestArchitectureRejectsDynamicImportCommentsBeforeCall(t *testing.T) {
+	for _, ext := range []string{".js", ".jsx", ".ts", ".tsx"} {
+		t.Run(ext, func(t *testing.T) {
+			original, staged := t.TempDir(), t.TempDir()
+			writeFile(t, staged, ".ai-engineering-os/architecture.yaml", "version: 1\nrules:\n  - id: boundary\n    paths: [\"src/**\"]\n    forbidden_imports: [\"infra\"]\n")
+			writeFile(t, staged, "src/module"+ext, "const module = import /* chunk */ // build hint\n /* another */ (\"example.com/infra\");\n")
+			result, err := Verify(original, staged)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.Passed || len(result.Findings) != 1 || result.Findings[0].Kind != FindingArchitecture {
+				t.Fatalf("comments before dynamic import call must not bypass policy: %#v", result)
+			}
+		})
+	}
+}
+
+func TestArchitectureAllowsDynamicImportCommentsBeforeCall(t *testing.T) {
+	original, staged := t.TempDir(), t.TempDir()
+	writeFile(t, staged, ".ai-engineering-os/architecture.yaml", "version: 1\nrules:\n  - id: boundary\n    paths: [\"src/**\"]\n    forbidden_imports: [\"infra\"]\n")
+	writeFile(t, staged, "src/module.ts", "const module = import /* hint */ (\"example.com/allowed\");\n")
+	result, err := Verify(original, staged)
+	if err != nil || !result.Passed {
+		t.Fatalf("allowed import should pass: result=%#v err=%v", result, err)
+	}
+}
