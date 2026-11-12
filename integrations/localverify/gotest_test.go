@@ -628,9 +628,9 @@ func TestParseGoTestJSONValidTestOutputIdentityRemainsComplete(t *testing.T) {
 
 func TestParseGoTestJSONInvalidOnlySuccessfulExitIsPartial(t *testing.T) {
 	for _, raw := range []string{
-		"not-json\\n",
-		"{\\"Action\\":\\"future-action\\",\\"Package\\":\\"probe/ok\\"}\\n",
-		"{\\"Action\\":\\"output\\",\\"Package\\":\\"   \\",\\"Output\\":\\"unscoped\\"}\\n",
+		"not-json\n",
+		"{\"Action\":\"future-action\",\"Package\":\"probe/ok\"}\n",
+		"{\"Action\":\"output\",\"Package\":\"   \",\"Output\":\"unscoped\"}\n",
 	} {
 		got := parseGoTestJSON(raw, false)
 		if got.Confidence != verification.ParsePartial {
@@ -640,7 +640,7 @@ func TestParseGoTestJSONInvalidOnlySuccessfulExitIsPartial(t *testing.T) {
 }
 
 func TestParseGoTestJSONInvalidOnlyFailedExitRemainsFailed(t *testing.T) {
-	got := parseGoTestJSON("not-json\\n", true)
+	got := parseGoTestJSON("not-json\n", true)
 	if got.Confidence != verification.ParseFailed {
 		t.Fatalf("failed command with no valid events must remain failed: %#v", got)
 	}
