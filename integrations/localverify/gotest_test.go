@@ -449,3 +449,28 @@ func TestParseGoTestJSONKnownActionsRemainComplete(t *testing.T) {
 		t.Fatalf("known successful events should be complete: %q", got.Confidence)
 	}
 }
+
+func TestParseGoTestJSONUnscopedLifecycleEventIsPartial(t *testing.T) {
+	for _, action := range []string{"start", "run", "pass", "fail", "skip"} {
+		t.Run(action, func(t *testing.T) {
+			raw := "{\"Action\":\"start\",\"Package\":\"example/pkg\"}\n" +
+				"{\"Action\":\"" + action + "\"}\n" +
+				"{\"Action\":\"pass\",\"Package\":\"example/pkg\"}\n"
+			got := parseGoTestJSON(raw, false)
+			if got.Confidence != verification.ParsePartial {
+				t.Fatalf("unscoped %s must yield partial evidence, got %q", action, got.Confidence)
+			}
+		})
+	}
+}
+
+func TestParseGoTestJSONScopedLifecycleEventsRemainComplete(t *testing.T) {
+	raw := "{\"Action\":\"start\",\"Package\":\"example/pkg\"}\n" +
+		"{\"Action\":\"run\",\"Package\":\"example/pkg\",\"Test\":\"TestOK\"}\n" +
+		"{\"Action\":\"pass\",\"Package\":\"example/pkg\",\"Test\":\"TestOK\"}\n" +
+		"{\"Action\":\"pass\",\"Package\":\"example/pkg\"}\n"
+	got := parseGoTestJSON(raw, false)
+	if got.Confidence != verification.ParseComplete {
+		t.Fatalf("scoped lifecycle events should remain complete, got %q", got.Confidence)
+	}
+}

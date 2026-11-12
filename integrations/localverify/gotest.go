@@ -62,6 +62,15 @@ func parseGoTestJSONWithStderr(raw, stderr string, exitFailed bool, roots ...str
 			rendered.WriteString(line + "\n")
 			continue
 		}
+		// Lifecycle events without a package cannot be attributed to a test
+		// unit and must not authorize complete quality evidence.
+		switch event.Action {
+		case "start", "run", "pass", "fail", "skip":
+			if strings.TrimSpace(event.Package) == "" {
+				invalid++
+				continue
+			}
+		}
 		valid++
 		key := unitKey{event.Package, event.Test}
 
