@@ -548,3 +548,27 @@ func TestParseGoTestJSONPackageStartRemainsComplete(t *testing.T) {
 		t.Fatalf("package-scoped start must remain complete: %#v", got)
 	}
 }
+
+
+func TestParseGoTestJSONRejectsUnscopedRun(t *testing.T) {
+	for _, testName := range []string{"", "   "} {
+		stream := "{\"Action\":\"start\",\"Package\":\"probe/ok\"}\n" +
+			"{\"Action\":\"run\",\"Package\":\"probe/ok\",\"Test\":\"" + testName + "\"}\n" +
+			"{\"Action\":\"pass\",\"Package\":\"probe/ok\"}\n"
+		got := parseGoTestJSON(stream, false)
+		if got.Confidence != verification.ParsePartial {
+			t.Fatalf("run without a test identity must be partial: %#v", got)
+		}
+	}
+}
+
+func TestParseGoTestJSONScopedRunRemainsComplete(t *testing.T) {
+	stream := "{\"Action\":\"start\",\"Package\":\"probe/ok\"}\n" +
+		"{\"Action\":\"run\",\"Package\":\"probe/ok\",\"Test\":\"TestOK\"}\n" +
+		"{\"Action\":\"pass\",\"Package\":\"probe/ok\",\"Test\":\"TestOK\"}\n" +
+		"{\"Action\":\"pass\",\"Package\":\"probe/ok\"}\n"
+	got := parseGoTestJSON(stream, false)
+	if got.Confidence != verification.ParseComplete {
+		t.Fatalf("test-scoped run must remain complete: %#v", got)
+	}
+}
