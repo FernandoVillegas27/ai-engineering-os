@@ -620,3 +620,23 @@ func TestArchitectureAllowsConsecutiveCommentedDynamicImport(t *testing.T) {
 		t.Fatalf("allowed import should pass: result=%#v err=%v", result, err)
 	}
 }
+
+func TestScanArchitectureViolationsRejectsSymlinkedDirectory(t *testing.T) {
+	root := t.TempDir()
+	target := t.TempDir()
+	if err := os.WriteFile(filepath.Join(target, "module.ts"), []byte("import 'example.com/infra'\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(root, "src")); err != nil {
+		if os.IsPermission(err) {
+			t.Skip("symlink creation not permitted")
+		}
+		t.Fatal(err)
+	}
+	policy := architecturePolicy{Rules: []architectureRule{{
+		ID: "boundary", Paths: []string{"src/**"}, ForbiddenImports: []string{"infra"},
+	}}}
+	if _, err := scanArchitectureViolations(root, policy); err == nil {
+		t.Fatal("symlinked architecture directory must fail closed instead of skipping source files")
+	}
+}
