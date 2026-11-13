@@ -2786,3 +2786,9 @@ is still current. Always preserve human approval and green CI before merge.
 - GitHub connector returned **zero** PR-triggered workflow runs and **zero** combined commit statuses for that exact head; PR reviews list was empty. This does **not** prove that no GitHub checks exist; this connector cannot enumerate check runs, required branch rules, or runner status. Never merge on this evidence.
 - Fixed CLI configuration regression: the test previously invoked the deliberately rejecting bare `CommandExecutor.Execute`, so it passed regardless of whether invalid binary/workdir configuration was checked. It now invokes `InstructionExecutor.Execute` with concrete instructions, reaching actual command configuration validation. Commit `e534ab9e`.
 - New test is committed, **not executed**; do not assert CI green. Keep PR open pending real provider integration, crash-consistent handoffs, exact-head Ubuntu/Windows/macOS + Ubuntu race/build/vet, conflict and human approval verification. Reconcile master divergence without force push.
+
+### 2026-11-12 — Bounded agent result capture (PR #223)
+
+- Added `ResultExecutor` to run trusted configured CLI commands with explicit instructions and retain bounded per-task output in memory. Rejects empty responses, duplicate task result IDs, and oversized output; tests cover POSIX helper output and invalid configurations.
+- Result capture is **not durable artifact storage** and does not automatically validate agent correctness, persist messages or hand off output to another role. The CLI remains provider-neutral rather than verified Codex/Cursor integration.
+- Keep the PR open until live runtime integration, durable results/handoff, exact-head tests and required reviews are complete.
