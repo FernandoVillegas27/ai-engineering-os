@@ -2767,3 +2767,9 @@ is still current. Always preserve human approval and green CI before merge.
 - Added `OpenOwnedDurableSession` to acquire ownership before replaying both journals, reject path aliases and release ownership on failed journal validation; added replay, contention and cleanup tests.
 - These tests are committed but **not executed**. The runtime container cannot resolve github.com for cloning. The lock is an opt-in ownership wrapper: all writers must use it; crash markers require operator reconciliation and cannot be stolen automatically. It is not a distributed lease and is not safe across filesystems lacking reliable exclusive-create semantics.
 - Remaining blockers: integrate the owned session into actual orchestrator and agent adapters, crash-consistent multi-journal handoff, local and full exact-head Ubuntu/Windows/macOS CI including Ubuntu race/build/vet, reconcile four master commits, check reviews/conflicts, then merge only when accepted. No releases/deploy/visibility changes.
+
+### 2026-11-12 — CLI bridge scaffold (PR #223)
+
+- Added `core/coordination/command_executor.go`: shell-free `exec.CommandContext` adapter with fixed trusted binary/args, working-directory validation, context cancellation and task identity on stdin. Added configuration/cancellation/POSIX stdin regression tests.
+- This is **not yet a production Codex/Cursor integration**: installed CLI flags, provider authentication, prompt payload, workspace/tool authorization, structured result capture, agent handoff and real E2E still require explicit adapters and validation.
+- Never configure unrestricted CLI tool permissions; use sandbox, approvals and owned durable session. Exact-head CI remains unverified; do not merge as complete.
