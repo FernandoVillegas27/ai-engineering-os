@@ -14,7 +14,7 @@ func TestCommandExecutorRequiresExplicitConfiguration(t *testing.T) {
  task:=Task{ID:"plan",Role:Architect,State:Ready}
  cases:=[]CommandExecutor{{},{Binary:"go"},{Binary:"go",Workdir:filepath.Join(t.TempDir(),"missing")}}
  for _,e:=range cases {
-  if err:=e.Execute(context.Background(),task);err==nil {t.Fatal("invalid executor configuration accepted")}
+  if err:=(&InstructionExecutor{Command:&e,Instructions:map[string]string{"plan":"produce a plan"}}).Execute(context.Background(),task);err==nil {t.Fatal("invalid executor configuration accepted")}
  }
  ctx,cancel:=context.WithCancel(context.Background())
  cancel()
