@@ -14,9 +14,8 @@ func RunOwnedUntilIdle(ctx context.Context, session *OwnedDurableSession, execut
   return errors.New("owned durable session required")
  }
  session.lease.mu.Lock()
- closed:=session.lease.closed
- session.lease.mu.Unlock()
- if closed {return errors.New("run lease already released")}
+ defer session.lease.mu.Unlock()
+ if session.lease.closed {return errors.New("run lease already released")}
  if session.Tasks==nil {return errors.New("owned task scheduler required")}
  return RunUntilIdle(ctx,session.Tasks,executor)
 }
