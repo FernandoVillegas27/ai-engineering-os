@@ -2798,3 +2798,9 @@ is still current. Always preserve human approval and green CI before merge.
 - Added `DurableResultExecutor` wrapping `ResultExecutor`. Successful bounded output is serialized as one immutable JSON file per task with exclusive creation, restrictive file permissions, and file fsync before task success is returned. Task IDs are hex-encoded as filenames to prevent traversal. Read supports restart and refuses mismatched/empty records.
 - Added tests for persistence, replay, duplicate refusal, path traversal, missing directory. Tests are authored but **not yet executed in CI on the exact head**.
 - Crash window remains between result-file fsync and durable task-state Completed transition. A restart must reconcile a durable result before re-running any side-effectful agent; this is not yet automated. Directory ownership, symlink hardening, downstream prompt composition, true Codex/Cursor invocation and multi-platform end-to-end remain blockers. Do not merge.
+
+### 2026-11-13 — Reconciliation diagnostics and dependency prompt assembly (PR #223)
+
+- Added `InspectDurableResults` with fail-closed checks for corrupt output and discrepancies between durable task state and immutable agent output. It never changes task state or retries work; crash-window cases require human/control-plane review.
+- Added `BuildDependentInstructions` to construct downstream task instructions from explicitly completed predecessors with valid durable outputs; predecessor text is labeled untrusted. Tests cover completed/unfinished/missing dependencies and missing instructions.
+- **Remaining:** wire dependency context into actual run execution, durable handoff protocol, validate real provider CLI invocation and sandbox, run tests and CI on exact head. Inspection alone does not reconcile or authorize success.
