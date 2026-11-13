@@ -23,6 +23,10 @@ type CommandExecutor struct {
 }
 
 func (e *CommandExecutor) Execute(ctx context.Context, task Task) error {
+ return errors.New("agent instructions required: use InstructionExecutor")
+}
+
+func (e *CommandExecutor) executeWithPrompt(ctx context.Context, task Task, prompt string) error {
  if e==nil || strings.TrimSpace(e.Binary)=="" || strings.TrimSpace(e.Workdir)=="" {
   return errors.New("agent binary and workdir required")
  }
@@ -33,7 +37,6 @@ func (e *CommandExecutor) Execute(ctx context.Context, task Task) error {
  if strings.ContainsAny(e.Binary,"\r\n") {return errors.New("invalid agent executable")}
  // Task fields are data only. A trusted controller must provide the actual
  // task instructions and tool policy through its own runtime adapter.
- prompt:=fmt.Sprintf("Role: %s\nTask ID: %s\nDo not modify files unless explicitly authorized by the host.\n",task.Role,task.ID)
  cmd:=exec.CommandContext(ctx,e.Binary,e.Args...)
  cmd.Dir=e.Workdir
  cmd.Stdin=strings.NewReader(prompt)
