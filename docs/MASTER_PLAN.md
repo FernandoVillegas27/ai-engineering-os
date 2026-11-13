@@ -2792,3 +2792,9 @@ is still current. Always preserve human approval and green CI before merge.
 - Added `ResultExecutor` to run trusted configured CLI commands with explicit instructions and retain bounded per-task output in memory. Rejects empty responses, duplicate task result IDs, and oversized output; tests cover POSIX helper output and invalid configurations.
 - Result capture is **not durable artifact storage** and does not automatically validate agent correctness, persist messages or hand off output to another role. The CLI remains provider-neutral rather than verified Codex/Cursor integration.
 - Keep the PR open until live runtime integration, durable results/handoff, exact-head tests and required reviews are complete.
+
+### 2026-11-12 — Durable immutable agent results (PR #223)
+
+- Added `DurableResultExecutor` wrapping `ResultExecutor`. Successful bounded output is serialized as one immutable JSON file per task with exclusive creation, restrictive file permissions, and file fsync before task success is returned. Task IDs are hex-encoded as filenames to prevent traversal. Read supports restart and refuses mismatched/empty records.
+- Added tests for persistence, replay, duplicate refusal, path traversal, missing directory. Tests are authored but **not yet executed in CI on the exact head**.
+- Crash window remains between result-file fsync and durable task-state Completed transition. A restart must reconcile a durable result before re-running any side-effectful agent; this is not yet automated. Directory ownership, symlink hardening, downstream prompt composition, true Codex/Cursor invocation and multi-platform end-to-end remain blockers. Do not merge.
