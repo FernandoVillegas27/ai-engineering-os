@@ -2758,3 +2758,12 @@ is still current. Always preserve human approval and green CI before merge.
 - Corrected `RunUntilIdle` so cancelled work is **not** treated as successful completion. A fully or partially cancelled graph now returns an error without running dependent work; added two regressions.
 - Commits: `3eecce2` and `4d4297d`. These are committed tests, **not executed tests**. No CI-green claim, approval bypass or merge.
 - Next: reconcile branch, confirm actual CI workflow triggers/runners and exact-head matrix; integrate live agent adapters, exclusive journal ownership, and crash-consistent handoff before declaring Module 1 complete.
+
+
+### 2026-11-12 — Exclusive ownership for Module 1 journals (PR #223)
+
+- Verified actual master `37e25dd1fc1c1cefff49a8258cb757228da163e9`, sole open PR #223, and branch divergence (34 ahead / four behind before this change). PR review submissions empty; GitHub connector returned no PR-triggered Actions runs or commit statuses for inspected previous head. No runner-list/dispatch API exposed by current GitHub connector.
+- Added `RunLease` with atomic exclusive creation, fail-closed existing/stale marker behavior, explicit release with same-file ownership verification, and tests for contention, replacement and stale markers.
+- Added `OpenOwnedDurableSession` to acquire ownership before replaying both journals, reject path aliases and release ownership on failed journal validation; added replay, contention and cleanup tests.
+- These tests are committed but **not executed**. The runtime container cannot resolve github.com for cloning. The lock is an opt-in ownership wrapper: all writers must use it; crash markers require operator reconciliation and cannot be stolen automatically. It is not a distributed lease and is not safe across filesystems lacking reliable exclusive-create semantics.
+- Remaining blockers: integrate the owned session into actual orchestrator and agent adapters, crash-consistent multi-journal handoff, local and full exact-head Ubuntu/Windows/macOS CI including Ubuntu race/build/vet, reconcile four master commits, check reviews/conflicts, then merge only when accepted. No releases/deploy/visibility changes.
