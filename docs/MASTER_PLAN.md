@@ -2779,3 +2779,10 @@ is still current. Always preserve human approval and green CI before merge.
 - Added `InstructionExecutor` mapping each durable task ID to nonblank concrete instructions. The CLI command is no longer invoked by the bare `CommandExecutor.Execute` placeholder; `executeWithPrompt` is used only after instruction validation.
 - Added regressions for blank/missing instructions, prompt delivery to a POSIX helper, cancellation, and durable task failure instead of false completion.
 - **Not yet provider integration:** CLI command flags/authentication, trusted prompt assembly from task artifacts, structured outputs, workspace sandbox/approval policy, actual Codex/Cursor execution and full E2E still require implementation. Do not claim 100% or merge without exact-head CI.
+
+### 2026-11-12 22:32 ART — PR #223 pre-merge audit and CLI regression repair
+
+- Rechecked live master `37e25dd1fc1c1cefff49a8258cb757228da163e9`, sole open PR #223, branch `feat/coordination-message-contract` (50 ahead / 4 behind before repair), and confirmed previous head `2adb0abf` exactly matched the branch. Existing branch list was inspected; no duplicate PR created.
+- GitHub connector returned **zero** PR-triggered workflow runs and **zero** combined commit statuses for that exact head; PR reviews list was empty. This does **not** prove that no GitHub checks exist; this connector cannot enumerate check runs, required branch rules, or runner status. Never merge on this evidence.
+- Fixed CLI configuration regression: the test previously invoked the deliberately rejecting bare `CommandExecutor.Execute`, so it passed regardless of whether invalid binary/workdir configuration was checked. It now invokes `InstructionExecutor.Execute` with concrete instructions, reaching actual command configuration validation. Commit `e534ab9e`.
+- New test is committed, **not executed**; do not assert CI green. Keep PR open pending real provider integration, crash-consistent handoffs, exact-head Ubuntu/Windows/macOS + Ubuntu race/build/vet, conflict and human approval verification. Reconcile master divergence without force push.
