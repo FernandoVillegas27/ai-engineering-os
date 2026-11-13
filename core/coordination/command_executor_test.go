@@ -19,7 +19,7 @@ func TestCommandExecutorRequiresExplicitConfiguration(t *testing.T) {
  ctx,cancel:=context.WithCancel(context.Background())
  cancel()
  e:=&CommandExecutor{Binary:"go",Workdir:t.TempDir()}
- if err:=e.Execute(ctx,task);!errors.Is(err,context.Canceled) {t.Fatalf("cancelled execution: %v",err)}
+ if err:=(&InstructionExecutor{Command:e,Instructions:map[string]string{"plan":"produce a plan"}}).Execute(ctx,task);!errors.Is(err,context.Canceled) {t.Fatalf("cancelled execution: %v",err)}
 }
 
 func TestCommandExecutorUsesStdinWithoutShellInterpolation(t *testing.T) {
@@ -32,6 +32,6 @@ func TestCommandExecutorUsesStdinWithoutShellInterpolation(t *testing.T) {
  var out bytes.Buffer
  e:=&CommandExecutor{Binary:script,Workdir:dir,Output:&out}
  task:=Task{ID:"plan; echo UNSAFE",Role:Architect,State:Ready}
- if err:=e.Execute(context.Background(),task);err!=nil {t.Fatal(err)}
- if !strings.Contains(out.String(),"Task ID: plan; echo UNSAFE") {t.Fatalf("task input was not preserved as data: %q",out.String())}
+ if err:=(&InstructionExecutor{Command:e,Instructions:map[string]string{task.ID:"write a design"}}).Execute(context.Background(),task);err!=nil {t.Fatal(err)}
+ if !strings.Contains(out.String(),"Task ID: plan; echo UNSAFE") || !strings.Contains(out.String(),"write a design") {t.Fatalf("task input was not preserved as data: %q",out.String())}
 }
