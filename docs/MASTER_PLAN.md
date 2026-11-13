@@ -2773,3 +2773,9 @@ is still current. Always preserve human approval and green CI before merge.
 - Added `core/coordination/command_executor.go`: shell-free `exec.CommandContext` adapter with fixed trusted binary/args, working-directory validation, context cancellation and task identity on stdin. Added configuration/cancellation/POSIX stdin regression tests.
 - This is **not yet a production Codex/Cursor integration**: installed CLI flags, provider authentication, prompt payload, workspace/tool authorization, structured result capture, agent handoff and real E2E still require explicit adapters and validation.
 - Never configure unrestricted CLI tool permissions; use sandbox, approvals and owned durable session. Exact-head CI remains unverified; do not merge as complete.
+
+### 2026-11-12 — Fail-closed CLI instructions (PR #223)
+
+- Added `InstructionExecutor` mapping each durable task ID to nonblank concrete instructions. The CLI command is no longer invoked by the bare `CommandExecutor.Execute` placeholder; `executeWithPrompt` is used only after instruction validation.
+- Added regressions for blank/missing instructions, prompt delivery to a POSIX helper, cancellation, and durable task failure instead of false completion.
+- **Not yet provider integration:** CLI command flags/authentication, trusted prompt assembly from task artifacts, structured outputs, workspace sandbox/approval policy, actual Codex/Cursor execution and full E2E still require implementation. Do not claim 100% or merge without exact-head CI.
